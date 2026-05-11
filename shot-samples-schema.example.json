@@ -1,0 +1,36 @@
+{
+  "title": "Example parsed replay with frame-accurate shot samples",
+  "durationSeconds": 305,
+  "players": [
+    {
+      "name": "I az I",
+      "team": "Blue",
+      "scoreboard": {
+        "score": 760,
+        "goals": 4,
+        "assists": 1,
+        "saves": 2,
+        "shots": 5
+      },
+      "shotSamples": [
+        {
+          "result": "goal",
+          "elapsedSeconds": 148.2,
+          "xPercent": 71.4,
+          "yPercent": 22.8,
+          "target": "top right",
+          "nearestOpponentDistanceUU": 1180,
+          "lastTouchDistanceToNetUU": 3210
+        }
+      ],
+      "positionSamples": [
+        {
+          "time": 148.2,
+          "x": 820,
+          "y": -1840,
+          "z": 18
+        }
+      ]
+    }
+  ]
+}
