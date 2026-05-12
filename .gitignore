@@ -1,0 +1,5 @@
+.tmp/
+*.network.json
+*.replay
+*.log
+tools/*.zip
