@@ -1284,8 +1284,8 @@ body.obsOverlayMode #obsOverlayRoot{
     </div>
 
     <div class="card">
-      <h2>Distance to Ball Over Time</h2>
-      <div class="help">Shows how far the selected player or team average is from the ball. Distances assume 1 uu = 1 cm, shown as metric first with imperial in brackets. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Hover a vertical line to see who made the play. Lower values usually mean closer pressure; consistently too low can indicate overcommitting or ball-chasing.</div>
+      <h2>Distance to Ball</h2>
+      <div class="help">Shows decoded car-to-ball distance for the selected player or team average. Distances assume 1 uu = 1 cm, shown as metric first with imperial in brackets. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Lower values usually mean closer pressure; consistently too low can indicate overcommitting or ball-chasing.</div>
       <div class="chartWrap"><canvas id="distanceChart"></canvas></div>
       <div class="note" id="distanceNote"></div>
     </div>
@@ -1299,7 +1299,7 @@ body.obsOverlayMode #obsOverlayRoot{
 
     <div class="card">
       <h2>Shooting Heatmap</h2>
-      <div class="help">Shot placement, nearest defender distance, and last-touch distance require frame-by-frame ball, car, and touch data. This panel only plots markers when those frame-accurate shot events are available.</div>
+      <div class="help">Uses decoded replay shot events, ball positions, and car positions when the local parser is running. Placement comes from the ball at the goal/save/shot event; defender distance comes from car positions at the shot touch.</div>
       <div class="goalMap" id="shootingHeatmap">
         <div class="goalLabel">GOAL FACE</div>
         <div class="postZone left"></div>
@@ -1963,6 +1963,11 @@ function buildData(seed=42, replayPlayers=null, replayTitle="Sample Replay", mat
     if(p.censoredName) player.censoredName = cleanReplayName(p.censoredName);
     if(Array.isArray(p.boostPickups)) player.boostPickups = p.boostPickups;
     if(Array.isArray(p.boostPadPickups)) player.boostPadPickups = p.boostPadPickups;
+    if(Array.isArray(p.shotSamples)) player.shotSamples = p.shotSamples;
+    if(Array.isArray(p.positionSamples)) player.positionSamples = p.positionSamples;
+    if(Array.isArray(p.ballSamples)) player.ballSamples = p.ballSamples;
+    if(Array.isArray(p.distanceToBallSamples)) player.distanceToBallSamples = p.distanceToBallSamples;
+    if(Array.isArray(p.ballDistanceSamples)) player.distanceToBallSamples = p.ballDistanceSamples;
     return player;
   });
   return {players, teams:["Blue","Orange"], match:replayTitle || "Replay analysis", durationSeconds: normalizeReplayDurationSeconds(matchDurationSeconds || 300)};
@@ -2215,12 +2220,24 @@ function formatGameClock(secondsRemaining){
 function gameTimeLabels(durationSeconds=300, stepSeconds=15){
   const labels = [];
   const rawDuration = Math.max(1, Number(durationSeconds) || 300);
+  const scoreboardStart = Number(data?.scoreboardClockStartSeconds);
+  const scoreboardFinal = Number(data?.scoreboardClockFinalSeconds);
+
+  if(Number.isFinite(scoreboardStart) && Number.isFinite(scoreboardFinal) && scoreboardStart >= scoreboardFinal){
+    const scoreboardSpan = Math.max(0, scoreboardStart - scoreboardFinal);
+    const total = Math.ceil(scoreboardSpan / stepSeconds) * stepSeconds;
+    for(let elapsed=0; elapsed<=total; elapsed+=stepSeconds){
+      const remaining = elapsed >= scoreboardSpan ? scoreboardFinal : scoreboardStart - elapsed;
+      labels.push(formatGameClock(Math.max(0, remaining)));
+    }
+    return labels.length ? labels : [formatGameClock(scoreboardFinal)];
+  }
+
   const total = Math.ceil(rawDuration / stepSeconds) * stepSeconds;
 
   for(let elapsed=0; elapsed<=total; elapsed+=stepSeconds){
     if(rawDuration <= 300){
-      // Shortened/forfeit games count down from the actual replay length.
-      labels.push(formatGameClock(Math.max(0, rawDuration - elapsed)));
+      labels.push(formatGameClock(Math.max(0, 300 - elapsed)));
     }else if(elapsed <= 300){
       // Regulation portion of overtime games.
       labels.push(formatGameClock(300 - elapsed));
@@ -2251,14 +2268,41 @@ function expandSeriesToClock(values, durationSeconds=300, stepSeconds=15, seed=1
 
 function distanceToBallSeries(a, durationSeconds=300, stepSeconds=15){
   const labels = gameTimeLabels(durationSeconds, stepSeconds);
-  const base = a.isTeam ? 1850 : 1650;
-  const pressureAdjust = (100 - a.pressure) * 9;
-  const spacingAdjust = a.spacing * 5;
-  return labels.map((_,i)=>{
-    const wave = Math.sin(i * 0.8 + a.touches * 0.03) * 420;
-    const noise = (seeded(a.touches + i * 13) - 0.5) * 320;
-    return Math.max(250, Math.round(base + pressureAdjust + spacingAdjust + wave + noise));
+  const players = Array.isArray(a?.ps) ? a.ps : (a ? [a] : []);
+  const playerBins = players.map(()=>labels.map(()=>({sum:0,count:0})));
+  let sampleCount = 0;
+
+  players.forEach((player, playerIndex)=>{
+    const samples = Array.isArray(player.distanceToBallSamples)
+      ? player.distanceToBallSamples
+      : Array.isArray(player.ballDistanceSamples)
+        ? player.ballDistanceSamples
+        : [];
+    samples.forEach(sample=>{
+      const elapsed = Number(sample.scoreboardElapsedSeconds ?? sample.elapsedSeconds ?? sample.elapsed ?? sample.timeSeconds ?? sample.time);
+      const distance = Number(sample.distanceUU ?? sample.distanceToBallUU ?? sample.distance ?? sample.value);
+      if(!Number.isFinite(elapsed) || !Number.isFinite(distance)) return;
+      const binIndex = Math.max(0, Math.min(labels.length - 1, Math.floor(elapsed / stepSeconds)));
+      playerBins[playerIndex][binIndex].sum += distance;
+      playerBins[playerIndex][binIndex].count++;
+      sampleCount++;
+    });
   });
+
+  if(!sampleCount){
+    return {values:labels.map(()=>null), sampleCount:0, parsed:false};
+  }
+
+  const values = labels.map((_, binIndex)=>{
+    const playerValues = playerBins
+      .map(bins=>bins[binIndex])
+      .filter(bin=>bin.count > 0)
+      .map(bin=>bin.sum / bin.count);
+    if(!playerValues.length) return null;
+    return Math.round(playerValues.reduce((sum,value)=>sum + value, 0) / playerValues.length);
+  });
+
+  return {values, sampleCount, parsed:true};
 }
 
 
@@ -2437,7 +2481,26 @@ function formatDistanceFromUU(uu){
   return `${Math.round(cm)} cm (${inches.toFixed(1)} in)`;
 }
 
+function scoreboardClockFromSample(shot){
+  const secondsRemaining = Number(shot?.scoreboardSecondsRemaining ?? shot?.clockSecondsRemaining ?? shot?.secondsRemaining);
+  if(Number.isFinite(secondsRemaining)) return formatGameClock(secondsRemaining);
+  return null;
+}
+
+function scoreboardElapsedFromSample(shot){
+  const elapsed = Number(shot?.scoreboardElapsedSeconds ?? shot?.clockElapsedSeconds);
+  if(Number.isFinite(elapsed)) return elapsed;
+  const secondsRemaining = Number(shot?.scoreboardSecondsRemaining ?? shot?.clockSecondsRemaining ?? shot?.secondsRemaining);
+  if(Number.isFinite(secondsRemaining)) return Math.max(0, 300 - secondsRemaining);
+  return null;
+}
+
 function shotClockFromElapsed(elapsed, durationSeconds){
+  const start = Number(data?.scoreboardClockStartSeconds);
+  const final = Number(data?.scoreboardClockFinalSeconds);
+  if(Number.isFinite(start) && Number.isFinite(final)){
+    return formatGameClock(Math.max(0, start - Math.max(0, Math.round(elapsed || 0))));
+  }
   elapsed = Math.max(0, Math.round(elapsed || 0));
   const regulation = 300;
   if(elapsed <= regulation){
@@ -2489,7 +2552,9 @@ function getFrameAccurateShootingSamples(a){
       const elapsed = Number(shot.elapsed ?? shot.elapsedSeconds ?? shot.timeSeconds ?? 0);
       const nearestOpponentDistance = Number(shot.nearestOpponentDistanceUU ?? shot.nearestOpponentDistance ?? NaN);
       const lastTouchDistanceToNet = Number(shot.lastTouchDistanceToNetUU ?? shot.lastTouchDistanceToNet ?? NaN);
-      const goalTime = shot.goalTime || shotClockFromElapsed(elapsed, data.durationSeconds || 300);
+      const scoreboardElapsed = scoreboardElapsedFromSample(shot);
+      const goalTime = shot.goalTime || scoreboardClockFromSample(shot) || shotClockFromElapsed(elapsed, data.durationSeconds || 300);
+      const nearestOpponent = cleanReplayName(shot.nearestOpponent || shot.nearestDefender || shot.closestDefender || "");
 
       samples.push({
         player: playerDisplayName(player),
@@ -2499,9 +2564,12 @@ function getFrameAccurateShootingSamples(a){
         y: Math.max(0, Math.min(100, y)),
         result,
         target: shot.target || targetFromGoalFacePosition(x, y, result),
-        elapsed,
+        elapsed: Number.isFinite(scoreboardElapsed) ? scoreboardElapsed : elapsed,
+        replayElapsed: elapsed,
+        scoreboardSecondsRemaining: Number(shot.scoreboardSecondsRemaining ?? NaN),
         goalTime,
         nearestOpponentDistance: Number.isFinite(nearestOpponentDistance) ? nearestOpponentDistance : null,
+        nearestOpponent: nearestOpponent || null,
         lastTouchDistanceToNet: Number.isFinite(lastTouchDistanceToNet) ? lastTouchDistanceToNet : null,
         frameAccurate: true,
         index: i
@@ -2661,7 +2729,7 @@ function renderShootingHeatmap(a){
         hover.innerHTML = `
           <b>Goal scorer:</b> ${s.player}<br>
           <b>Game time:</b> ${s.goalTime}<br>
-          <b>Nearest opponent:</b> ${optionalDistanceText(s.nearestOpponentDistance)}<br>
+          <b>Nearest opponent:</b> ${optionalDistanceText(s.nearestOpponentDistance)}${s.nearestOpponent ? ` (${escapeHtml(s.nearestOpponent)})` : ""}<br>
           <b>Last touch distance from net:</b> ${optionalDistanceText(s.lastTouchDistanceToNet)}<br>
           <span class="muted">Target: ${s.target}</span>
         `;
@@ -2670,7 +2738,7 @@ function renderShootingHeatmap(a){
           <b>${s.result === "save" ? "Saved shot" : s.result === "post" ? "Post/crossbar hit" : "Missed shot"}</b><br>
           <span class="muted">Shooter: ${s.player}</span><br>
           <span class="muted">Game time: ${s.goalTime}</span><br>
-          <span class="muted">Nearest opponent: ${optionalDistanceText(s.nearestOpponentDistance)}</span><br>
+          <span class="muted">Nearest opponent: ${optionalDistanceText(s.nearestOpponentDistance)}${s.nearestOpponent ? ` (${escapeHtml(s.nearestOpponent)})` : ""}</span><br>
           <span class="muted">Last touch distance from net: ${optionalDistanceText(s.lastTouchDistanceToNet)}</span><br>
           <span class="muted">Target: ${s.target}</span>
         `;
@@ -2972,8 +3040,33 @@ function buildGoalSaveEvents(durationSeconds, scope){
     return labels[idx];
   }
 
+  const hasExactShotSamples = players.some(p=>Array.isArray(p.shotSamples) && p.shotSamples.length);
+  let exactEventCount = 0;
   players.forEach((p)=>{
     const displayName = playerDisplayName(p);
+    if(Array.isArray(p.shotSamples) && p.shotSamples.length){
+      p.shotSamples.forEach(shot=>{
+        const result = normalizeShotResult(shot.result ?? shot.outcome);
+        if(result !== "goal" && result !== "save") return;
+        const elapsed = scoreboardElapsedFromSample(shot) ?? Number(shot.elapsedSeconds ?? shot.elapsed ?? shot.timeSeconds ?? 0);
+        if(!Number.isFinite(elapsed)) return;
+        const isSelectedPlayer = selectedPlayer && p.id === selectedPlayer.id;
+        const isSelectedTeamGoal = selectedTeam && p.team === selectedTeam;
+        exactEventCount++;
+        events.push({
+          label: shot.goalTime || scoreboardClockFromSample(shot) || nearestLabelFromElapsed(elapsed),
+          elapsed,
+          player:displayName,
+          team:p.team,
+          type:result === "goal" ? "Goal" : "Saved shot",
+          isSelectedPlayer,
+          color: isSelectedPlayer ? "#ffd000" : result === "goal" ? (isSelectedTeamGoal ? "#22c55e" : "#ef4444") : "#38bdf8"
+        });
+      });
+      return;
+    }
+    if(hasExactShotSamples) return;
+
     for(let g=0; g<(p.goals||0); g++){
       // More stable timing: spread each player's goals across the actual game duration.
       // Uses deterministic seed but converts to elapsed seconds and nearest 15s bucket.
@@ -3007,6 +3100,11 @@ function buildGoalSaveEvents(durationSeconds, scope){
       });
     }
   });
+
+  if(exactEventCount){
+    events.sort((a,b)=>(a.elapsed ?? 0) - (b.elapsed ?? 0));
+    return events;
+  }
 
   events.sort((a,b)=>(a.elapsed ?? 0) - (b.elapsed ?? 0));
   return events;
@@ -3222,9 +3320,9 @@ function render(){
   chart("trendChart",{
     type:"line",
     data:{labels:impactLabels,datasets:[
-      {label:"Touches per 5s window",data:touchClock,borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.18)",fill:true,tension:.36,pointRadius:1.5},
-      {label:"Possession % trend",data:possClock,borderColor:"#f2f2f2",backgroundColor:"rgba(242,242,242,.12)",fill:true,tension:.36,pointRadius:1.5},
-      {label:"Pressure score trend",data:pressureClock,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.12)",fill:true,tension:.36,pointRadius:1.5}
+      {label:"Touches per 5s window",data:touchClock,borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.18)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9},
+      {label:"Possession % trend",data:possClock,borderColor:"#f2f2f2",backgroundColor:"rgba(242,242,242,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9},
+      {label:"Pressure score trend",data:pressureClock,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9}
     ]},
     options:{
       maintainAspectRatio:false,
@@ -3263,11 +3361,13 @@ function render(){
     options:{maintainAspectRatio:false,plugins:{legend},scales:{x:axis,y:axis}}
   });
 
-  const distanceSeries = distanceToBallSeries(a, durationSeconds, 15);
+  const distanceStepSeconds = 15;
+  const distanceResult = distanceToBallSeries(a, durationSeconds, distanceStepSeconds);
+  const distanceSeries = distanceResult.values;
   chart("distanceChart",{
     type:"line",
     data:{labels:clockLabels,datasets:[
-      {label:"Distance to ball: centimeters/meters",data:distanceSeries,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.16)",fill:true,tension:.35,pointRadius:1.5}
+      {label:"Distance to ball: centimeters/meters",data:distanceSeries,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.16)",fill:true,tension:.35,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true}
     ]},
     options:{
       maintainAspectRatio:false,
@@ -3279,8 +3379,15 @@ function render(){
     }
   });
 
-  const avgDistance = Math.round(distanceSeries.reduce((a,b)=>a+b,0)/distanceSeries.length);
-  $("distanceNote").textContent = `${a.label}: average distance to ball is approximately ${formatDistanceFromUU(avgDistance)} across 3-second game-time intervals. Spikes usually mean slow recovery, wide boost routing, or being out of the next play.`;
+  const validDistanceValues = distanceSeries.filter(Number.isFinite);
+  if(validDistanceValues.length){
+    const avgDistance = Math.round(validDistanceValues.reduce((sum,value)=>sum + value,0)/validDistanceValues.length);
+    $("distanceNote").textContent = distanceResult.parsed
+      ? `${a.label}: average distance to ball is ${formatDistanceFromUU(avgDistance)}, calculated from ${distanceResult.sampleCount.toLocaleString()} decoded car-ball position samples and binned into ${distanceStepSeconds}-second game-time windows.`
+      : `${a.label}: average distance to ball is approximately ${formatDistanceFromUU(avgDistance)}.`;
+  }else{
+    $("distanceNote").textContent = `${a.label}: decoded car and ball positions are not available yet, so this chart is intentionally blank instead of showing fabricated distances.`;
+  }
 
   chart("shotChart",{
     type:"bar",
@@ -3568,10 +3675,13 @@ function renderTable(){
 function keyEventClockFromElapsed(elapsed, durationSeconds){
   elapsed = Math.max(0, Math.round(Number(elapsed) || 0));
   durationSeconds = Math.max(1, Math.round(Number(durationSeconds) || 300));
+  const start = Number(data?.scoreboardClockStartSeconds);
+  if(Number.isFinite(start)){
+    return formatGameClock(Math.max(0, start - elapsed));
+  }
 
   if(durationSeconds <= 300){
-    // For shortened / forfeit games, show time remaining in that shortened game.
-    return formatGameClock(Math.max(0, durationSeconds - elapsed));
+    return formatGameClock(Math.max(0, 300 - elapsed));
   }
 
   // For overtime games, regulation counts down from 5:00, then OT counts up.
@@ -3969,6 +4079,7 @@ function normalizeParsedReplayPlayer(raw, index=0){
     shotSamples: Array.isArray(raw.shotSamples) ? raw.shotSamples : Array.isArray(raw.shotsDetailed) ? raw.shotsDetailed : [],
     positionSamples: Array.isArray(raw.positionSamples) ? raw.positionSamples : Array.isArray(raw.carSamples) ? raw.carSamples : [],
     ballSamples: Array.isArray(raw.ballSamples) ? raw.ballSamples : [],
+    distanceToBallSamples: Array.isArray(raw.distanceToBallSamples) ? raw.distanceToBallSamples : Array.isArray(raw.ballDistanceSamples) ? raw.ballDistanceSamples : [],
     boostPickups: Array.isArray(raw.boostPickups) ? raw.boostPickups : Array.isArray(raw.boostPadPickups) ? raw.boostPadPickups : []
   };
 }
@@ -4024,6 +4135,9 @@ function applyParsedShotSamplesToData(parsed){
     }
     if(player && Array.isArray(parsedPlayer.positionSamples)){
       player.positionSamples = parsedPlayer.positionSamples;
+    }
+    if(player && Array.isArray(parsedPlayer.distanceToBallSamples)){
+      player.distanceToBallSamples = parsedPlayer.distanceToBallSamples;
     }
     if(player && Array.isArray(parsedPlayer.boostPickups)){
       player.boostPickups = parsedPlayer.boostPickups;
@@ -4114,11 +4228,14 @@ function vectorFromApi(value){
   return null;
 }
 
-function goalFaceFromImpactLocation(location){
+function goalFaceFromImpactLocation(location, team=null){
   const v = vectorFromApi(location);
   if(!v || !Number.isFinite(v.x)) return {xPercent:50,yPercent:50};
+  const rawX = Math.max(0, Math.min(100, ((v.x + 900) / 1800) * 100));
+  const teamName = typeof team === "string" ? team : normalizeLiveTeam(team);
+  const xPercent = teamName === "Blue" ? 100 - rawX : rawX;
   return {
-    xPercent:Math.max(0, Math.min(100, ((v.x + 900) / 1800) * 100)),
+    xPercent,
     yPercent:Math.max(0, Math.min(100, 100 - ((Math.max(0, Math.min(650, v.z || 0)) / 650) * 100)))
   };
 }
@@ -4555,7 +4672,7 @@ function handleLiveGoal(payload){
   p.stats.goals = Math.max(p.stats.goals, toNumber(valueByKey(payload,["goals","Goals"]), p.stats.goals), sampledGoalCount);
   p.stats.shots = Math.max(p.stats.shots, p.stats.goals);
   const impact = firstDefined(valueByKey(payload,["impactLocation","ImpactLocation","location","Location"]), valueByKey(payload?.ball,["location","Location"]));
-  const face = goalFaceFromImpactLocation(impact);
+  const face = goalFaceFromImpactLocation(impact, p.team);
   const lastHit = lastLiveHitForPlayer(scorer);
   const elapsed = toNumber(valueByKey(payload,["GoalTime","goalTime","elapsedSeconds","ElapsedSeconds","seconds","Seconds"]), liveElapsedSeconds());
   const sample = {
@@ -4579,7 +4696,7 @@ function handleLiveCrossbar(payload){
   const p = ensureLivePlayer(player, team);
   p.stats.shots = Math.max(p.stats.shots, p.stats.goals + p.shotSamples.length + 1);
   const location = firstDefined(valueByKey(payload,["ballLocation","BallLocation","location","Location"]), valueByKey(payload?.ball,["location","Location"]));
-  const face = goalFaceFromImpactLocation(location);
+  const face = goalFaceFromImpactLocation(location, p.team);
   const lastHit = lastLiveHitForPlayer(player);
   const sample = {
     result:"post",
@@ -4767,6 +4884,23 @@ async function requestExactBoostPickups(file){
   }
 }
 
+async function requestExactShotSamples(file){
+  const endpoint = location.protocol === "file:"
+    ? "http://127.0.0.1:8765/api/parse-replay-shots"
+    : "/api/parse-replay-shots";
+  try{
+    const response = await fetch(endpoint, {
+      method: "POST",
+      body: file
+    });
+    if(!response.ok) throw new Error((await response.text()) || response.statusText);
+    return await response.json();
+  }catch(err){
+    console.warn("Exact shooting parser failed:", err);
+    return {error: err.message || String(err)};
+  }
+}
+
 function applyParsedBoostPickupsToReplayMeta(replayMeta, parsedBoosts){
   if(!parsedBoosts || !Array.isArray(parsedBoosts.players) || !Array.isArray(replayMeta.players)) return 0;
   const parsedByName = new Map(parsedBoosts.players.map(player=>[
@@ -4801,7 +4935,9 @@ async function loadFile(file){
   let matchDurationSeconds = 300;
   let parsedJson = null;
   let parsedBoosts = null;
+  let parsedShots = null;
   let mappedBoostPickupCount = 0;
+  let mappedShotSampleCount = 0;
   let replayBufferForPhysics = null;
 
   if(file.name.toLowerCase().endsWith(".json")){
@@ -4825,17 +4961,43 @@ async function loadFile(file){
       replayTitle = extractReplayTitle(buffer, replayTitle);
       matchDurationSeconds = extractReplayDurationSeconds(buffer, file.name);
       replayBufferForPhysics = buffer.slice(0);
-      $("fileStatus").innerHTML = `Loaded metadata from <b>${file.name}</b>. Decoding exact boost pickups with the local replay parser...`;
+      $("fileStatus").innerHTML = `Loaded metadata from <b>${file.name}</b>. Decoding exact boost pickups and shooting positions with the local replay parser...`;
       parsedBoosts = await requestExactBoostPickups(file);
       if(!parsedBoosts?.error) mappedBoostPickupCount = applyParsedBoostPickupsToReplayMeta(replayMeta, parsedBoosts);
+      parsedShots = await requestExactShotSamples(file);
     }catch(err){
       console.warn("Could not extract replay metadata:", err);
     }
   }
 
   data=buildData(seed, replayMeta.players, replayTitle, matchDurationSeconds);
+  if(parsedShots && !parsedShots.error){
+    const clockStart = Number(parsedShots.scoreboardClockStartSeconds);
+    const clockFinal = Number(parsedShots.scoreboardClockFinalSeconds);
+    if(Number.isFinite(clockStart)) data.scoreboardClockStartSeconds = clockStart;
+    if(Number.isFinite(clockFinal)) data.scoreboardClockFinalSeconds = clockFinal;
+  }
   if(parsedJson) applyParsedShotSamplesToData(parsedJson);
-  if(replayBufferForPhysics) startReplayPhysicsAnalysis(replayBufferForPhysics, file.name);
+  if(parsedShots && !parsedShots.error){
+    applyParsedShotSamplesToData(parsedShots);
+    mappedShotSampleCount = data.players.reduce((sum,p)=>sum + (Array.isArray(p.shotSamples) ? p.shotSamples.length : 0), 0);
+  }
+  if(parsedShots && !parsedShots.error){
+    physicsAnalysisState={
+      status:"done",
+      progress:100,
+      message:"Replay parser decoded shot, car, and ball position samples for charting.",
+      frames:parsedShots.frameCount || 0,
+      carSamples:parsedShots.totalPositionSamples || 0,
+      ballSamples:parsedShots.totalBallSamples || parsedShots.frameCount || 0,
+      shotSamples:parsedShots.totalShotSamples || mappedShotSampleCount,
+      tokens:{},
+      warnings:[]
+    };
+    renderPhysicsAnalysis();
+  }else if(replayBufferForPhysics){
+    startReplayPhysicsAnalysis(replayBufferForPhysics, file.name);
+  }
 
   const playerList = data.players.map(p => `${playerDisplayName(p)} (${p.team})`).join(", ");
   const spectatorList = replayMeta.spectators.length ? `<br>Excluded spectator(s): ${replayMeta.spectators.join(", ")}` : "";
@@ -4843,6 +5005,21 @@ async function loadFile(file){
   const expectedText = replayMeta.expectedPlayers ? `${replayMeta.expectedPlayers} expected from TeamSize ${replayMeta.teamSize}` : "unknown expected lobby size";
   const shotSampleText = parsedJson
     ? `<br><span style='color:#26e68a'>Parsed shot samples:</span> ${parsedJson.shotSampleCount} frame-accurate shot event${parsedJson.shotSampleCount===1?"":"s"} supplied by JSON.`
+    : parsedShots?.error
+      ? `<br><span style='color:#ff6b6b'>Exact shooting parser unavailable:</span> ${parsedShots.error}`
+      : mappedShotSampleCount
+        ? `<br><span style='color:#26e68a'>Exact shooting samples:</span> ${mappedShotSampleCount} frame-accurate shot event${mappedShotSampleCount===1?"":"s"} mapped from replay positions.`
+        : "";
+  const distanceSampleText = parsedShots?.totalDistanceSamples
+    ? `<br><span style='color:#26e68a'>Distance samples:</span> ${Number(parsedShots.totalDistanceSamples).toLocaleString()} decoded car-to-ball sample${parsedShots.totalDistanceSamples===1?"":"s"}.`
+    : "";
+  const exactParserPieces = [
+    mappedBoostPickupCount ? "boost pickups" : "",
+    mappedShotSampleCount ? "shooting samples" : "",
+    parsedShots?.totalDistanceSamples ? "distance-to-ball samples" : ""
+  ].filter(Boolean);
+  const exactParserSummary = exactParserPieces.length
+    ? `Exact ${exactParserPieces.join(" and ")} were decoded locally with rrrocket.`
     : "";
   const boostPickupText = parsedBoosts?.error
     ? `<br><span style='color:#ff6b6b'>Exact boost parser unavailable:</span> ${parsedBoosts.error}`
@@ -4851,16 +5028,19 @@ async function loadFile(file){
       : "";
   const parserNote = parsedJson
     ? `Structured replay JSON loaded. Heatmap markers use supplied frame-accurate shot samples when present.`
-    : mappedBoostPickupCount
-      ? `Exact boost pickup events were decoded locally with rrrocket. A background physics pass is still scanning for future car/ball position analysis.`
+    : exactParserSummary
+      ? `${exactParserSummary} Position-based charts now use decoded replay samples.`
       : `A background physics pass is scanning the .replay file. Frame-accurate position heatmaps still require completing the actor/channel bitstream decoder.`;
+  const scoreboardClockLine = Number.isFinite(data.scoreboardClockStartSeconds) && Number.isFinite(data.scoreboardClockFinalSeconds)
+    ? `Scoreboard clock used for charts: <b>${formatGameClock(data.scoreboardClockStartSeconds)}</b> to <b>${formatGameClock(data.scoreboardClockFinalSeconds)}</b><br>`
+    : `Gameplay duration used for charts: <b>${formatGameClock(data.durationSeconds || 300)}</b><br>`;
 
   $("fileStatus").innerHTML=
     `Loaded <b>${file.name}</b> (${(file.size/1024/1024).toFixed(2)} MB).<br>` +
     `Replay title: <b>${data.match}</b><br>` +
-    `Gameplay duration used for charts: <b>${formatGameClock(data.durationSeconds || 300)}</b><br>` +
+    scoreboardClockLine +
     `Charts support shortened/forfeit and overtime games.<br>` +
-    `<span style='color:#ffd000'>Note:</span> ${parserNote}${shotSampleText}${boostPickupText}<br>` +
+    `<span style='color:#ffd000'>Note:</span> ${parserNote}${shotSampleText}${distanceSampleText}${boostPickupText}<br>` +
     (extractedCount
       ? `Showing <b>${extractedCount}</b> active player${extractedCount===1?"":"s"} (${expectedText}).${spectatorList}<br>` +
         `<span style="color:var(--muted)">Metadata evidence: ${replayMeta.statCount} active PlayerStats block(s), ${replayMeta.primaryCount} PlayerName block(s), ${replayMeta.reservationCount} reservation/name block(s), ${replayMeta.candidateCount} active candidate name(s).</span><br>` +

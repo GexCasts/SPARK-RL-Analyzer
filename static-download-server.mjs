@@ -177,6 +177,101 @@ function isSmallBoostRise(boostIncrease){
   return boostIncrease.boostDelta >= 8 && boostIncrease.boostDelta <= 45;
 }
 
+function clampNumber(value, min, max){
+  return Math.max(min, Math.min(max, value));
+}
+
+function normalizeTeamNumber(value){
+  if(value === 0 || value === "0") return 0;
+  if(value === 1 || value === "1") return 1;
+  return null;
+}
+
+function buildPlayerTeamNumbers(parsedReplay){
+  const teams = new Map();
+  for(const player of parsedReplay?.properties?.PlayerStats || []){
+    const name = cleanName(player?.Name);
+    const teamNumber = normalizeTeamNumber(player?.Team);
+    if(name && teamNumber !== null) teams.set(name, teamNumber);
+  }
+  return teams;
+}
+
+function isCarActorObject(objectName){
+  return typeof objectName === "string" && (
+    objectName === "TAGame.Car_TA" ||
+    objectName.endsWith(".Car_Default") ||
+    objectName.includes(".Car.Car_Default")
+  );
+}
+
+function isBallActorObject(objectName){
+  return typeof objectName === "string" && (
+    objectName === "TAGame.Ball_TA" ||
+    objectName.endsWith(".Ball_Default") ||
+    objectName.includes(".Ball.Ball_Default")
+  );
+}
+
+function teamNumberFromActorObject(objectName){
+  if(typeof objectName !== "string") return null;
+  if(objectName.endsWith(".Team0") || objectName.includes("Team0")) return 0;
+  if(objectName.endsWith(".Team1") || objectName.includes("Team1")) return 1;
+  return null;
+}
+
+function replayIntValue(attribute, value){
+  const raw = getObject(value, "Int") ?? getObject(attribute, "Int");
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function replayElapsedSeconds(time, firstTime, lastTime, totalSeconds){
+  const total = Number(totalSeconds);
+  if(!Number.isFinite(time)) return 0;
+  if(Number.isFinite(firstTime) && Number.isFinite(lastTime) && lastTime > firstTime && Number.isFinite(total) && total > 0){
+    return clampNumber(((time - firstTime) / (lastTime - firstTime)) * total, 0, total);
+  }
+  return Math.max(0, time - (firstTime || 0));
+}
+
+function goalFaceFromReplayLocation(location, teamNumber=null){
+  if(!location || !Number.isFinite(location.x)) return {xPercent:50, yPercent:50};
+  let xPercent = clampNumber(((location.x + 900) / 1800) * 100, 0, 100);
+  // Goal face is shown from the field looking into the net.
+  // Blue shoots toward +Y, so positive field X appears on the viewer's left.
+  if(normalizeTeamNumber(teamNumber) === 0) xPercent = 100 - xPercent;
+  return {
+    xPercent,
+    yPercent: clampNumber(100 - ((clampNumber(location.z || 0, 0, 650) / 650) * 100), 0, 100)
+  };
+}
+
+function scoreboardClockLabel(secondsRemaining, isOvertime=false, overtimeSeconds=null){
+  if(isOvertime && Number.isFinite(overtimeSeconds)){
+    const seconds = Math.max(0, Math.round(overtimeSeconds));
+    return `OT +${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  }
+  if(Number.isFinite(secondsRemaining)){
+    const seconds = Math.max(0, Math.round(secondsRemaining));
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  }
+  return null;
+}
+
+function distanceToOpponentNet(location, teamNumber){
+  if(!location || !Number.isFinite(location.x) || !Number.isFinite(location.y)) return null;
+  const normalizedTeam = normalizeTeamNumber(teamNumber);
+  if(normalizedTeam === null) return null;
+  const targetY = normalizedTeam === 0 ? 5120 : -5120;
+  return Math.round(Math.hypot(location.x, location.y - targetY, (location.z || 0) - 320));
+}
+
+function distanceBetweenLocations(a, b){
+  if(!a || !b) return Infinity;
+  return Math.hypot((a.x || 0) - (b.x || 0), (a.y || 0) - (b.y || 0), (a.z || 0) - (b.z || 0));
+}
+
 function summarizeBoostPickups(parsedReplay){
   const frames = parsedReplay?.network_frames?.frames || parsedReplay?.frames || [];
   const objects = parsedReplay?.objects || [];
@@ -460,6 +555,545 @@ function summarizeBoostPickups(parsedReplay){
   };
 }
 
+function summarizeShotSamples(parsedReplay){
+  const frames = parsedReplay?.network_frames?.frames || parsedReplay?.frames || [];
+  const objects = parsedReplay?.objects || [];
+  const names = parsedReplay?.names || [];
+  const totalSeconds = Number(parsedReplay?.properties?.TotalSecondsPlayed) || 300;
+  const firstFrameTime = Number(frames[0]?.time ?? 0);
+  const lastFrameTime = Number(frames.at(-1)?.time ?? firstFrameTime + totalSeconds);
+  const teamByStatName = buildPlayerTeamNumbers(parsedReplay);
+  const expectedShotsByStatName = new Map((parsedReplay?.properties?.PlayerStats || [])
+    .map(player=>[cleanName(player?.Name), Number(player?.Shots)])
+    .filter(([name, shots])=>name && Number.isFinite(shots)));
+
+  const priName = new Map();
+  const priTeam = new Map();
+  const teamActorNumber = new Map();
+  const carPri = new Map();
+  const carLoc = new Map();
+  const ballLoc = new Map();
+  const actorObject = new Map();
+  const carActors = new Set();
+  const ballActors = new Set();
+  const lastStatValue = new Map();
+  const shotEvents = [];
+  const goalEvents = [];
+  const saveEvents = [];
+  const distanceSamplesByPri = new Map();
+  const positionSamplesByPri = new Map();
+  const lastDistanceSampleElapsedByPri = new Map();
+  const recentTouchCandidatesByPri = new Map();
+  let ballSampleCount = 0;
+  let latestBallLocation = null;
+  let scoreboardSecondsRemaining = null;
+  let scoreboardClockStartSeconds = null;
+  let scoreboardClockFinalSeconds = null;
+  let isOvertime = false;
+
+  function teamForPri(pri, playerName){
+    const directTeam = priTeam.get(pri);
+    if(directTeam !== null && directTeam !== undefined) return directTeam;
+    const headerTeam = teamByStatName.get(cleanName(playerName));
+    return headerTeam !== undefined ? headerTeam : null;
+  }
+
+  function activeCarsForPri(pri){
+    const cars = [];
+    for(const [carActor, ownerPri] of carPri){
+      if(ownerPri !== pri) continue;
+      const location = carLoc.get(carActor);
+      if(location) cars.push({carActor, location});
+    }
+    if(cars.length > 1 && latestBallLocation){
+      cars.sort((a,b)=>distanceBetweenLocations(a.location, latestBallLocation) - distanceBetweenLocations(b.location, latestBallLocation));
+    }
+    return cars;
+  }
+
+  function activePlayerSnapshots(){
+    const players = [];
+    const seen = new Set();
+    for(const [carActor, pri] of carPri){
+      const location = carLoc.get(carActor);
+      if(!location) continue;
+      const playerName = cleanName(priName.get(pri));
+      if(!playerName) continue;
+      const key = `${pri}:${playerName}`;
+      if(seen.has(key)) continue;
+      seen.add(key);
+      players.push({
+        pri,
+        playerName,
+        teamNumber: teamForPri(pri, playerName),
+        carActor,
+        location
+      });
+    }
+    return players;
+  }
+
+  function nearestOpponent(referenceLocation, teamNumber, shooterPri){
+    if(!referenceLocation || normalizeTeamNumber(teamNumber) === null) return {distance:null, playerName:null};
+    let best = {distance:Infinity, playerName:null};
+    for(const player of activePlayerSnapshots()){
+      if(player.pri === shooterPri) continue;
+      if(normalizeTeamNumber(player.teamNumber) === normalizeTeamNumber(teamNumber)) continue;
+      const distance = Math.round(distanceBetweenLocations(referenceLocation, player.location));
+      if(distance < best.distance){
+        best = {distance, playerName:player.playerName};
+      }
+    }
+    return Number.isFinite(best.distance) ? best : {distance:null, playerName:null};
+  }
+
+  function currentBallLocation(){
+    if(latestBallLocation) return latestBallLocation;
+    for(const location of ballLoc.values()){
+      if(location) return location;
+    }
+    return null;
+  }
+
+  function makeStatEvent(kind, time, pri, value){
+    const playerName = cleanName(priName.get(pri));
+    const teamNumber = teamForPri(pri, playerName);
+    const cars = activeCarsForPri(pri);
+    const shooterLocation = cars[0]?.location || null;
+    const ballLocation = currentBallLocation();
+    const referenceLocation = ballLocation || shooterLocation;
+    const opponent = nearestOpponent(referenceLocation, teamNumber, pri);
+    const touchCandidates = (recentTouchCandidatesByPri.get(pri) || [])
+      .filter(touch => time - touch.time >= -0.05 && time - touch.time <= 8);
+    let recentTouch = null;
+    if(touchCandidates.length){
+      let sequenceStart = touchCandidates.length - 1;
+      for(let i = touchCandidates.length - 1; i > 0; i--){
+        const gap = touchCandidates[i].time - touchCandidates[i - 1].time;
+        if(gap > 0.55) break;
+        sequenceStart = i - 1;
+      }
+      recentTouch = touchCandidates[sequenceStart];
+    }
+    const lastTouchLocation = recentTouch?.ballLocation || ballLocation || shooterLocation;
+
+    return {
+      kind,
+      value,
+      time: Number.isFinite(time) ? time : 0,
+      elapsedSeconds: replayElapsedSeconds(time, firstFrameTime, lastFrameTime, totalSeconds),
+      scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: Number.isFinite(scoreboardSecondsRemaining) ? Math.max(0, 300 - scoreboardSecondsRemaining) : null,
+      goalTime: scoreboardClockLabel(scoreboardSecondsRemaining, isOvertime),
+      pri,
+      playerName,
+      teamNumber,
+      carActor: cars[0]?.carActor ?? null,
+      shooterLocation,
+      ballLocation,
+      lastTouchLocation,
+      lastTouchTime: recentTouch?.time ?? null,
+      lastTouchScoreboardSecondsRemaining: recentTouch?.scoreboardSecondsRemaining ?? null,
+      nearestOpponentDistanceUU: opponent.distance,
+      nearestOpponent: opponent.playerName,
+      lastTouchDistanceToNetUU: distanceToOpponentNet(lastTouchLocation, teamNumber)
+    };
+  }
+
+  function pushPhysicsSamples(time){
+    const ballLocation = currentBallLocation();
+    if(!ballLocation) return;
+    ballSampleCount++;
+    const elapsedSeconds = replayElapsedSeconds(time, firstFrameTime, lastFrameTime, totalSeconds);
+    const seenPris = new Set();
+    for(const pri of carPri.values()){
+      if(!Number.isInteger(pri) || seenPris.has(pri)) continue;
+      seenPris.add(pri);
+      const playerName = cleanName(priName.get(pri));
+      if(!playerName) continue;
+      const car = activeCarsForPri(pri)[0];
+      if(!car?.location) continue;
+      const carBallDistance = distanceBetweenLocations(car.location, ballLocation);
+      if(carBallDistance <= 750){
+        if(!recentTouchCandidatesByPri.has(pri)) recentTouchCandidatesByPri.set(pri, []);
+        const candidates = recentTouchCandidatesByPri.get(pri);
+        const lastCandidate = candidates[candidates.length - 1];
+        if(!lastCandidate || time - lastCandidate.time > 0.12 || carBallDistance < lastCandidate.carBallDistance){
+          candidates.push({
+            time,
+            elapsedSeconds,
+            scoreboardSecondsRemaining,
+            carActor: car.carActor,
+            carBallDistance: Math.round(carBallDistance),
+            carLocation: car.location,
+            ballLocation
+          });
+          while(candidates.length > 40) candidates.shift();
+        }else{
+          lastCandidate.time = time;
+          lastCandidate.elapsedSeconds = elapsedSeconds;
+          lastCandidate.scoreboardSecondsRemaining = scoreboardSecondsRemaining;
+          lastCandidate.carBallDistance = Math.round(carBallDistance);
+          lastCandidate.carLocation = car.location;
+          lastCandidate.ballLocation = ballLocation;
+        }
+      }
+      const lastElapsed = lastDistanceSampleElapsedByPri.get(pri);
+      if(Number.isFinite(lastElapsed) && elapsedSeconds - lastElapsed < 0.45) continue;
+
+      lastDistanceSampleElapsedByPri.set(pri, elapsedSeconds);
+      if(!distanceSamplesByPri.has(pri)) distanceSamplesByPri.set(pri, []);
+      if(!positionSamplesByPri.has(pri)) positionSamplesByPri.set(pri, []);
+      distanceSamplesByPri.get(pri).push({
+        elapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+        scoreboardSecondsRemaining,
+        scoreboardElapsedSeconds: Number.isFinite(scoreboardSecondsRemaining) ? Math.max(0, 300 - scoreboardSecondsRemaining) : null,
+        distanceUU: Math.round(distanceBetweenLocations(car.location, ballLocation)),
+        carActor: car.carActor,
+        ballLocation,
+        carLocation: car.location,
+        playerName
+      });
+      positionSamplesByPri.get(pri).push({
+        elapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+        scoreboardSecondsRemaining,
+        scoreboardElapsedSeconds: Number.isFinite(scoreboardSecondsRemaining) ? Math.max(0, 300 - scoreboardSecondsRemaining) : null,
+        x: Math.round(car.location.x),
+        y: Math.round(car.location.y),
+        z: Math.round(car.location.z || 0),
+        playerName
+      });
+    }
+  }
+
+  for(const frame of frames){
+    const time = Number(frame.time ?? frame.seconds ?? frame.delta ?? 0);
+
+    for(const actor of frame.new_actors || []){
+      if(!Number.isInteger(actor.actor_id)) continue;
+      const objectName = objects[actor.object_id] || names[actor.name_id] || actor.object_name || actor.object || actor.name || "";
+      actorObject.set(actor.actor_id, objectName);
+
+      const teamNumber = teamNumberFromActorObject(objectName);
+      if(teamNumber !== null) teamActorNumber.set(actor.actor_id, teamNumber);
+
+      if(isCarActorObject(objectName)) carActors.add(actor.actor_id);
+      if(isBallActorObject(objectName)) ballActors.add(actor.actor_id);
+
+      const initialLocation = decodeActorLocation(actor.initial_trajectory);
+      if(initialLocation){
+        if(carActors.has(actor.actor_id)) carLoc.set(actor.actor_id, initialLocation);
+        if(ballActors.has(actor.actor_id)){
+          ballLoc.set(actor.actor_id, initialLocation);
+          latestBallLocation = initialLocation;
+        }
+      }
+    }
+
+    for(const actorId of frame.deleted_actors || []){
+      actorObject.delete(actorId);
+      carActors.delete(actorId);
+      ballActors.delete(actorId);
+      carPri.delete(actorId);
+      carLoc.delete(actorId);
+      ballLoc.delete(actorId);
+      teamActorNumber.delete(actorId);
+    }
+
+    for(const update of frame.updated_actors || []){
+      const actorId = update.actor_id;
+      const attribute = update.attribute || {};
+      const objectId = Number(update.object_id ?? attribute.object_id);
+      const objectName = objects[objectId] || "";
+      const value = attribute.value ?? attribute;
+
+      if(objectNameMatches(objectName, "Engine.PlayerReplicationInfo:PlayerName")){
+        const name = cleanName(typeof value === "string" ? value : value?.String || attribute.String || value?.name);
+        if(name) priName.set(actorId, name);
+      }
+
+      if(objectNameMatches(objectName, "Engine.PlayerReplicationInfo:Team")){
+        const teamActor = extractActorReference(value) ?? extractActorReference(attribute);
+        const teamNumber = teamActorNumber.get(teamActor);
+        if(teamNumber !== null && teamNumber !== undefined) priTeam.set(actorId, teamNumber);
+      }
+
+      if(objectNameMatches(objectName, "Engine.Pawn:PlayerReplicationInfo")){
+        const priActor = extractActorReference(value) ?? extractActorReference(attribute);
+        if(Number.isInteger(priActor)) carPri.set(actorId, priActor);
+      }
+
+      if(objectNameMatches(objectName, "TAGame.GameEvent_Soccar_TA:SecondsRemaining")){
+        const secondsRemaining = replayIntValue(attribute, value);
+        if(Number.isFinite(secondsRemaining)){
+          scoreboardSecondsRemaining = secondsRemaining;
+          scoreboardClockFinalSeconds = secondsRemaining;
+          scoreboardClockStartSeconds = Math.max(scoreboardClockStartSeconds ?? secondsRemaining, secondsRemaining);
+        }
+      }
+
+      if(objectNameMatches(objectName, "TAGame.GameEvent_Soccar_TA:bOverTime")){
+        const overtimeValue = getObject(attribute, "Boolean") ?? getObject(value, "Boolean");
+        if(typeof overtimeValue === "boolean") isOvertime = overtimeValue;
+      }
+
+      const loc = decodeActorLocation(value);
+      if(loc){
+        if(carActors.has(actorId)) carLoc.set(actorId, loc);
+        if(ballActors.has(actorId)){
+          ballLoc.set(actorId, loc);
+          latestBallLocation = loc;
+        }
+      }
+
+      const statMatch = /TAGame\.PRI_TA:Match(Shots|Goals|Saves)$/.exec(objectName);
+      if(!statMatch) continue;
+      const statValue = replayIntValue(attribute, value);
+      if(!Number.isFinite(statValue)) continue;
+      const key = `${actorId}:${statMatch[1]}`;
+      const previousValue = lastStatValue.get(key) ?? 0;
+      lastStatValue.set(key, statValue);
+      if(statValue <= previousValue) continue;
+
+      for(let valueIndex = previousValue + 1; valueIndex <= statValue; valueIndex++){
+        const event = makeStatEvent(statMatch[1], time, actorId, valueIndex);
+        if(!event.playerName) continue;
+        if(statMatch[1] === "Shots") shotEvents.push(event);
+        if(statMatch[1] === "Goals") goalEvents.push(event);
+        if(statMatch[1] === "Saves") saveEvents.push(event);
+      }
+    }
+
+    pushPhysicsSamples(time);
+  }
+
+  const nameAliases = buildReplayNameAliases(parsedReplay, [
+    ...new Set([
+      ...priName.values(),
+      ...shotEvents.map(event=>event.playerName),
+      ...goalEvents.map(event=>event.playerName),
+      ...saveEvents.map(event=>event.playerName),
+      ...[...distanceSamplesByPri.keys()].map(pri=>priName.get(pri))
+    ])
+  ]);
+  const censoredAliases = new Map([...nameAliases].map(([censoredName, realName]) => [realName, censoredName]));
+  const resolveName = name => nameAliases.get(cleanName(name)) || cleanName(name);
+  const resolveTeam = event => {
+    const aliasName = resolveName(event.playerName);
+    const headerTeam = teamByStatName.get(aliasName);
+    return headerTeam !== undefined ? headerTeam : event.teamNumber;
+  };
+
+  const usedGoals = new Set();
+  const usedSaves = new Set();
+  const players = new Map();
+
+  function ensurePlayer(playerName, censoredName=null){
+    const cleanPlayerName = cleanName(playerName);
+    if(!cleanPlayerName) return null;
+    if(!players.has(cleanPlayerName)){
+      players.set(cleanPlayerName, {
+        name: cleanPlayerName,
+        censoredName: censoredName || censoredAliases.get(cleanPlayerName) || null,
+        shotSamples: [],
+        distanceToBallSamples: [],
+        positionSamples: []
+      });
+    }
+    const player = players.get(cleanPlayerName);
+    if(censoredName && !player.censoredName) player.censoredName = censoredName;
+    return player;
+  }
+
+  function addSample(playerName, censoredName, sample){
+    const player = ensurePlayer(playerName, censoredName);
+    if(!player) return;
+    player.shotSamples.push(sample);
+  }
+
+  function findMatchingGoal(shot){
+    let bestIndex = null;
+    let bestScore = Infinity;
+    for(let i = 0; i < goalEvents.length; i++){
+      if(usedGoals.has(i)) continue;
+      const goal = goalEvents[i];
+      if(resolveName(goal.playerName).toLowerCase() !== resolveName(shot.playerName).toLowerCase()) continue;
+      const delta = goal.time - shot.time;
+      if(delta < -0.35 || delta > 6.25) continue;
+      const score = Math.abs(delta);
+      if(score < bestScore){
+        bestScore = score;
+        bestIndex = i;
+      }
+    }
+    return bestIndex;
+  }
+
+  function findMatchingSave(shot, shotTeam){
+    let bestIndex = null;
+    let bestScore = Infinity;
+    for(let i = 0; i < saveEvents.length; i++){
+      if(usedSaves.has(i)) continue;
+      const save = saveEvents[i];
+      const saveTeam = normalizeTeamNumber(resolveTeam(save));
+      if(saveTeam !== null && shotTeam !== null && saveTeam === shotTeam) continue;
+      const delta = save.time - shot.time;
+      if(delta < -0.35 || delta > 2.75) continue;
+      const distanceScore = distanceBetweenLocations(shot.ballLocation, save.ballLocation) / 2500;
+      const score = Math.abs(delta) + distanceScore;
+      if(score < bestScore){
+        bestScore = score;
+        bestIndex = i;
+      }
+    }
+    return bestIndex;
+  }
+
+  for(const shot of shotEvents){
+    const playerName = resolveName(shot.playerName);
+    const censoredName = censoredAliases.get(playerName) || (isMaskedReplayName(shot.playerName) ? shot.playerName : null);
+    const teamNumber = normalizeTeamNumber(resolveTeam(shot));
+    let result = "miss";
+    let placementLocation = shot.ballLocation || shot.shooterLocation;
+    let placementSource = "shot";
+
+    const goalIndex = findMatchingGoal(shot);
+    if(goalIndex !== null){
+      const goal = goalEvents[goalIndex];
+      usedGoals.add(goalIndex);
+      result = "goal";
+      placementLocation = goal.ballLocation || placementLocation;
+      placementSource = "goal";
+      shot.nearestOpponentDistanceUU = goal.nearestOpponentDistanceUU;
+      shot.nearestOpponent = goal.nearestOpponent;
+    }else{
+      const saveIndex = findMatchingSave(shot, teamNumber);
+      if(saveIndex !== null){
+        const save = saveEvents[saveIndex];
+        usedSaves.add(saveIndex);
+        result = "save";
+        placementLocation = save.ballLocation || placementLocation;
+        placementSource = "save";
+        shot.nearestOpponentDistanceUU = save.nearestOpponentDistanceUU;
+        shot.nearestOpponent = save.nearestOpponent;
+      }
+    }
+
+    const face = goalFaceFromReplayLocation(placementLocation, teamNumber);
+    addSample(playerName, censoredName, {
+      result,
+      elapsedSeconds: Number(shot.elapsedSeconds.toFixed(3)),
+      scoreboardSecondsRemaining: shot.scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: shot.scoreboardElapsedSeconds,
+      goalTime: shot.goalTime || scoreboardClockLabel(shot.scoreboardSecondsRemaining),
+      xPercent: Number(face.xPercent.toFixed(2)),
+      yPercent: Number(face.yPercent.toFixed(2)),
+      nearestOpponentDistanceUU: shot.nearestOpponentDistanceUU,
+      nearestOpponent: shot.nearestOpponent ? resolveName(shot.nearestOpponent) : null,
+      lastTouchDistanceToNetUU: shot.lastTouchDistanceToNetUU,
+      player: playerName,
+      team: teamNumber === 0 ? "Blue" : teamNumber === 1 ? "Orange" : null,
+      source: "rrrocket-stat",
+      placementSource,
+      statValue: shot.value,
+      shotTime: shot.time,
+      shotLocation: shot.ballLocation,
+      lastTouchLocation: shot.lastTouchLocation,
+      lastTouchTime: shot.lastTouchTime,
+      lastTouchScoreboardSecondsRemaining: shot.lastTouchScoreboardSecondsRemaining,
+      placementLocation,
+      shooterLocation: shot.shooterLocation
+    });
+  }
+
+  for(let i = 0; i < goalEvents.length; i++){
+    if(usedGoals.has(i)) continue;
+    const goal = goalEvents[i];
+    const playerName = resolveName(goal.playerName);
+    const expectedShots = expectedShotsByStatName.get(playerName);
+    const currentSamples = players.get(playerName)?.shotSamples.length || 0;
+    if(Number.isFinite(expectedShots) && currentSamples >= expectedShots) continue;
+    const teamNumber = normalizeTeamNumber(resolveTeam(goal));
+    const face = goalFaceFromReplayLocation(goal.ballLocation || goal.shooterLocation, teamNumber);
+    addSample(playerName, censoredAliases.get(playerName) || null, {
+      result: "goal",
+      elapsedSeconds: Number(goal.elapsedSeconds.toFixed(3)),
+      scoreboardSecondsRemaining: goal.scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: goal.scoreboardElapsedSeconds,
+      goalTime: goal.goalTime || scoreboardClockLabel(goal.scoreboardSecondsRemaining),
+      xPercent: Number(face.xPercent.toFixed(2)),
+      yPercent: Number(face.yPercent.toFixed(2)),
+      nearestOpponentDistanceUU: goal.nearestOpponentDistanceUU,
+      nearestOpponent: goal.nearestOpponent ? resolveName(goal.nearestOpponent) : null,
+      lastTouchDistanceToNetUU: goal.lastTouchDistanceToNetUU,
+      player: playerName,
+      team: teamNumber === 0 ? "Blue" : teamNumber === 1 ? "Orange" : null,
+      source: "rrrocket-goal-fallback",
+      placementSource: "goal",
+      statValue: goal.value,
+      shotTime: goal.time,
+      shotLocation: goal.ballLocation,
+      lastTouchLocation: goal.lastTouchLocation,
+      lastTouchTime: goal.lastTouchTime,
+      lastTouchScoreboardSecondsRemaining: goal.lastTouchScoreboardSecondsRemaining,
+      placementLocation: goal.ballLocation,
+      shooterLocation: goal.shooterLocation
+    });
+  }
+
+  for(const [pri, samples] of distanceSamplesByPri){
+    const rawName = cleanName(samples[0]?.playerName || priName.get(pri));
+    const playerName = resolveName(rawName);
+    const censoredName = censoredAliases.get(playerName) || (isMaskedReplayName(rawName) ? rawName : null);
+    const player = ensurePlayer(playerName, censoredName);
+    if(!player) continue;
+    player.distanceToBallSamples = samples.map(sample=>({
+      elapsedSeconds: sample.elapsedSeconds,
+      scoreboardSecondsRemaining: sample.scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: sample.scoreboardElapsedSeconds,
+      distanceUU: sample.distanceUU,
+      carActor: sample.carActor,
+      carLocation: sample.carLocation,
+      ballLocation: sample.ballLocation
+    }));
+    player.positionSamples = (positionSamplesByPri.get(pri) || []).map(sample=>({
+      elapsedSeconds: sample.elapsedSeconds,
+      scoreboardSecondsRemaining: sample.scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: sample.scoreboardElapsedSeconds,
+      x: sample.x,
+      y: sample.y,
+      z: sample.z
+    }));
+  }
+
+  const sortedPlayers = [...players.values()]
+    .map(player=>({
+      ...player,
+      shotSamples: player.shotSamples.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0)),
+      distanceToBallSamples: player.distanceToBallSamples.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0)),
+      positionSamples: player.positionSamples.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0))
+    }))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+
+  return {
+    parser: "rrrocket",
+    players: sortedPlayers,
+    nameAliases: [...nameAliases].map(([censoredName, realName])=>({name:realName, censoredName})),
+    totalShotSamples: sortedPlayers.reduce((sum, player)=>sum + player.shotSamples.length, 0),
+    totalDistanceSamples: sortedPlayers.reduce((sum, player)=>sum + player.distanceToBallSamples.length, 0),
+    totalPositionSamples: sortedPlayers.reduce((sum, player)=>sum + player.positionSamples.length, 0),
+    totalBallSamples: ballSampleCount,
+    scoreboardClockStartSeconds,
+    scoreboardClockFinalSeconds,
+    frameCount: frames.length,
+    shotStatEvents: shotEvents.length,
+    goalStatEvents: goalEvents.length,
+    saveStatEvents: saveEvents.length,
+    matchedGoalEvents: usedGoals.size,
+    matchedSaveEvents: usedSaves.size
+  };
+}
+
 async function handleBoostParse(req, res){
   if(req.method === "OPTIONS"){
     res.writeHead(204, corsHeaders);
@@ -489,11 +1123,44 @@ async function handleBoostParse(req, res){
   }
 }
 
+async function handleShotParse(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use POST with replay bytes.");
+    return;
+  }
+
+  const replayBytes = await readRequestBody(req);
+  if(!replayBytes.length) throw new Error("No replay bytes were uploaded.");
+
+  await fs.mkdir(tmpDir, {recursive:true});
+  const replayPath = path.join(tmpDir, `shots-${Date.now()}-${Math.random().toString(16).slice(2)}.replay`);
+  try{
+    await fs.writeFile(replayPath, replayBytes);
+    const stdout = await runRrrocket(replayPath);
+    const parsed = JSON.parse(stdout.charCodeAt(0) === 0xfeff ? stdout.slice(1) : stdout);
+    const summary = summarizeShotSamples(parsed);
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8"});
+    res.end(JSON.stringify(summary));
+  }finally{
+    await fs.rm(replayPath, {force:true}).catch(()=>{});
+  }
+}
+
 http.createServer(async (req,res)=>{
   try{
     const url = new URL(req.url, "http://127.0.0.1");
     if(url.pathname === "/api/parse-replay-boosts"){
       await handleBoostParse(req, res);
+      return;
+    }
+    if(url.pathname === "/api/parse-replay-shots"){
+      await handleShotParse(req, res);
       return;
     }
     if(url.pathname === "/__spark_logo.png" || url.pathname === "/__1ne_logo.png"){
