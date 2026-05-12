@@ -10,7 +10,6 @@ const appFileName = "SPARK.html";
 const logoPath = path.join(here, "assets", "Spark Logo.png");
 const rrrocketPath = path.join(here, "tools", "rrrocket", "rrrocket-0.11.1-x86_64-pc-windows-msvc", "rrrocket.exe");
 const tmpDir = path.join(here, ".tmp");
-const knownBoostMapPath = path.join(here, "known-boost-maps.json");
 const types = new Map([
   [".html", "text/html; charset=utf-8"],
   [".js", "text/javascript"],
@@ -59,43 +58,6 @@ const standardBoostPadCoords = [
   {fieldX:-1792,fieldY:4184,type:"small"},
   {fieldX:1792,fieldY:4184,type:"small"},
   {fieldX:0,fieldY:4240,type:"small"}
-];
-
-const ballchasingBoostPadCoords = [
-  {fieldX:3700,fieldY:0},
-  {fieldX:-3700,fieldY:0},
-  {fieldX:3100,fieldY:4150},
-  {fieldX:-3100,fieldY:4150},
-  {fieldX:-3100,fieldY:-4150},
-  {fieldX:3100,fieldY:-4150},
-  {fieldX:1000,fieldY:0},
-  {fieldX:-1000,fieldY:0},
-  {fieldX:0,fieldY:1000},
-  {fieldX:0,fieldY:-1000},
-  {fieldX:2050,fieldY:1050},
-  {fieldX:2050,fieldY:-1050},
-  {fieldX:-2050,fieldY:1050},
-  {fieldX:-2050,fieldY:-1050},
-  {fieldX:1750,fieldY:2280},
-  {fieldX:1750,fieldY:-2280},
-  {fieldX:-1750,fieldY:2280},
-  {fieldX:-1750,fieldY:-2280},
-  {fieldX:0,fieldY:2800},
-  {fieldX:0,fieldY:-2800},
-  {fieldX:950,fieldY:3300},
-  {fieldX:-950,fieldY:3300},
-  {fieldX:950,fieldY:-3300},
-  {fieldX:-950,fieldY:-3300},
-  {fieldX:1780,fieldY:4180},
-  {fieldX:1780,fieldY:-4180},
-  {fieldX:-1780,fieldY:4180},
-  {fieldX:-1780,fieldY:-4180},
-  {fieldX:0,fieldY:4200},
-  {fieldX:0,fieldY:-4200},
-  {fieldX:3550,fieldY:2500},
-  {fieldX:3550,fieldY:-2500},
-  {fieldX:-3550,fieldY:2500},
-  {fieldX:-3550,fieldY:-2500}
 ];
 
 function readRequestBody(req, limitBytes=128 * 1024 * 1024){
@@ -158,10 +120,6 @@ function cleanName(name){
   return String(name || "").replace(/\0/g, "").trim();
 }
 
-function normalizeNameKey(name){
-  return cleanName(name).toLowerCase();
-}
-
 function nearestBoostPadIndex(coord){
   if(!coord) return null;
   const best = nearestBoostPadMatch(coord);
@@ -190,11 +148,6 @@ function isMaskedReplayName(name){
   return /^\*+$/.test(cleanName(name));
 }
 
-function ballchasingPadToStandardPadIndex(ballchasingPadIndex){
-  const coord = ballchasingBoostPadCoords[ballchasingPadIndex];
-  return coord ? nearestBoostPadIndex({x:coord.fieldX, y:coord.fieldY}) : null;
-}
-
 function buildReplayNameAliases(parsedReplay, observedPlayers){
   const statNames = (parsedReplay?.properties?.PlayerStats || [])
     .map(player => cleanName(player?.Name))
@@ -215,92 +168,13 @@ function buildReplayNameAliases(parsedReplay, observedPlayers){
   return aliases;
 }
 
-async function loadKnownBoostMap(parsedReplay){
-  let knownBoostMaps = null;
-  try{
-    knownBoostMaps = JSON.parse(await fs.readFile(knownBoostMapPath, "utf8"));
-  }catch{
-    return null;
-  }
-
-  const candidateIds = [
-    parsedReplay?.properties?.Id,
-    parsedReplay?.properties?.ReplayId,
-    parsedReplay?.properties?.MatchGUID,
-    parsedReplay?.properties?.MatchGuid
-  ].map(cleanName).filter(Boolean);
-
-  for(const id of candidateIds){
-    if(knownBoostMaps[id]) return knownBoostMaps[id];
-  }
-  return null;
+function boostPickupEventKey(playerName, padIndex, time){
+  return `${playerName}:${padIndex}:${Math.round(Number(time || 0) * 20) / 20}`;
 }
 
-function countsToBoostPickups(counts, source){
-  const boostPickups = [];
-  (counts || []).forEach((count, ballchasingPadIndex)=>{
-    const padIndex = ballchasingPadToStandardPadIndex(ballchasingPadIndex);
-    const pad = standardBoostPadCoords[padIndex];
-    const pickupCount = Math.max(0, Math.trunc(Number(count) || 0));
-    if(!pad) return;
-    for(let pickupNumber = 0; pickupNumber < pickupCount; pickupNumber++){
-      boostPickups.push({
-        time:null,
-        padIndex,
-        padActor:null,
-        padName:null,
-        pickupActorSuffix:null,
-        type:pad.type,
-        fieldX:pad.fieldX,
-        fieldY:pad.fieldY,
-        instigator:null,
-        pri:null,
-        boostBefore:null,
-        boostAfter:null,
-        boostDelta:null,
-        detection:"ballchasing-boostmap",
-        source,
-        sourcePadIndex:ballchasingPadIndex
-      });
-    }
-  });
-  return boostPickups;
-}
-
-function applyKnownBoostMap(summary, knownBoostMap){
-  const importedPlayers = [
-    ...(knownBoostMap?.teams?.blue || []).map((player, teamIndex)=>({...player, team:"blue", teamIndex})),
-    ...(knownBoostMap?.teams?.orange || []).map((player, teamIndex)=>({...player, team:"orange", teamIndex}))
-  ];
-  if(!importedPlayers.length) return summary;
-
-  const playersByName = new Map();
-  const playersByCensoredName = new Map();
-  for(const player of summary.players){
-    playersByName.set(normalizeNameKey(player.name), player);
-    if(player.censoredName) playersByCensoredName.set(normalizeNameKey(player.censoredName), player);
-  }
-
-  const appliedPlayers = [];
-  for(const importedPlayer of importedPlayers){
-    const importedNameKey = normalizeNameKey(importedPlayer.name);
-    const player = playersByName.get(importedNameKey) || playersByCensoredName.get(importedNameKey);
-    if(!player) continue;
-    player.boostPickups = countsToBoostPickups(importedPlayer.counts, knownBoostMap.source);
-    player.boostMapSource = knownBoostMap.source || "known-boost-map";
-    appliedPlayers.push(player.name);
-  }
-
-  if(!appliedPlayers.length) return summary;
-  const totalBoostPickups = summary.players.reduce((sum, player)=>sum + player.boostPickups.length, 0);
-  return {
-    ...summary,
-    boostMapSource:"known-boost-map",
-    boostMapSourceUrl:knownBoostMap.source || null,
-    boostMapAppliedPlayers:appliedPlayers,
-    totalBoostPickups,
-    mappedBoostPickups:totalBoostPickups
-  };
+function isSmallBoostRise(boostIncrease){
+  if(!boostIncrease) return false;
+  return boostIncrease.boostDelta >= 8 && boostIncrease.boostDelta <= 45;
 }
 
 function summarizeBoostPickups(parsedReplay){
@@ -312,6 +186,7 @@ function summarizeBoostPickups(parsedReplay){
   const carLoc = new Map();
   const boostComponentCar = new Map();
   const boostComponentAmount = new Map();
+  const carBoostAmount = new Map();
   const actorObject = new Map();
   const pickupState = new Map();
   const pickupAvailable = new Map();
@@ -335,6 +210,8 @@ function summarizeBoostPickups(parsedReplay){
       pickupState.delete(actorId);
       carPri.delete(actorId);
       carLoc.delete(actorId);
+      const boostCarActor = boostComponentCar.get(actorId);
+      if(Number.isInteger(boostCarActor)) carBoostAmount.delete(boostCarActor);
       boostComponentCar.delete(actorId);
       boostComponentAmount.delete(actorId);
     }
@@ -362,7 +239,11 @@ function summarizeBoostPickups(parsedReplay){
 
       if(objectNameMatches(objectName, "TAGame.CarComponent_TA:Vehicle")){
         const carActor = extractActorReference(value) ?? extractActorReference(attribute);
-        if(Number.isInteger(carActor)) boostComponentCar.set(actorId, carActor);
+        if(Number.isInteger(carActor)){
+          boostComponentCar.set(actorId, carActor);
+          const boostAmount = boostComponentAmount.get(actorId);
+          if(Number.isFinite(boostAmount)) carBoostAmount.set(carActor, boostAmount);
+        }
       }
 
       const loc = decodeActorLocation(value);
@@ -388,6 +269,7 @@ function summarizeBoostPickups(parsedReplay){
               location: carLoc.get(carActor)
             });
           }
+          if(Number.isInteger(carActor)) carBoostAmount.set(carActor, boostAmount);
           boostComponentAmount.set(actorId, boostAmount);
         }
       }
@@ -430,7 +312,8 @@ function summarizeBoostPickups(parsedReplay){
         location,
         hadAvailable: pickupAvailable.get(suffix) === true,
         isInitialPickupState: pickedUp === 1,
-        isOvertime
+        isOvertime,
+        boostAtPickup: carBoostAmount.get(instigator)
       });
       pickupAvailable.set(suffix, false);
     }
@@ -496,7 +379,39 @@ function summarizeBoostPickups(parsedReplay){
       padIndex,
       boostBefore: bestBoost.previousBoost,
       boostAfter: bestBoost.boostAmount,
-      boostDelta: bestBoost.boostDelta
+      boostDelta: bestBoost.boostDelta,
+      detection: "pickup-state"
+    });
+  }
+
+  const eventKeys = new Set(events.map(event=>boostPickupEventKey(event.playerName, event.padIndex, event.time)));
+  for(let i = 0; i < boostIncreases.length; i++){
+    if(usedBoostIncreases.has(i)) continue;
+    const boostIncrease = boostIncreases[i];
+    if(!boostIncrease.playerName || !boostIncrease.location || !isSmallBoostRise(boostIncrease)) continue;
+    const match = nearestBoostPadMatch(boostIncrease.location);
+    if(!match?.pad || match.pad.type !== "small" || match.distance > 260) continue;
+    const key = boostPickupEventKey(boostIncrease.playerName, match.index, boostIncrease.time);
+    if(eventKeys.has(key)) continue;
+
+    eventKeys.add(key);
+    events.push({
+      time: boostIncrease.time,
+      playerName: boostIncrease.playerName,
+      pri: boostIncrease.pri,
+      instigator: boostIncrease.carActor,
+      padActor: null,
+      padName: null,
+      pickupActorSuffix: null,
+      location: boostIncrease.location,
+      hadAvailable: false,
+      isInitialPickupState: false,
+      isOvertime: false,
+      padIndex: match.index,
+      boostBefore: boostIncrease.previousBoost,
+      boostAfter: boostIncrease.boostAmount,
+      boostDelta: boostIncrease.boostDelta,
+      detection: "small-boost-rise"
     });
   }
 
@@ -566,8 +481,7 @@ async function handleBoostParse(req, res){
     await fs.writeFile(replayPath, replayBytes);
     const stdout = await runRrrocket(replayPath);
     const parsed = JSON.parse(stdout.charCodeAt(0) === 0xfeff ? stdout.slice(1) : stdout);
-    const knownBoostMap = await loadKnownBoostMap(parsed);
-    const summary = applyKnownBoostMap(summarizeBoostPickups(parsed), knownBoostMap);
+    const summary = summarizeBoostPickups(parsed);
     res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8"});
     res.end(JSON.stringify(summary));
   }finally{
