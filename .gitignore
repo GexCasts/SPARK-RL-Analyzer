@@ -3,3 +3,5 @@
 *.replay
 *.log
 tools/*.zip
+tools/node/
+tools/rrrocket/*.zip

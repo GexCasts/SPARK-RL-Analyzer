@@ -4,6 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>SPARK</title>
+<link rel="icon" type="image/png" href="assets/SPARK%20app%20logo%20transparent.png"/>
+<link rel="apple-touch-icon" href="assets/SPARK%20app%20logo%20transparent.png"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 :root{
@@ -13,6 +15,7 @@
   --gold:#ffd000; --silver:#a8a8a8; --dark:#090909;
   --spark-yellow:#ffd000; --spark-amber:#f0a020; --spark-deep:#111111;
   --spark-graphite:#3f3f3f; --spark-steel:#8f8f8f; --spark-chrome:#f2f2f2;
+  --spark-watermark:url("assets/SPARK%20app%20logo%20transparent.png");
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -104,7 +107,7 @@ input{display:none}
 .modeTabs{margin:12px 0 2px}
 .modeTabs button{border-color:var(--spark-yellow)}
 .modeTabs button:not(.active){background:#191919;color:#ececec}
-.nameDisplayToggle{
+.nameDisplayToggle,.unitDisplayToggle{
   display:flex;
   align-items:center;
   justify-content:space-between;
@@ -117,7 +120,7 @@ input{display:none}
   color:var(--muted);
   font-size:12px;
 }
-.nameDisplayToggle label{
+.nameDisplayToggle label,.unitDisplayToggle label{
   display:flex;
   align-items:center;
   gap:8px;
@@ -125,8 +128,8 @@ input{display:none}
   color:#dce8f7;
   font-weight:800;
 }
-.nameDisplayToggle input{display:inline-block;accent-color:var(--gold)}
-.nameDisplayToggle.disabled{opacity:.45}
+.nameDisplayToggle input,.unitDisplayToggle input{display:inline-block;accent-color:var(--gold)}
+.nameDisplayToggle.disabled,.unitDisplayToggle.disabled{opacity:.45}
 button{
   background:linear-gradient(180deg,#2b2b2b,#171717);color:#f3f4f6;border:1px solid #6b6b6b;border-radius:999px;
   padding:8px 12px;cursor:pointer;font-weight:700;font-size:12px;
@@ -158,9 +161,23 @@ button.active{background:linear-gradient(90deg,var(--spark-yellow),var(--spark-c
 }
 .span2{grid-column:span 2}
 .full{grid-column:1 / -1}
-.chartWrap{height:clamp(240px,24vh,330px);position:relative}
+.chartWrap{height:clamp(240px,24vh,330px);position:relative;overflow:hidden;border-radius:6px}
 .chartWrap.tall{height:clamp(280px,30vh,420px)}
+.chartWrap::before{
+  content:"";
+  position:absolute;
+  inset:10% 8%;
+  background-image:var(--spark-watermark);
+  background-repeat:no-repeat;
+  background-position:center;
+  background-size:contain;
+  opacity:.18;
+  filter:grayscale(.2) contrast(1.08) drop-shadow(0 0 14px rgba(255,208,0,.18));
+  pointer-events:none;
+  z-index:0;
+}
 canvas{width:100%!important;height:100%!important}
+.chartWrap canvas{position:relative;z-index:1}
 .note{
   margin-top:10px;padding:10px;border:1px solid #555;background:linear-gradient(180deg,#242424,#171717);border-radius:8px;
   color:#e6e6e6;line-height:1.45;font-size:clamp(11px,.72vw,13px)
@@ -246,6 +263,7 @@ canvas{width:100%!important;height:100%!important}
 .barlabel{display:flex;justify-content:space-between;font-size:clamp(11px,.72vw,13px);margin-bottom:5px;gap:12px}
 .track{height:16px;background:#2a2c31;border-radius:999px;overflow:hidden}
 .fill{height:100%;background:linear-gradient(90deg,var(--spark-yellow),var(--spark-chrome));border-radius:999px}
+.fill.warningFill{background:linear-gradient(90deg,#f0a020,#ef4444)}
 .tableWrap{overflow:auto;max-height:clamp(220px,26vh,360px)}
 table{width:100%;border-collapse:collapse;font-size:clamp(11px,.72vw,13px);min-width:760px}
 td,th{border-bottom:1px solid #1e3354;padding:8px;text-align:left;vertical-align:top}
@@ -269,6 +287,20 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
 
 .goal.left{left:0}.goal.right{right:0}
 
+
+.sparkMapWatermark{
+  position:absolute;
+  inset:12% 16%;
+  z-index:1;
+  background-image:var(--spark-watermark);
+  background-repeat:no-repeat;
+  background-position:center;
+  background-size:contain;
+  opacity:.16;
+  filter:grayscale(.25) contrast(1.08) drop-shadow(0 0 16px rgba(255,208,0,.18));
+  pointer-events:none;
+}
+.goalMap .sparkMapWatermark{inset:10% 18%;opacity:.14;z-index:2}
 
 .heatBlob{
   position:absolute;
@@ -354,34 +386,45 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
 .goalMap{
   position:relative;
   width:100%;
-  aspect-ratio:16 / 9;
+  aspect-ratio:16 / 8.6;
   border-radius:16px;
   overflow:hidden;
   border:1px solid #55585f;
   background:
-    radial-gradient(circle at 50% 54%, rgba(255,204,0,.16), transparent 34%),
-    linear-gradient(180deg, rgba(255,255,255,.045), rgba(0,0,0,.18)),
+    radial-gradient(ellipse at 50% 60%, rgba(255,208,0,.16), transparent 36%),
+    radial-gradient(ellipse at 50% 18%, rgba(201,201,201,.14), transparent 42%),
+    linear-gradient(180deg, rgba(255,255,255,.07), rgba(0,0,0,.22)),
     #101215;
 }
 .goalMap:before{
   content:"";
   position:absolute;
-  inset:8% 6%;
-  border:4px solid rgba(220,220,220,.82);
-  border-bottom-width:6px;
-  border-radius:8px 8px 3px 3px;
+  left:8.33%;
+  right:8.33%;
+  top:6.67%;
+  bottom:10%;
+  border:5px solid rgba(232,232,220,.88);
+  border-top-color:rgba(255,224,80,.82);
+  border-bottom-width:8px;
+  border-radius:12px 12px 4px 4px;
   box-shadow:
-    0 0 18px rgba(255,204,0,.14),
-    inset 0 0 22px rgba(255,255,255,.06);
-  z-index:2;
+    0 0 0 5px rgba(255,208,0,.18),
+    0 0 24px rgba(255,204,0,.22),
+    inset 0 0 26px rgba(255,255,255,.08);
+  z-index:3;
 }
 .goalMap:after{
   content:"";
   position:absolute;
-  inset:8% 6%;
+  left:8.33%;
+  right:8.33%;
+  top:6.67%;
+  bottom:10%;
   background:
-    linear-gradient(90deg, transparent 0 24.8%, rgba(201,201,201,.18) 24.8% 25.3%, transparent 25.3% 49.8%, rgba(201,201,201,.24) 49.8% 50.2%, transparent 50.2% 74.7%, rgba(201,201,201,.18) 74.7% 75.2%, transparent 75.2%),
-    linear-gradient(180deg, transparent 0 24.7%, rgba(201,201,201,.18) 24.7% 25.2%, transparent 25.2% 49.8%, rgba(201,201,201,.22) 49.8% 50.2%, transparent 50.2% 74.8%, rgba(201,201,201,.18) 74.8% 75.3%, transparent 75.3%);
+    linear-gradient(90deg, transparent 0 12%, rgba(255,255,255,.12) 12.1% 12.4%, transparent 12.5% 24.8%, rgba(255,255,255,.20) 24.8% 25.2%, transparent 25.3% 37.3%, rgba(255,255,255,.12) 37.4% 37.7%, transparent 37.8% 49.8%, rgba(255,255,255,.24) 49.8% 50.2%, transparent 50.3% 62.3%, rgba(255,255,255,.12) 62.4% 62.7%, transparent 62.8% 74.8%, rgba(255,255,255,.20) 74.8% 75.2%, transparent 75.3% 87.5%, rgba(255,255,255,.12) 87.6% 87.9%, transparent 88%),
+    linear-gradient(180deg, transparent 0 16.4%, rgba(255,255,255,.12) 16.5% 16.8%, transparent 16.9% 33.1%, rgba(255,255,255,.20) 33.2% 33.6%, transparent 33.7% 49.8%, rgba(255,255,255,.22) 49.8% 50.2%, transparent 50.3% 66.4%, rgba(255,255,255,.20) 66.5% 66.9%, transparent 67% 83.1%, rgba(255,255,255,.12) 83.2% 83.5%, transparent 83.6%),
+    repeating-linear-gradient(45deg, rgba(255,255,255,.055) 0 1px, transparent 1px 17px),
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.045) 0 1px, transparent 1px 17px);
   z-index:1;
 }
 .goalLabel{
@@ -407,14 +450,14 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
 }
 .postZone{
   position:absolute;
-  z-index:3;
-  background:rgba(255,204,0,.10);
-  border:1px solid rgba(255,204,0,.22);
-  box-shadow:inset 0 0 16px rgba(255,204,0,.12);
+  z-index:4;
+  background:rgba(255,204,0,.14);
+  border:1px solid rgba(255,204,0,.34);
+  box-shadow:inset 0 0 18px rgba(255,204,0,.18),0 0 14px rgba(255,204,0,.14);
 }
-.postZone.left{left:5.2%;top:7%;width:2.4%;height:86%;}
-.postZone.right{right:5.2%;top:7%;width:2.4%;height:86%;}
-.postZone.top{left:6%;top:7%;width:88%;height:3%;}
+.postZone.left{left:7.38%;top:6%;width:2.5%;height:84.8%;}
+.postZone.right{right:7.38%;top:6%;width:2.5%;height:84.8%;}
+.postZone.top{left:8.33%;top:5.72%;width:83.33%;height:3.2%;}
 .shotBlob{
   position:absolute;
   transform:translate(-50%,-50%);
@@ -667,9 +710,29 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
   width:100%;
   height:100%;
   pointer-events:none;
+  z-index:3;
   mix-blend-mode:screen;
   filter:saturate(1.15);
 }
+
+.positioningGridCanvas{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+  z-index:4;
+}
+.positioningLegend{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:8px;
+  color:var(--muted);
+  font-size:12px;
+}
+.positioningLegend span{display:inline-flex;align-items:center;gap:6px}
+.positioningLegend i{display:inline-block;width:13px;height:13px;border-radius:4px}
 
 
 
@@ -679,17 +742,6 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
 .ball{background:#fff;width:9px!important;height:9px!important;box-shadow:0 0 18px #fff}
 .legend{display:flex;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:10px}
 .legendItem:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--c)}
-.physicsPanel{display:grid;grid-template-columns:minmax(260px,1fr) minmax(280px,1.2fr);gap:14px;align-items:stretch}
-.physicsCanvasWrap{position:relative;aspect-ratio:16/9;border:1px solid #4e5056;border-radius:8px;overflow:hidden;background:#101215}
-.physicsCanvasWrap:before{content:"";position:absolute;inset:9% 6%;border:2px solid rgba(220,220,220,.28);border-radius:6px;z-index:1;pointer-events:none}
-#physicsCanvas{width:100%;height:100%;display:block;background:radial-gradient(circle at 50% 50%,rgba(255,208,0,.13),transparent 32%),linear-gradient(90deg,rgba(255,208,0,.09),transparent 48%,rgba(240,160,32,.09));}
-.physicsReadout{display:grid;gap:10px;align-content:start}
-.physicsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.physicsStat{padding:9px;border:1px solid rgba(255,255,255,.10);border-radius:6px;background:rgba(255,255,255,.045);font-size:12px;color:var(--muted)}
-.physicsStat b{display:block;color:#fff;font-size:18px;margin-bottom:2px}
-.physicsStatusLine{font-size:12px;color:#dce8f7;line-height:1.45}
-.physicsStatusLine strong{color:var(--spark-yellow)}
-@media (max-width:900px){.physicsPanel{grid-template-columns:1fr}.physicsGrid{grid-template-columns:repeat(2,1fr)}}
 
 .timelineCard{
   display:flex;
@@ -1202,6 +1254,13 @@ body.obsOverlayMode #obsOverlayRoot{
         </label>
         <span id="censoredNameStatus">No censored names loaded</span>
       </div>
+      <div class="unitDisplayToggle" id="unitDisplayToggle">
+        <label>
+          <input id="unitSystemToggle" type="checkbox" onchange="toggleUnitSystem(this.checked)">
+          Use imperial measurements
+        </label>
+        <span id="unitSystemStatus">Metric measurements</span>
+      </div>
       <div class="tabs" id="tabs"></div>
     </div>
   </section>
@@ -1233,27 +1292,9 @@ body.obsOverlayMode #obsOverlayRoot{
       </div>
     </div>
 
-    <div class="card span2" id="physicsAnalysisCard">
-      <h2>Background Replay Physics Analysis</h2>
-      <div class="help">Runs after a .replay upload without blocking the dashboard. This pass scans the whole replay buffer and prepares the app for frame-level ball/car decoding; position rendering stays disabled until valid physics frames are decoded.</div>
-      <div class="physicsPanel">
-        <div class="physicsCanvasWrap"><canvas id="physicsCanvas" width="960" height="540"></canvas></div>
-        <div class="physicsReadout">
-          <div class="physicsStatusLine" id="physicsStatusText"><strong>Idle.</strong> Upload a replay to start the background physics pass.</div>
-          <div class="track"><div class="fill" id="physicsProgressFill" style="width:0%"></div></div>
-          <div class="physicsGrid" id="physicsDetails">
-            <div class="physicsStat"><b>0</b>frames</div>
-            <div class="physicsStat"><b>0</b>car samples</div>
-            <div class="physicsStat"><b>0</b>ball samples</div>
-          </div>
-          <div class="note" id="physicsNote">Waiting for a replay file.</div>
-        </div>
-      </div>
-    </div>
-
     <div class="card span2">
       <h2>Impact on Play</h2>
-      <div class="help">Shows realistic 5-second windows. Touches are actual estimated touches per 5 seconds; possession and pressure are trend scores. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Hover a vertical line to see who made the play.</div>
+      <div class="help">Shows 5-second game-time windows. Possession and pressure use decoded car and ball positions when available. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Hover a vertical line to see who made the play.</div>
       <div class="chartWrap tall"><canvas id="trendChart"></canvas></div>
       <div class="note" id="trendNote"></div>
     </div>
@@ -1277,6 +1318,19 @@ body.obsOverlayMode #obsOverlayRoot{
       <div class="note" id="boostPickupNote"></div>
     </div>
 
+    <div class="card" id="positioningMapCard">
+      <h2>Positioning Heatmap</h2>
+      <div class="help">Uses decoded car position samples for the selected player. Repeated positioning gets hotter, moving from dim grey to yellow, orange, and red. The map uses the same top-down field orientation as the boost pickup map.</div>
+      <div class="field" id="positioningMap"></div>
+      <div class="positioningLegend">
+        <span><i style="background:rgba(90,145,255,.58)"></i>Low presence</span>
+        <span><i style="background:rgba(75,220,145,.68)"></i>Repeated route</span>
+        <span><i style="background:rgba(255,208,0,.82)"></i>High presence</span>
+        <span><i style="background:rgba(255,64,64,.98)"></i>Hot zone</span>
+      </div>
+      <div class="note" id="positioningMapNote"></div>
+    </div>
+
     <div class="card" id="teamComparisonCard">
       <h2>Player / Team Comparison</h2>
       <div class="help">Compare contribution across the lobby. In team view, compare overall contribution distribution across players on the selected team.</div>
@@ -1285,7 +1339,7 @@ body.obsOverlayMode #obsOverlayRoot{
 
     <div class="card">
       <h2>Distance to Ball</h2>
-      <div class="help">Shows decoded car-to-ball distance for the selected player or team average. Distances assume 1 uu = 1 cm, shown as metric first with imperial in brackets. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Lower values usually mean closer pressure; consistently too low can indicate overcommitting or ball-chasing.</div>
+      <div class="help">Shows decoded car-to-ball distance for the selected player or team average. Distances follow the app unit switch with sensible small-distance units. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Lower values usually mean closer pressure; consistently too low can indicate overcommitting or ball-chasing.</div>
       <div class="chartWrap"><canvas id="distanceChart"></canvas></div>
       <div class="note" id="distanceNote"></div>
     </div>
@@ -1383,7 +1437,9 @@ const $=id=>document.getElementById(id);
 let charts={}, selected="match", activeView="analysis", data;
 const nameDisplayPreferenceKey = "oneReplayAnalyzer.useCensoredNames.v1";
 let useCensoredNames = localStorage.getItem(nameDisplayPreferenceKey) === "1";
-let physicsAnalysisState={status:"idle",progress:0,message:"Upload a replay to start the background physics pass.",frames:0,carSamples:0,ballSamples:0,shotSamples:0,tokens:{},warnings:[]};
+const unitSystemPreferenceKey = "spark.unitSystem.v1";
+let useImperialUnits = localStorage.getItem(unitSystemPreferenceKey) === "imperial";
+let physicsAnalysisState={status:"idle",progress:0,message:"Upload a replay to start parser analysis.",frames:0,carSamples:0,ballSamples:0,shotSamples:0,tokens:{},warnings:[]};
 let physicsWorker=null;
 let liveApiSocket=null;
 let liveApiReconnectTimer=null;
@@ -2064,6 +2120,23 @@ window.toggleCensoredNames = checked => {
   render();
 };
 
+function renderUnitDisplayToggle(){
+  const row = $("unitDisplayToggle");
+  const input = $("unitSystemToggle");
+  const status = $("unitSystemStatus");
+  if(!row || !input || !status) return;
+
+  row.style.display = activeView === "overlay" ? "none" : "";
+  input.checked = useImperialUnits;
+  status.textContent = useImperialUnits ? "Imperial measurements" : "Metric measurements";
+}
+
+window.toggleUnitSystem = checked => {
+  useImperialUnits = !!checked;
+  localStorage.setItem(unitSystemPreferenceKey, useImperialUnits ? "imperial" : "metric");
+  render();
+};
+
 function renderTabs(){
   const teamNames = [...new Set(data.players.map(p => p.team || "Unknown"))];
 
@@ -2095,6 +2168,7 @@ function renderTabs(){
   if(analysisBtn) analysisBtn.classList.toggle("active", activeView === "analysis");
   if(overlayBtn) overlayBtn.classList.toggle("active", activeView === "overlay");
   renderNameDisplayToggle();
+  renderUnitDisplayToggle();
 }
 
 window.selectMainView=view=>{
@@ -2266,21 +2340,87 @@ function expandSeriesToClock(values, durationSeconds=300, stepSeconds=15, seed=1
   return out;
 }
 
-function distanceToBallSeries(a, durationSeconds=300, stepSeconds=15){
+function clampValue(value, min=0, max=100){
+  return Math.max(min, Math.min(max, value));
+}
+
+function sampleElapsedSeconds(sample){
+  const elapsed = Number(sample?.scoreboardElapsedSeconds ?? sample?.elapsedSeconds ?? sample?.elapsed ?? sample?.timeSeconds ?? sample?.time);
+  return Number.isFinite(elapsed) ? elapsed : null;
+}
+
+function sampleDistanceUU(sample){
+  const distance = Number(sample?.distanceUU ?? sample?.distanceToBallUU ?? sample?.distance ?? sample?.value);
+  return Number.isFinite(distance) ? distance : null;
+}
+
+function sampleBallLocation(sample){
+  return vectorFromApi(sample?.ballLocation ?? sample?.ball ?? sample?.ballPosition);
+}
+
+function secondNormalizedDistanceSamples(player){
+  const samples = Array.isArray(player?.distanceToBallSamples)
+    ? player.distanceToBallSamples
+    : Array.isArray(player?.ballDistanceSamples)
+      ? player.ballDistanceSamples
+      : [];
+  const bySecond = new Map();
+
+  samples.forEach(sample=>{
+    const elapsed = sampleElapsedSeconds(sample);
+    const distance = sampleDistanceUU(sample);
+    if(!Number.isFinite(elapsed) || !Number.isFinite(distance)) return;
+    const second = Math.max(0, Math.floor(elapsed));
+    const ball = sampleBallLocation(sample);
+    if(!bySecond.has(second)){
+      bySecond.set(second, {
+        second,
+        sum:0,
+        count:0,
+        ballX:0,
+        ballY:0,
+        ballZ:0,
+        ballCount:0
+      });
+    }
+    const bucket = bySecond.get(second);
+    bucket.sum += distance;
+    bucket.count++;
+    if(ball && Number.isFinite(ball.x) && Number.isFinite(ball.y)){
+      bucket.ballX += ball.x;
+      bucket.ballY += ball.y;
+      bucket.ballZ += Number.isFinite(ball.z) ? ball.z : 0;
+      bucket.ballCount++;
+    }
+  });
+
+  return [...bySecond.values()]
+    .filter(bucket=>bucket.count > 0)
+    .map(bucket=>({
+      player,
+      second:bucket.second,
+      elapsed:bucket.second + 0.5,
+      distance:bucket.sum / bucket.count,
+      ballLocation:bucket.ballCount ? {
+        x:bucket.ballX / bucket.ballCount,
+        y:bucket.ballY / bucket.ballCount,
+        z:bucket.ballZ / bucket.ballCount
+      } : null
+    }))
+    .sort((left,right)=>left.second - right.second);
+}
+
+function distanceToBallSeries(a, durationSeconds=300, stepSeconds=5){
   const labels = gameTimeLabels(durationSeconds, stepSeconds);
   const players = Array.isArray(a?.ps) ? a.ps : (a ? [a] : []);
   const playerBins = players.map(()=>labels.map(()=>({sum:0,count:0})));
   let sampleCount = 0;
 
   players.forEach((player, playerIndex)=>{
-    const samples = Array.isArray(player.distanceToBallSamples)
-      ? player.distanceToBallSamples
-      : Array.isArray(player.ballDistanceSamples)
-        ? player.ballDistanceSamples
-        : [];
+    const samples = secondNormalizedDistanceSamples(player);
     samples.forEach(sample=>{
-      const elapsed = Number(sample.scoreboardElapsedSeconds ?? sample.elapsedSeconds ?? sample.elapsed ?? sample.timeSeconds ?? sample.time);
-      const distance = Number(sample.distanceUU ?? sample.distanceToBallUU ?? sample.distance ?? sample.value);
+      const elapsed = sample.elapsed;
+      const distance = sample.distance;
       if(!Number.isFinite(elapsed) || !Number.isFinite(distance)) return;
       const binIndex = Math.max(0, Math.min(labels.length - 1, Math.floor(elapsed / stepSeconds)));
       playerBins[playerIndex][binIndex].sum += distance;
@@ -2303,6 +2443,157 @@ function distanceToBallSeries(a, durationSeconds=300, stepSeconds=15){
   });
 
   return {values, sampleCount, parsed:true};
+}
+
+function buildParsedImpactSeries(a, durationSeconds=300, stepSeconds=5){
+  const labels = gameTimeLabels(durationSeconds, stepSeconds);
+  const allPlayers = Array.isArray(data?.players) ? data.players : [];
+  const selectedPlayers = Array.isArray(a?.ps) ? a.ps : (a ? [a] : []);
+  const selectedNames = new Set(selectedPlayers.map(p=>cleanReplayName(p.name || "").toLowerCase()).filter(Boolean));
+  const selectedTeams = new Set(selectedPlayers.map(p=>p.team).filter(Boolean));
+  const isTeamView = !!a?.isTeam;
+  const snapshots = new Map();
+
+  allPlayers.forEach(player=>{
+    secondNormalizedDistanceSamples(player).forEach(sample=>{
+      if(!snapshots.has(sample.second)) snapshots.set(sample.second, []);
+      snapshots.get(sample.second).push({
+        player,
+        playerName:cleanReplayName(player.name || "").toLowerCase(),
+        team:player.team,
+        distance:sample.distance,
+        ballLocation:sample.ballLocation
+      });
+    });
+  });
+
+  const possessionBins = labels.map(()=>({wins:0,total:0}));
+  const pressureBins = labels.map(()=>({sum:0,count:0}));
+
+  snapshots.forEach((samples, second)=>{
+    const validSamples = samples
+      .filter(sample=>Number.isFinite(sample.distance))
+      .sort((left,right)=>left.distance - right.distance);
+    if(validSamples.length < 2) return;
+
+    const selectedSamples = validSamples.filter(sample=>{
+      if(isTeamView) return selectedTeams.has(sample.team);
+      return selectedNames.has(sample.playerName);
+    });
+    if(!selectedSamples.length) return;
+
+    const selectedNearest = selectedSamples[0];
+    const opponentNearest = validSamples.find(sample=>{
+      if(isTeamView) return !selectedTeams.has(sample.team);
+      return sample.team && selectedNearest.team && sample.team !== selectedNearest.team;
+    }) || validSamples.find(sample=>sample.playerName !== selectedNearest.playerName);
+    const overallNearest = validSamples[0];
+    const selectedHasPossession = isTeamView
+      ? selectedTeams.has(overallNearest.team)
+      : selectedNames.has(overallNearest.playerName);
+    const binIndex = Math.max(0, Math.min(labels.length - 1, Math.floor((second + 0.5) / stepSeconds)));
+
+    possessionBins[binIndex].total++;
+    if(selectedHasPossession) possessionBins[binIndex].wins++;
+
+    const ball = selectedNearest.ballLocation || overallNearest.ballLocation;
+    const team = selectedNearest.team || [...selectedTeams][0] || null;
+    if(ball && team){
+      const attackingProgress = team === "Blue"
+        ? clampValue(((ball.y + 5120) / 10240) * 100)
+        : clampValue(((5120 - ball.y) / 10240) * 100);
+      const proximity = clampValue(100 - (selectedNearest.distance / 35));
+      const opponentDistance = opponentNearest?.distance;
+      const distanceAdvantage = Number.isFinite(opponentDistance)
+        ? clampValue(((opponentDistance - selectedNearest.distance + 1000) / 2000) * 100)
+        : (selectedHasPossession ? 70 : 30);
+      const controlBonus = selectedHasPossession ? 8 : 0;
+      const pressure = clampValue((attackingProgress * 0.48) + (proximity * 0.30) + (distanceAdvantage * 0.22) + controlBonus);
+      pressureBins[binIndex].sum += pressure;
+      pressureBins[binIndex].count++;
+    }
+  });
+
+  const possessionValues = possessionBins.map(bin=>{
+    if(!bin.total) return null;
+    return Math.round((bin.wins / bin.total) * 100);
+  });
+  const pressureValues = pressureBins.map(bin=>{
+    if(!bin.count) return null;
+    return Math.round(bin.sum / bin.count);
+  });
+  const sampleCount = possessionBins.reduce((sum,bin)=>sum + bin.total, 0);
+
+  return {
+    labels,
+    possessionValues,
+    pressureValues,
+    sampleCount,
+    parsed:sampleCount > 0
+  };
+}
+
+function finiteChartValues(...groups){
+  return groups.flat(Infinity).filter(Number.isFinite);
+}
+
+function niceChartMax(maxValue){
+  const value = Number(maxValue);
+  if(!Number.isFinite(value) || value <= 0) return undefined;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+  const normalized = value / magnitude;
+  const steps = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10];
+  const step = steps.find(candidate=>normalized <= candidate) || 10;
+  return step * magnitude;
+}
+
+function comparableChartScopes(isTeamView){
+  if(isTeamView){
+    return [...new Set((data?.players || []).map(p=>p.team).filter(Boolean))]
+      .map(team=>aggregate(team));
+  }
+
+  return (data?.players || []).map(player=>aggregate(player.id));
+}
+
+function buildImpactChartValues(scope, durationSeconds, stepSeconds){
+  const impact = buildParsedImpactSeries(scope, durationSeconds, stepSeconds);
+  const touchClock = distributeTotalAcrossWindows(scope.touches, durationSeconds, stepSeconds, scope.touches + 17);
+  const possessionClock = impact.parsed
+    ? impact.possessionValues
+    : averagePercentAcrossWindows(scope.possession, durationSeconds, stepSeconds, scope.possession + 41);
+  const pressureClock = impact.parsed
+    ? impact.pressureValues
+    : averagePercentAcrossWindows(scope.pressure, durationSeconds, stepSeconds, scope.pressure + 73);
+
+  return {impact, touchClock, possessionClock, pressureClock};
+}
+
+function replayChartMax(chartType, isTeamView, durationSeconds, stepSeconds=5){
+  const scopes = comparableChartScopes(isTeamView);
+  let values = [];
+
+  if(chartType === "impact"){
+    scopes.forEach(scope=>{
+      const built = buildImpactChartValues(scope, durationSeconds, stepSeconds);
+      values.push(...finiteChartValues(built.touchClock, built.possessionClock, built.pressureClock));
+    });
+  }
+
+  if(chartType === "distance"){
+    scopes.forEach(scope=>{
+      values.push(...finiteChartValues(distanceToBallSeries(scope, durationSeconds, stepSeconds).values));
+    });
+  }
+
+  if(chartType === "shotQuality"){
+    scopes.forEach(scope=>{
+      values.push(...finiteChartValues(shotQualityBreakdown(scope).values));
+    });
+  }
+
+  if(!values.length) return undefined;
+  return niceChartMax(Math.max(...values));
 }
 
 
@@ -2431,6 +2722,51 @@ function boostPickupCounts(a){
   return pads;
 }
 
+function boostPickupTotals(a){
+  const pads = boostPickupCounts(a);
+  return pads.reduce((totals, pad)=>{
+    totals.total += pad.count;
+    if(pad.type === "large") totals.large += pad.count;
+    else totals.small += pad.count;
+    if(pad.exact) totals.exact += pad.count;
+    return totals;
+  }, {total:0, large:0, small:0, exact:0});
+}
+
+function boostManagementMetrics(a){
+  const totals = boostPickupTotals(a);
+  const exactShare = totals.total ? Math.round((totals.exact / totals.total) * 100) : 0;
+  return [
+    {label:"Exact Pad Pickups",value:totals.total,display:totals.total.toLocaleString(),kind:"count"},
+    {label:"Small Pad Pickups",value:totals.small,display:totals.small.toLocaleString(),kind:"count"},
+    {label:"Large Pad Pickups",value:totals.large,display:totals.large.toLocaleString(),kind:"count"},
+    {label:"Opponent Boost Stolen",value:a.stolen || 0,display:String(a.stolen || 0),kind:"count"},
+    {label:"Boost Efficiency",value:a.boostEff || 0,display:`${a.boostEff || 0}%`,kind:"percent"},
+    {label:"Low-Boost Recovery",value:a.recovery || 0,display:`${a.recovery || 0}%`,kind:"percent"},
+    {label:"Boost Wasted",value:a.boostWaste || 0,display:`${a.boostWaste || 0}%`,kind:"percent",warning:true},
+    {label:"Decoded Pickup Coverage",value:exactShare,display:`${exactShare}%`,kind:"percent"}
+  ];
+}
+
+function renderBoostManagement(a, isTeamView){
+  const metrics = boostManagementMetrics(a);
+  const scopes = comparableChartScopes(isTeamView);
+  const countMax = Math.max(1, ...scopes.flatMap(scope=>boostManagementMetrics(scope).filter(metric=>metric.kind === "count").map(metric=>metric.value)));
+  $("boostBars").innerHTML = metrics.map(metric=>{
+    const scale = metric.kind === "percent" ? 100 : countMax;
+    const width = Math.max(0, Math.min(100, (metric.value / Math.max(1, scale)) * 100));
+    const fillClass = metric.warning ? " warningFill" : "";
+    return `<div class="barrow"><div class="barlabel"><span>${metric.label}</span><b>${metric.display}</b></div><div class="track"><div class="fill${fillClass}" style="width:${width}%"></div></div></div>`;
+  }).join("");
+
+  const totals = boostPickupTotals(a);
+  const sourceText = totals.exact
+    ? `exact decoded per-pad pickups (${totals.small.toLocaleString()} small, ${totals.large.toLocaleString()} large)`
+    : "scoreboard and derived boost metrics; exact per-pad pickups were not decoded for this scope";
+  $("boostNote").textContent =
+    `${a.label}: boost management now prioritizes ${sourceText}. Efficiency, waste, steals, and low-boost recovery stay as supporting context instead of replacing pickup data.`;
+}
+
 
 
 function renderBoostPickupMap(a){
@@ -2438,6 +2774,7 @@ function renderBoostPickupMap(a){
   if(!map) return;
 
   map.querySelectorAll(".boostPad").forEach(e=>e.remove());
+  ensureSparkMapWatermark(map);
 
   const pads = boostPickupCounts(a);
   const maxCount = Math.max(1, ...pads.map(p=>p.count));
@@ -2465,20 +2802,39 @@ function renderBoostPickupMap(a){
     : "";
 }
 
+function ensureSparkMapWatermark(container){
+  if(!container) return null;
+  let mark = container.querySelector(":scope > .sparkMapWatermark");
+  if(!mark){
+    mark = document.createElement("div");
+    mark.className = "sparkMapWatermark";
+    container.insertBefore(mark, container.firstChild);
+  }
+  return mark;
+}
+
 
 
 
 function formatDistanceFromUU(uu){
   const cm = Number(uu) || 0;
-  const metres = cm / 100;
-  const inches = cm / 2.54;
-  const feet = inches / 12;
+  if(useImperialUnits){
+    const inches = cm / 2.54;
+    const feet = inches / 12;
+    const yards = feet / 3;
 
-  if(cm >= 100){
-    return `${metres.toFixed(2)} m (${feet.toFixed(1)} ft)`;
+    if(inches < 12) return `${inches.toFixed(1)} in`;
+    if(feet < 30) return `${feet.toFixed(1)} ft`;
+    return `${yards.toFixed(1)} yd`;
   }
 
-  return `${Math.round(cm)} cm (${inches.toFixed(1)} in)`;
+  const metres = cm / 100;
+
+  if(cm >= 100){
+    return `${metres.toFixed(2)} m`;
+  }
+
+  return `${Math.round(cm)} cm`;
 }
 
 function scoreboardClockFromSample(shot){
@@ -2533,6 +2889,16 @@ function targetFromGoalFacePosition(x, y, result){
   return x < 35 ? "middle left" : x > 65 ? "middle right" : "centre";
 }
 
+const goalFaceViewport = {xMin:-10, xMax:110, yMin:-8, yMax:112};
+function goalFaceToViewportPercent(x, y){
+  const rangeX = goalFaceViewport.xMax - goalFaceViewport.xMin;
+  const rangeY = goalFaceViewport.yMax - goalFaceViewport.yMin;
+  return {
+    x: Math.max(0, Math.min(100, ((Number(x) - goalFaceViewport.xMin) / rangeX) * 100)),
+    y: Math.max(0, Math.min(100, ((Number(y) - goalFaceViewport.yMin) / rangeY) * 100))
+  };
+}
+
 function optionalDistanceText(uu){
   return Number.isFinite(uu) ? formatDistanceFromUU(uu) : "Unavailable";
 }
@@ -2555,13 +2921,14 @@ function getFrameAccurateShootingSamples(a){
       const scoreboardElapsed = scoreboardElapsedFromSample(shot);
       const goalTime = shot.goalTime || scoreboardClockFromSample(shot) || shotClockFromElapsed(elapsed, data.durationSeconds || 300);
       const nearestOpponent = cleanReplayName(shot.nearestOpponent || shot.nearestDefender || shot.closestDefender || "");
+      const defender = cleanReplayName(shot.defender || shot.saver || shot.savedBy || shot.savedByPlayer || shot.savePlayer || nearestOpponent || "");
 
       samples.push({
         player: playerDisplayName(player),
         playerId: player.id,
         team: player.team,
-        x: Math.max(0, Math.min(100, x)),
-        y: Math.max(0, Math.min(100, y)),
+        x: Math.max(-30, Math.min(130, x)),
+        y: Math.max(-25, Math.min(125, y)),
         result,
         target: shot.target || targetFromGoalFacePosition(x, y, result),
         elapsed: Number.isFinite(scoreboardElapsed) ? scoreboardElapsed : elapsed,
@@ -2570,6 +2937,7 @@ function getFrameAccurateShootingSamples(a){
         goalTime,
         nearestOpponentDistance: Number.isFinite(nearestOpponentDistance) ? nearestOpponentDistance : null,
         nearestOpponent: nearestOpponent || null,
+        defender: defender || null,
         lastTouchDistanceToNet: Number.isFinite(lastTouchDistanceToNet) ? lastTouchDistanceToNet : null,
         frameAccurate: true,
         index: i
@@ -2586,6 +2954,36 @@ function makeShootingSamples(a){
   // require frame-level physics/touch decoding. Until the parser supplies
   // player.shotSamples, the heatmap intentionally remains unplotted.
   return getFrameAccurateShootingSamples(a);
+}
+
+function isWideShotSample(sample){
+  const target = String(sample?.target || "").toLowerCase();
+  return target.includes("wide") || Number(sample?.x) < 6 || Number(sample?.x) > 94;
+}
+
+function shotQualityBreakdown(a){
+  const samples = makeShootingSamples(a);
+  const hasSamples = samples.length > 0;
+  const goals = hasSamples ? samples.filter(s=>s.result === "goal").length : (a.goals || 0);
+  const savedShots = hasSamples ? samples.filter(s=>s.result === "save").length : (a.forcedSaves || 0);
+  const wideMisses = hasSamples ? samples.filter(s=>s.result === "miss" && isWideShotSample(s)).length : 0;
+  const nearMisses = hasSamples
+    ? samples.filter(s=>s.result === "post" || (s.result === "miss" && !isWideShotSample(s))).length
+    : (a.nearMiss || 0);
+  const openNets = hasSamples
+    ? samples.filter(s=>s.result === "goal" && Number.isFinite(s.nearestOpponentDistance) && s.nearestOpponentDistance > 1500).length
+    : 0;
+  const accurateShots = hasSamples
+    ? samples.filter(s=>["goal","save"].includes(s.result) && Number.isFinite(s.nearestOpponentDistance) && s.nearestOpponentDistance <= 700).length
+    : 0;
+  const shots = hasSamples ? Math.max(a.shots || 0, samples.length) : (a.shots || 0);
+
+  return {
+    hasSamples,
+    samples,
+    labels:["Goals","Shots","Near Misses","Wide Misses","Saved Shots","Open Nets","Accurate Shots"],
+    values:[goals,shots,nearMisses,wideMisses,savedShots,openNets,accurateShots]
+  };
 }
 
 
@@ -2623,13 +3021,14 @@ function renderShootingHeatmap(a){
   const el = $("shootingHeatmap");
   if(!el) return;
   el.innerHTML = `
+    <div class="sparkMapWatermark"></div>
     <div class="goalLabel">GOAL FACE</div>
     <div class="postZone left"></div>
     <div class="postZone right"></div>
     <div class="postZone top"></div>
-    <div class="goalZoneLabel" style="left:9%;top:10%">LEFT POST</div>
-    <div class="goalZoneLabel" style="right:9%;top:10%">RIGHT POST</div>
-    <div class="goalZoneLabel" style="left:45%;top:10%">CROSSBAR</div>
+    <div class="goalZoneLabel" style="left:11%;top:10%">LEFT POST</div>
+    <div class="goalZoneLabel" style="right:11%;top:10%">RIGHT POST</div>
+    <div class="goalZoneLabel" style="left:46%;top:10%">CROSSBAR</div>
     <div class="shotHoverBox" id="shotHoverBox"></div>
   `;
 
@@ -2678,7 +3077,8 @@ function renderShootingHeatmap(a){
   }
 
   samples.forEach(s=>{
-    addDensity(s.x, s.y, s.result === "post" ? 1.55 : s.result === "goal" ? 1.45 : s.result === "save" ? 1.15 : .9);
+    const pos = goalFaceToViewportPercent(s.x, s.y);
+    addDensity(pos.x, pos.y, s.result === "post" ? 1.55 : s.result === "goal" ? 1.45 : s.result === "save" ? 1.15 : .9);
   });
 
   let max = 0;
@@ -2710,10 +3110,11 @@ function renderShootingHeatmap(a){
   }
 
   samples.forEach(s=>{
+    const pos = goalFaceToViewportPercent(s.x, s.y);
     const dot = document.createElement("div");
     dot.className = `shotPoint ${s.result}`;
-    dot.style.left = s.x + "%";
-    dot.style.top = s.y + "%";
+    dot.style.left = pos.x + "%";
+    dot.style.top = pos.y + "%";
     dot.dataset.result = s.result;
     dot.dataset.player = s.player;
     dot.dataset.time = s.goalTime;
@@ -2729,7 +3130,7 @@ function renderShootingHeatmap(a){
         hover.innerHTML = `
           <b>Goal scorer:</b> ${s.player}<br>
           <b>Game time:</b> ${s.goalTime}<br>
-          <b>Nearest opponent:</b> ${optionalDistanceText(s.nearestOpponentDistance)}${s.nearestOpponent ? ` (${escapeHtml(s.nearestOpponent)})` : ""}<br>
+          <b>Nearest defender:</b> ${optionalDistanceText(s.nearestOpponentDistance)}${s.defender ? ` (${escapeHtml(s.defender)})` : ""}<br>
           <b>Last touch distance from net:</b> ${optionalDistanceText(s.lastTouchDistanceToNet)}<br>
           <span class="muted">Target: ${s.target}</span>
         `;
@@ -2738,13 +3139,15 @@ function renderShootingHeatmap(a){
           <b>${s.result === "save" ? "Saved shot" : s.result === "post" ? "Post/crossbar hit" : "Missed shot"}</b><br>
           <span class="muted">Shooter: ${s.player}</span><br>
           <span class="muted">Game time: ${s.goalTime}</span><br>
-          <span class="muted">Nearest opponent: ${optionalDistanceText(s.nearestOpponentDistance)}${s.nearestOpponent ? ` (${escapeHtml(s.nearestOpponent)})` : ""}</span><br>
+          ${s.result === "save"
+            ? `<span class="muted">Defender: ${s.defender ? escapeHtml(s.defender) : "Unknown"}${Number.isFinite(s.nearestOpponentDistance) ? `, ${optionalDistanceText(s.nearestOpponentDistance)} away` : ""}</span><br>`
+            : `<span class="muted">Nearest defender: ${optionalDistanceText(s.nearestOpponentDistance)}${s.defender ? ` (${escapeHtml(s.defender)})` : ""}</span><br>`}
           <span class="muted">Last touch distance from net: ${optionalDistanceText(s.lastTouchDistanceToNet)}</span><br>
           <span class="muted">Target: ${s.target}</span>
         `;
       }
 
-      positionShotHoverBox(hover, el, s.x, s.y);
+      positionShotHoverBox(hover, el, pos.x, pos.y);
     });
 
     dot.addEventListener("mouseleave", ()=>{
@@ -3112,7 +3515,7 @@ function buildGoalSaveEvents(durationSeconds, scope){
 
 
 function distributeTotalAcrossWindows(total, durationSeconds, stepSeconds, seedBase, minValue=0){
-  const windowCount = Math.max(1, Math.ceil((durationSeconds || 300) / stepSeconds));
+  const windowCount = gameTimeLabels(durationSeconds, stepSeconds).length;
   total = Math.max(0, Math.round(total || 0));
 
   const weights = Array.from({length:windowCount}, (_,i)=>{
@@ -3144,7 +3547,7 @@ function distributeTotalAcrossWindows(total, durationSeconds, stepSeconds, seedB
 }
 
 function averagePercentAcrossWindows(avgPercent, durationSeconds, stepSeconds, seedBase){
-  const windowCount = Math.max(1, Math.ceil((durationSeconds || 300) / stepSeconds));
+  const windowCount = gameTimeLabels(durationSeconds, stepSeconds).length;
   const base = Math.max(0, Math.min(100, Number(avgPercent) || 0));
 
   return Array.from({length:windowCount}, (_,i)=>{
@@ -3285,6 +3688,8 @@ function render(){
     const el = $(id);
     if(el) el.style.display = isTeamView ? "" : "none";
   });
+  const positioningCard = $("positioningMapCard");
+  if(positioningCard) positioningCard.style.display = isTeamView ? "none" : "";
 
   // Hide player-specific notes in team view
   const playerOnlySelectors = ["shotNote"];
@@ -3307,50 +3712,47 @@ function render(){
   ].map(k=>`<div class="card kpi"><div class="label">${k[0]}</div><div class="value">${k[1]}</div><div class="meaning">${k[2]}</div></div>`).join("");
 
   const durationSeconds = normalizeReplayDurationSeconds(data.durationSeconds || 300);
-  const impactLabels = gameTimeLabels(durationSeconds, 5);
-  const clockLabels = gameTimeLabels(durationSeconds, 15);
   const goalSaveEvents = buildGoalSaveEvents(durationSeconds, selected);
   // Impact on Play uses realistic 5-second windows.
   // Touches are distributed from the selected player/team total, so no 5s window can imply more touches than the whole replay.
   const impactStepSeconds = 5;
-  const touchClock = distributeTotalAcrossWindows(a.touches, durationSeconds, impactStepSeconds, a.touches + 17);
-  const possClock = averagePercentAcrossWindows(a.possession, durationSeconds, impactStepSeconds, a.possession + 41);
-  const pressureClock = averagePercentAcrossWindows(a.pressure, durationSeconds, impactStepSeconds, a.pressure + 73);
+  const impactChartValues = buildImpactChartValues(a, durationSeconds, impactStepSeconds);
+  const impactResult = impactChartValues.impact;
+  const impactLabels = impactResult.labels;
+  const touchClock = impactChartValues.touchClock;
+  const possClock = impactChartValues.possessionClock;
+  const pressureClock = impactChartValues.pressureClock;
+  const impactScaleMax = replayChartMax("impact", isTeamView, durationSeconds, impactStepSeconds);
 
   chart("trendChart",{
     type:"line",
     data:{labels:impactLabels,datasets:[
       {label:"Touches per 5s window",data:touchClock,borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.18)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9},
-      {label:"Possession % trend",data:possClock,borderColor:"#f2f2f2",backgroundColor:"rgba(242,242,242,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9},
-      {label:"Pressure score trend",data:pressureClock,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9}
+      {label:"Possession: closest to ball %",data:possClock,borderColor:"#f2f2f2",backgroundColor:"rgba(242,242,242,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true},
+      {label:"Pressure from position",data:pressureClock,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true}
     ]},
     options:{
       maintainAspectRatio:false,
       plugins:{legend,eventMarkers:{events:goalSaveEvents,stepSeconds:5}},
       scales:{
         x:{...axis,ticks:{...axis.ticks,maxRotation:0,autoSkip:true,maxTicksLimit:11}},
-        y:axis
+        y:{...axis,beginAtZero:true,max:impactScaleMax}
       }
     }
   });
 
-  $("trendNote").textContent = a.touches > 260
-    ? "Team-level view: touch counts are distributed into realistic 5-second windows. Check whether possession rises with touches; if not, your team may be giving the ball away after first contact."
-    : a.touches > 110 ? "Player view: high involvement. The blue line shows touches per 5-second window, not total touches. Review whether touches become controlled possession or simply relieve pressure."
-    : "Lower involvement. This may indicate passive rotations, poor boost paths, or being too far from the next play.";
+  $("trendNote").textContent = impactResult.parsed
+    ? `${a.label}: possession and pressure are calculated from ${impactResult.sampleCount.toLocaleString()} decoded scoreboard-second position snapshots. Possession is the share of sampled seconds where the selected player/team is closest to the ball; pressure combines attacking field position, ball proximity, and distance advantage.`
+    : (a.touches > 260
+      ? "Team-level view: touch counts are distributed into realistic 5-second windows. Parsed position samples are not available, so possession and pressure use the older trend estimate."
+      : a.touches > 110 ? "Player view: high involvement. Parsed position samples are not available, so possession and pressure use the older trend estimate."
+      : "Lower involvement. Parsed position samples are not available, so possession and pressure use the older trend estimate.");
 
-  $("boostBars").innerHTML=[
-    ["Small Pad Collection",a.smallPads+"%",a.smallPads],
-    ["Boost Wasted",a.boostWaste+"%",a.boostWaste],
-    ["Opponent Boost Stolen",a.stolen,Math.min(100,a.stolen/8)],
-    ["Low-Boost Recovery",a.recovery+"%",a.recovery]
-  ].map(b=>`<div class="barrow"><div class="barlabel"><span>${b[0]}</span><b>${b[1]}</b></div><div class="track"><div class="fill" style="width:${b[2]}%"></div></div></div>`).join("");
   const phase = inferGamePhase(a);
-  $("boostNote").textContent = (a.boostWaste>27
-    ? "Boost waste is a coaching priority. Look for boosting while already supersonic, panic recoveries, and wide rotations that require extra boost."
-    : "Boost waste is controlled. Next step: convert efficient collection into faster second touches and stronger pressure.")
-    + ` Inferred game phase from boost use, pressure, saves, and recovery: attack ${phase.attack}%, defence ${phase.defence}%, neutral ${phase.neutral}%.`;
+  renderBoostManagement(a, isTeamView);
+  $("boostNote").textContent += ` Inferred game phase from boost use, pressure, saves, and recovery: attack ${phase.attack}%, defence ${phase.defence}%, neutral ${phase.neutral}%.`;
   renderBoostPickupMap(a);
+  if(!isTeamView) renderPositioningHeatmap(a);
 
   chart("compareChart",{
     type:"bar",
@@ -3361,20 +3763,32 @@ function render(){
     options:{maintainAspectRatio:false,plugins:{legend},scales:{x:axis,y:axis}}
   });
 
-  const distanceStepSeconds = 15;
+  const distanceStepSeconds = 5;
+  const clockLabels = gameTimeLabels(durationSeconds, distanceStepSeconds);
   const distanceResult = distanceToBallSeries(a, durationSeconds, distanceStepSeconds);
   const distanceSeries = distanceResult.values;
+  const distanceScaleMax = replayChartMax("distance", isTeamView, durationSeconds, distanceStepSeconds);
   chart("distanceChart",{
     type:"line",
     data:{labels:clockLabels,datasets:[
-      {label:"Distance to ball: centimeters/meters",data:distanceSeries,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.16)",fill:true,tension:.35,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true}
+      {label:"Distance to ball",data:distanceSeries,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.16)",fill:true,tension:.35,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true}
     ]},
     options:{
       maintainAspectRatio:false,
-      plugins:{legend,eventMarkers:{events:goalSaveEvents}},
+      plugins:{
+        legend,
+        eventMarkers:{events:goalSaveEvents,stepSeconds:distanceStepSeconds},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${formatDistanceFromUU(ctx.parsed.y)}`}}
+      },
       scales:{
         x:{...axis,ticks:{...axis.ticks,maxRotation:0,autoSkip:true,maxTicksLimit:11}},
-        y:{...axis,title:{display:true,text:"Distance from ball",color:"#b8bcc4"}}
+        y:{
+          ...axis,
+          beginAtZero:true,
+          max:distanceScaleMax,
+          ticks:{...axis.ticks,callback:value=>formatDistanceFromUU(value)},
+          title:{display:true,text:"Distance from ball",color:"#b8bcc4"}
+        }
       }
     }
   });
@@ -3389,12 +3803,15 @@ function render(){
     $("distanceNote").textContent = `${a.label}: decoded car and ball positions are not available yet, so this chart is intentionally blank instead of showing fabricated distances.`;
   }
 
+  const shotQuality = shotQualityBreakdown(a);
   chart("shotChart",{
     type:"bar",
-    data:{labels:["Goals","Shots","Near Misses","Forced Saves"],datasets:[{label:"Shot quality breakdown",data:[a.goals,a.shots,a.nearMiss,a.forcedSaves],backgroundColor:["#26e68a","#f2f2f2","#ffd000","#f0a020"]}]},
-    options:{maintainAspectRatio:false,plugins:{legend},scales:{x:axis,y:axis}}
+    data:{labels:shotQuality.labels,datasets:[{label:"Shot quality breakdown",data:shotQuality.values,backgroundColor:["#26e68a","#f2f2f2","#ffd000","#ef4444","#38bdf8","#a78bfa","#f0a020"]}]},
+    options:{maintainAspectRatio:false,plugins:{legend},scales:{x:axis,y:{...axis,beginAtZero:true,max:replayChartMax("shotQuality", isTeamView, durationSeconds)}}}
   });
-  $("shotNote").textContent = a.nearMiss>=5 ? "Many near misses: chance creation is present, but placement or approach timing needs work." : "Few near misses: review whether shot volume is too low or if you are waiting for only very clear chances.";
+  $("shotNote").textContent = shotQuality.hasSamples
+    ? `${a.label}: shot quality uses ${shotQuality.samples.length.toLocaleString()} decoded shot sample${shotQuality.samples.length===1?"":"s"}. Open nets mean goals with no defender within ${formatDistanceFromUU(1500)}; accurate shots are on-target attempts with a defender within ${formatDistanceFromUU(700)}.`
+    : `${a.label}: using scoreboard shooting totals because decoded shot samples are not available for the full breakdown yet.`;
   renderShootingHeatmap(a);
 
   chart("radarChart",{
@@ -3639,6 +4056,110 @@ function renderField(a){
     `${a.label}: rendered from ${samples.length.toLocaleString()} real X/Y car-position samples. Higher overlap becomes yellow, orange, then red/pink.`;
 }
 
+function renderPositioningHeatmap(a){
+  const map = $("positioningMap");
+  const note = $("positioningMapNote");
+  if(!map || !note) return;
+
+  map.querySelectorAll(".positioningGridCanvas").forEach(e=>e.remove());
+  ensureSparkMapWatermark(map);
+
+  const players = Array.isArray(a?.ps) ? a.ps : [];
+  const samples = [];
+  players.forEach(player=>{
+    if(!Array.isArray(player.positionSamples)) return;
+    player.positionSamples.forEach(sample=>{
+      const x = Number(sample.x ?? sample.fieldX ?? sample.location?.x ?? sample.position?.x);
+      const y = Number(sample.y ?? sample.fieldY ?? sample.location?.y ?? sample.position?.y);
+      if(Number.isFinite(x) && Number.isFinite(y)) samples.push({x,y,player});
+    });
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.className = "positioningGridCanvas";
+  canvas.width = 1920;
+  canvas.height = 1080;
+  map.appendChild(canvas);
+
+  if(!samples.length){
+    note.textContent = `${a.label}: decoded car-position samples are not available yet, so this heatmap is blank instead of showing estimated movement.`;
+    return;
+  }
+
+  const ctx = canvas.getContext("2d");
+  const gridW = 132;
+  const gridH = 74;
+  const density = new Float32Array(gridW * gridH);
+
+  function addCell(gx, gy, weight){
+    if(gx < 0 || gx >= gridW || gy < 0 || gy >= gridH) return;
+    density[gy * gridW + gx] += weight;
+  }
+
+  samples.forEach(sample=>{
+    const pos = boostCoordToMapPercent(sample.x, sample.y);
+    const gx = Math.round((pos.x / 100) * (gridW - 1));
+    const gy = Math.round((pos.y / 100) * (gridH - 1));
+    addCell(gx, gy, 1);
+    addCell(gx - 1, gy, .28);
+    addCell(gx + 1, gy, .28);
+    addCell(gx, gy - 1, .28);
+    addCell(gx, gy + 1, .28);
+  });
+
+  let max = 0;
+  for(let i=0;i<density.length;i++) max = Math.max(max, density[i]);
+
+  function colourFor(v){
+    if(v <= 0) return null;
+    if(v < .16) return "rgba(90,145,255,.58)";
+    if(v < .34) return "rgba(75,220,145,.68)";
+    if(v < .58) return "rgba(255,208,0,.82)";
+    if(v < .78) return "rgba(240,160,32,.90)";
+    return "rgba(255,64,64,.98)";
+  }
+
+  function roundedRect(x, y, w, h, r){
+    if(ctx.roundRect){
+      ctx.beginPath();
+      ctx.roundRect(x,y,w,h,r);
+      ctx.fill();
+      return;
+    }
+    const rr = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+rr,y);
+    ctx.lineTo(x+w-rr,y);
+    ctx.quadraticCurveTo(x+w,y,x+w,y+rr);
+    ctx.lineTo(x+w,y+h-rr);
+    ctx.quadraticCurveTo(x+w,y+h,x+w-rr,y+h);
+    ctx.lineTo(x+rr,y+h);
+    ctx.quadraticCurveTo(x,y+h,x,y+h-rr);
+    ctx.lineTo(x,y+rr);
+    ctx.quadraticCurveTo(x,y,x+rr,y);
+    ctx.fill();
+  }
+
+  const cellW = canvas.width / gridW;
+  const cellH = canvas.height / gridH;
+  const pad = Math.max(1.2, Math.min(cellW, cellH) * .11);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  for(let gy=0; gy<gridH; gy++){
+    for(let gx=0; gx<gridW; gx++){
+      const raw = density[gy * gridW + gx];
+      if(raw <= 0 || max <= 0) continue;
+      const v = Math.pow(raw / max, .58);
+      const color = colourFor(v);
+      if(!color) continue;
+      ctx.fillStyle = color;
+      roundedRect(gx * cellW + pad, gy * cellH + pad, cellW - pad * 2, cellH - pad * 2, Math.min(5, cellW * .24));
+    }
+  }
+
+  note.textContent = `${a.label}: rendered from ${samples.length.toLocaleString()} decoded car-position samples. Hotter rounded squares show repeated positioning in the same field zones.`;
+}
+
 
 
 
@@ -3859,7 +4380,7 @@ function renderCoach(a){
   ];
   $("coachCards").innerHTML=cards.map(c=>`<div class="card"><div class="priority ${c[1]}">${c[0]}</div><div class="help">${c[2]}</div></div>`).join("");
 }
-function resetPhysicsAnalysis(message="Upload a replay to start the background physics pass."){
+function resetPhysicsAnalysis(message="Upload a replay to start parser analysis."){
   if(physicsWorker){
     physicsWorker.terminate();
     physicsWorker = null;
@@ -4880,8 +5401,16 @@ async function requestExactBoostPickups(file){
     return await response.json();
   }catch(err){
     console.warn("Exact boost parser failed:", err);
-    return {error: err.message || String(err)};
+    return {error: parserFetchErrorMessage(err)};
   }
+}
+
+function parserFetchErrorMessage(err){
+  const message = err?.message || String(err);
+  if(/Failed to fetch|NetworkError|Load failed|fetch/i.test(message)){
+    return "Local parser server is not running. Open SPARK with SPARK Launcher.exe or SPARK Launcher.bat, then upload the replay again.";
+  }
+  return message;
 }
 
 async function requestExactShotSamples(file){
@@ -4897,7 +5426,7 @@ async function requestExactShotSamples(file){
     return await response.json();
   }catch(err){
     console.warn("Exact shooting parser failed:", err);
-    return {error: err.message || String(err)};
+    return {error: parserFetchErrorMessage(err)};
   }
 }
 
@@ -5030,7 +5559,7 @@ async function loadFile(file){
     ? `Structured replay JSON loaded. Heatmap markers use supplied frame-accurate shot samples when present.`
     : exactParserSummary
       ? `${exactParserSummary} Position-based charts now use decoded replay samples.`
-      : `A background physics pass is scanning the .replay file. Frame-accurate position heatmaps still require completing the actor/channel bitstream decoder.`;
+      : `Replay loaded. Position-based charts update automatically when decoded replay samples are available.`;
   const scoreboardClockLine = Number.isFinite(data.scoreboardClockStartSeconds) && Number.isFinite(data.scoreboardClockFinalSeconds)
     ? `Scoreboard clock used for charts: <b>${formatGameClock(data.scoreboardClockStartSeconds)}</b> to <b>${formatGameClock(data.scoreboardClockFinalSeconds)}</b><br>`
     : `Gameplay duration used for charts: <b>${formatGameClock(data.durationSeconds || 300)}</b><br>`;

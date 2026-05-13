@@ -237,13 +237,14 @@ function replayElapsedSeconds(time, firstTime, lastTime, totalSeconds){
 
 function goalFaceFromReplayLocation(location, teamNumber=null){
   if(!location || !Number.isFinite(location.x)) return {xPercent:50, yPercent:50};
-  let xPercent = clampNumber(((location.x + 900) / 1800) * 100, 0, 100);
+  let xPercent = ((location.x + 900) / 1800) * 100;
   // Goal face is shown from the field looking into the net.
   // Blue shoots toward +Y, so positive field X appears on the viewer's left.
   if(normalizeTeamNumber(teamNumber) === 0) xPercent = 100 - xPercent;
+  const z = Number(location.z || 0);
   return {
     xPercent,
-    yPercent: clampNumber(100 - ((clampNumber(location.z || 0, 0, 650) / 650) * 100), 0, 100)
+    yPercent: 100 - ((z / 650) * 100)
   };
 }
 
@@ -976,6 +977,7 @@ function summarizeShotSamples(parsedReplay){
         placementSource = "save";
         shot.nearestOpponentDistanceUU = save.nearestOpponentDistanceUU;
         shot.nearestOpponent = save.nearestOpponent;
+        shot.defender = resolveName(save.playerName);
       }
     }
 
@@ -990,6 +992,7 @@ function summarizeShotSamples(parsedReplay){
       yPercent: Number(face.yPercent.toFixed(2)),
       nearestOpponentDistanceUU: shot.nearestOpponentDistanceUU,
       nearestOpponent: shot.nearestOpponent ? resolveName(shot.nearestOpponent) : null,
+      defender: shot.defender || (shot.nearestOpponent ? resolveName(shot.nearestOpponent) : null),
       lastTouchDistanceToNetUU: shot.lastTouchDistanceToNetUU,
       player: playerName,
       team: teamNumber === 0 ? "Blue" : teamNumber === 1 ? "Orange" : null,
