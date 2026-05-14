@@ -740,7 +740,7 @@ function summarizeShotSamples(parsedReplay){
         }
       }
       const lastElapsed = lastDistanceSampleElapsedByPri.get(pri);
-      if(Number.isFinite(lastElapsed) && elapsedSeconds - lastElapsed < 0.45) continue;
+      if(Number.isFinite(lastElapsed) && elapsedSeconds - lastElapsed < 0.22) continue;
 
       lastDistanceSampleElapsedByPri.set(pri, elapsedSeconds);
       if(!distanceSamplesByPri.has(pri)) distanceSamplesByPri.set(pri, []);
@@ -1097,6 +1097,115 @@ function summarizeShotSamples(parsedReplay){
   };
 }
 
+function playerStatsByName(parsedReplay){
+  const stats = new Map();
+  for(const player of parsedReplay?.properties?.PlayerStats || []){
+    const name = cleanName(player?.Name);
+    if(!name) continue;
+    const teamNumber = normalizeTeamNumber(player?.Team);
+    stats.set(name.toLowerCase(), {
+      team: teamNumber === 0 ? "Blue" : teamNumber === 1 ? "Orange" : null,
+      stats: {
+        team: teamNumber === 0 ? "Blue" : teamNumber === 1 ? "Orange" : null,
+        score: Number(player?.Score ?? 0),
+        goals: Number(player?.Goals ?? 0),
+        assists: Number(player?.Assists ?? 0),
+        saves: Number(player?.Saves ?? 0),
+        shots: Number(player?.Shots ?? 0)
+      }
+    });
+  }
+  return stats;
+}
+
+function mergeReplayParserSummaries(parsedReplay, boostSummary, shotSummary){
+  const players = new Map();
+  const stats = playerStatsByName(parsedReplay);
+
+  function ensurePlayer(name, source={}){
+    const cleanPlayerName = cleanName(name);
+    if(!cleanPlayerName) return null;
+    const key = cleanPlayerName.toLowerCase();
+    if(!players.has(key)){
+      const stat = stats.get(key) || {};
+      players.set(key, {
+        name: cleanPlayerName,
+        censoredName: cleanName(source.censoredName || stat.censoredName || "") || null,
+        team: source.team || stat.team || null,
+        stats: stat.stats || undefined,
+        boostPickups: [],
+        shotSamples: [],
+        distanceToBallSamples: [],
+        positionSamples: []
+      });
+    }
+    const player = players.get(key);
+    if(source.censoredName && !player.censoredName) player.censoredName = cleanName(source.censoredName);
+    if(source.team && !player.team) player.team = source.team;
+    if(!player.stats && stats.get(key)?.stats) player.stats = stats.get(key).stats;
+    return player;
+  }
+
+  for(const alias of [...(boostSummary?.nameAliases || []), ...(shotSummary?.nameAliases || [])]){
+    const player = ensurePlayer(alias.name, {censoredName: alias.censoredName});
+    if(player && alias.censoredName && !player.censoredName) player.censoredName = cleanName(alias.censoredName);
+  }
+
+  for(const parsedPlayer of boostSummary?.players || []){
+    const player = ensurePlayer(parsedPlayer.name, parsedPlayer);
+    if(!player) continue;
+    player.boostPickups = Array.isArray(parsedPlayer.boostPickups) ? parsedPlayer.boostPickups : [];
+  }
+
+  for(const parsedPlayer of shotSummary?.players || []){
+    const player = ensurePlayer(parsedPlayer.name, parsedPlayer);
+    if(!player) continue;
+    player.shotSamples = Array.isArray(parsedPlayer.shotSamples) ? parsedPlayer.shotSamples : [];
+    player.distanceToBallSamples = Array.isArray(parsedPlayer.distanceToBallSamples) ? parsedPlayer.distanceToBallSamples : [];
+    player.positionSamples = Array.isArray(parsedPlayer.positionSamples) ? parsedPlayer.positionSamples : [];
+  }
+
+  return {
+    parser: "rrrocket",
+    players: [...players.values()].sort((a,b)=>a.name.localeCompare(b.name)),
+    nameAliases: [...(boostSummary?.nameAliases || []), ...(shotSummary?.nameAliases || [])]
+      .filter((alias, index, all)=>alias?.name && all.findIndex(other=>other.name === alias.name && other.censoredName === alias.censoredName) === index),
+    boostSummary,
+    shotSummary,
+    totalBoostPickups: boostSummary?.totalBoostPickups || 0,
+    mappedBoostPickups: boostSummary?.mappedBoostPickups || 0,
+    totalShotSamples: shotSummary?.totalShotSamples || 0,
+    totalDistanceSamples: shotSummary?.totalDistanceSamples || 0,
+    totalPositionSamples: shotSummary?.totalPositionSamples || 0,
+    totalBallSamples: shotSummary?.totalBallSamples || 0,
+    scoreboardClockStartSeconds: shotSummary?.scoreboardClockStartSeconds ?? null,
+    scoreboardClockFinalSeconds: shotSummary?.scoreboardClockFinalSeconds ?? null,
+    frameCount: shotSummary?.frameCount || 0,
+    shotStatEvents: shotSummary?.shotStatEvents || 0,
+    goalStatEvents: shotSummary?.goalStatEvents || 0,
+    saveStatEvents: shotSummary?.saveStatEvents || 0,
+    matchedGoalEvents: shotSummary?.matchedGoalEvents || 0,
+    matchedSaveEvents: shotSummary?.matchedSaveEvents || 0,
+    padActors: boostSummary?.padActors || [],
+    transient: true
+  };
+}
+
+async function parseReplayOnce(req, prefix){
+  const replayBytes = await readRequestBody(req);
+  if(!replayBytes.length) throw new Error("No replay bytes were uploaded.");
+
+  await fs.mkdir(tmpDir, {recursive:true});
+  const replayPath = path.join(tmpDir, `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}.replay`);
+  try{
+    await fs.writeFile(replayPath, replayBytes);
+    const stdout = await runRrrocket(replayPath);
+    return JSON.parse(stdout.charCodeAt(0) === 0xfeff ? stdout.slice(1) : stdout);
+  }finally{
+    await fs.rm(replayPath, {force:true}).catch(()=>{});
+  }
+}
+
 async function handleBoostParse(req, res){
   if(req.method === "OPTIONS"){
     res.writeHead(204, corsHeaders);
@@ -1109,21 +1218,10 @@ async function handleBoostParse(req, res){
     return;
   }
 
-  const replayBytes = await readRequestBody(req);
-  if(!replayBytes.length) throw new Error("No replay bytes were uploaded.");
-
-  await fs.mkdir(tmpDir, {recursive:true});
-  const replayPath = path.join(tmpDir, `boost-${Date.now()}-${Math.random().toString(16).slice(2)}.replay`);
-  try{
-    await fs.writeFile(replayPath, replayBytes);
-    const stdout = await runRrrocket(replayPath);
-    const parsed = JSON.parse(stdout.charCodeAt(0) === 0xfeff ? stdout.slice(1) : stdout);
-    const summary = summarizeBoostPickups(parsed);
-    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8"});
-    res.end(JSON.stringify(summary));
-  }finally{
-    await fs.rm(replayPath, {force:true}).catch(()=>{});
-  }
+  const parsed = await parseReplayOnce(req, "boost");
+  const summary = summarizeBoostPickups(parsed);
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify(summary));
 }
 
 async function handleShotParse(req, res){
@@ -1138,21 +1236,30 @@ async function handleShotParse(req, res){
     return;
   }
 
-  const replayBytes = await readRequestBody(req);
-  if(!replayBytes.length) throw new Error("No replay bytes were uploaded.");
+  const parsed = await parseReplayOnce(req, "shots");
+  const summary = summarizeShotSamples(parsed);
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify(summary));
+}
 
-  await fs.mkdir(tmpDir, {recursive:true});
-  const replayPath = path.join(tmpDir, `shots-${Date.now()}-${Math.random().toString(16).slice(2)}.replay`);
-  try{
-    await fs.writeFile(replayPath, replayBytes);
-    const stdout = await runRrrocket(replayPath);
-    const parsed = JSON.parse(stdout.charCodeAt(0) === 0xfeff ? stdout.slice(1) : stdout);
-    const summary = summarizeShotSamples(parsed);
-    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8"});
-    res.end(JSON.stringify(summary));
-  }finally{
-    await fs.rm(replayPath, {force:true}).catch(()=>{});
+async function handleReplayParse(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
   }
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use POST with replay bytes.");
+    return;
+  }
+
+  const parsed = await parseReplayOnce(req, "replay");
+  const boostSummary = summarizeBoostPickups(parsed);
+  const shotSummary = summarizeShotSamples(parsed);
+  const summary = mergeReplayParserSummaries(parsed, boostSummary, shotSummary);
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify(summary));
 }
 
 http.createServer(async (req,res)=>{
@@ -1164,6 +1271,10 @@ http.createServer(async (req,res)=>{
     }
     if(url.pathname === "/api/parse-replay-shots"){
       await handleShotParse(req, res);
+      return;
+    }
+    if(url.pathname === "/api/parse-replay"){
+      await handleReplayParse(req, res);
       return;
     }
     if(url.pathname === "/__spark_logo.png" || url.pathname === "/__1ne_logo.png"){
