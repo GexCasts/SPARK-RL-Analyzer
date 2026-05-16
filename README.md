@@ -15,6 +15,8 @@ The launcher:
 - downloads a portable Node.js runtime into `tools/node` if Node.js is not already installed
 - opens SPARK in your browser
 
+The local server stays alive while SPARK tabs or OBS overlay sources are open, then shuts itself down shortly after they are all closed.
+
 Do not open `SPARK.html` directly if you want replay parsing. Browser security prevents a plain local HTML file from running the parser, so the boost parser, shooting parser, distance chart, and other replay-position features need the local server.
 
 ## Included Parser

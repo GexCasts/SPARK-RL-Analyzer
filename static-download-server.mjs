@@ -22,6 +22,44 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type"
 };
+const activeClients = new Map();
+const clientStaleMs = 120000;
+const shutdownGraceMs = 60000;
+let hasSeenClient = false;
+let shutdownTimer = null;
+let server = null;
+
+function clearShutdownTimer(){
+  if(shutdownTimer){
+    clearTimeout(shutdownTimer);
+    shutdownTimer = null;
+  }
+}
+
+function pruneInactiveClients(now=Date.now()){
+  for(const [id, lastSeen] of activeClients.entries()){
+    if(now - lastSeen > clientStaleMs) activeClients.delete(id);
+  }
+}
+
+function shutdownWhenIdle(){
+  pruneInactiveClients();
+  if(!hasSeenClient || activeClients.size){
+    clearShutdownTimer();
+    return;
+  }
+  if(shutdownTimer) return;
+  shutdownTimer = setTimeout(()=>{
+    pruneInactiveClients();
+    if(activeClients.size) return clearShutdownTimer();
+    console.log("SPARK app closed; shutting down local server.");
+    server?.close(()=>process.exit(0));
+    setTimeout(()=>process.exit(0), 5000).unref();
+  }, shutdownGraceMs);
+  shutdownTimer.unref();
+}
+
+setInterval(shutdownWhenIdle, 30000).unref();
 
 const standardBoostPadCoords = [
   {fieldX:0,fieldY:-4240,type:"small"},
@@ -177,6 +215,11 @@ function isSmallBoostRise(boostIncrease){
   return boostIncrease.boostDelta >= 8 && boostIncrease.boostDelta <= 45;
 }
 
+function isLargeBoostRise(boostIncrease){
+  if(!boostIncrease) return false;
+  return boostIncrease.boostDelta > 45 || (boostIncrease.boostDelta >= 8 && boostIncrease.boostAmount >= 240);
+}
+
 function clampNumber(value, min, max){
   return Math.max(min, Math.min(max, value));
 }
@@ -229,10 +272,16 @@ function replayIntValue(attribute, value){
 function replayElapsedSeconds(time, firstTime, lastTime, totalSeconds){
   const total = Number(totalSeconds);
   if(!Number.isFinite(time)) return 0;
+  const start = Number.isFinite(firstTime) ? firstTime : 0;
+  const rawElapsed = Math.max(0, time - start);
   if(Number.isFinite(firstTime) && Number.isFinite(lastTime) && lastTime > firstTime && Number.isFinite(total) && total > 0){
-    return clampNumber(((time - firstTime) / (lastTime - firstTime)) * total, 0, total);
+    const frameSpan = lastTime - firstTime;
+    if(frameSpan > total + 1){
+      return clampNumber(rawElapsed, 0, frameSpan);
+    }
+    return clampNumber((rawElapsed / frameSpan) * total, 0, total);
   }
-  return Math.max(0, time - (firstTime || 0));
+  return rawElapsed;
 }
 
 function goalFaceFromReplayLocation(location, teamNumber=null){
@@ -288,8 +337,22 @@ function summarizeBoostPickups(parsedReplay){
   const pickupAvailable = new Map();
   const pickupCandidates = [];
   const boostIncreases = [];
+  const supersonicBoostSpend = new Map();
+  const carMotion = new Map();
+  const carSpeed = new Map();
   const padSamples = new Map();
   let isOvertime = false;
+  let scoreboardSecondsRemaining = null;
+  let scoreboardClockStartSeconds = null;
+
+  function currentGameElapsedSeconds(time){
+    const start = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
+    if(Number.isFinite(scoreboardSecondsRemaining)){
+      if(isOvertime) return start + Math.max(0, scoreboardSecondsRemaining);
+      return clampNumber(start - scoreboardSecondsRemaining, 0, start);
+    }
+    return Math.max(0, Number(time) || 0);
+  }
 
   for(const frame of frames){
     const time = Number(frame.time ?? frame.seconds ?? frame.delta ?? 0);
@@ -333,6 +396,14 @@ function summarizeBoostPickups(parsedReplay){
         if(typeof overtimeValue === "boolean") isOvertime = overtimeValue;
       }
 
+      if(objectNameMatches(objectName, "TAGame.GameEvent_Soccar_TA:SecondsRemaining")){
+        const secondsRemaining = replayIntValue(attribute, value);
+        if(Number.isFinite(secondsRemaining)){
+          scoreboardSecondsRemaining = secondsRemaining;
+          scoreboardClockStartSeconds = Math.max(scoreboardClockStartSeconds ?? secondsRemaining, secondsRemaining);
+        }
+      }
+
       if(objectNameMatches(objectName, "TAGame.CarComponent_TA:Vehicle")){
         const carActor = extractActorReference(value) ?? extractActorReference(attribute);
         if(Number.isInteger(carActor)){
@@ -343,7 +414,17 @@ function summarizeBoostPickups(parsedReplay){
       }
 
       const loc = decodeActorLocation(value);
-      if(loc) carLoc.set(actorId, loc);
+      if(loc){
+        const previousMotion = carMotion.get(actorId);
+        if(previousMotion && Number.isFinite(time)){
+          const dt = time - previousMotion.time;
+          if(dt > 0.01 && dt < 1.25){
+            carSpeed.set(actorId, distanceBetweenLocations(loc, previousMotion.location) / dt);
+          }
+        }
+        carMotion.set(actorId, {time, location:loc});
+        carLoc.set(actorId, loc);
+      }
 
       if(objectNameMatches(objectName, "TAGame.CarComponent_Boost_TA:ReplicatedBoost")){
         const replicatedBoost = getObject(attribute, "ReplicatedBoost") || getObject(value, "ReplicatedBoost");
@@ -355,6 +436,8 @@ function summarizeBoostPickups(parsedReplay){
             const pri = carPri.get(carActor);
             boostIncreases.push({
               time: Number.isFinite(time) ? time : 0,
+              elapsedSeconds: Number(currentGameElapsedSeconds(time).toFixed(3)),
+              scoreboardSecondsRemaining,
               carActor,
               componentActor: actorId,
               pri,
@@ -364,6 +447,19 @@ function summarizeBoostPickups(parsedReplay){
               boostDelta: boostAmount - previousBoost,
               location: carLoc.get(carActor)
             });
+          }
+          if(Number.isInteger(carActor) && Number.isFinite(previousBoost) && previousBoost > boostAmount + 1){
+            const speed = carSpeed.get(carActor);
+            if(Number.isFinite(speed) && speed >= 2200){
+              const pri = carPri.get(carActor);
+              const playerName = cleanName(priName.get(pri));
+              if(playerName){
+                const previous = supersonicBoostSpend.get(playerName) || {raw:0, events:0};
+                previous.raw += previousBoost - boostAmount;
+                previous.events += 1;
+                supersonicBoostSpend.set(playerName, previous);
+              }
+            }
           }
           if(Number.isInteger(carActor)) carBoostAmount.set(carActor, boostAmount);
           boostComponentAmount.set(actorId, boostAmount);
@@ -409,6 +505,8 @@ function summarizeBoostPickups(parsedReplay){
         hadAvailable: pickupAvailable.get(suffix) === true,
         isInitialPickupState: pickedUp === 1,
         isOvertime,
+        elapsedSeconds: Number(currentGameElapsedSeconds(time).toFixed(3)),
+        scoreboardSecondsRemaining,
         boostAtPickup: carBoostAmount.get(instigator)
       });
       pickupAvailable.set(suffix, false);
@@ -484,15 +582,20 @@ function summarizeBoostPickups(parsedReplay){
   for(let i = 0; i < boostIncreases.length; i++){
     if(usedBoostIncreases.has(i)) continue;
     const boostIncrease = boostIncreases[i];
-    if(!boostIncrease.playerName || !boostIncrease.location || !isSmallBoostRise(boostIncrease)) continue;
+    if(!boostIncrease.playerName || !boostIncrease.location) continue;
     const match = nearestBoostPadMatch(boostIncrease.location);
-    if(!match?.pad || match.pad.type !== "small" || match.distance > 260) continue;
+    if(!match?.pad) continue;
+    const isSmallMatch = match.pad.type === "small" && isSmallBoostRise(boostIncrease) && match.distance <= 260;
+    const isLargeMatch = match.pad.type === "large" && isLargeBoostRise(boostIncrease) && match.distance <= 520;
+    if(!isSmallMatch && !isLargeMatch) continue;
     const key = boostPickupEventKey(boostIncrease.playerName, match.index, boostIncrease.time);
     if(eventKeys.has(key)) continue;
 
     eventKeys.add(key);
     events.push({
       time: boostIncrease.time,
+      elapsedSeconds: boostIncrease.elapsedSeconds,
+      scoreboardSecondsRemaining: boostIncrease.scoreboardSecondsRemaining,
       playerName: boostIncrease.playerName,
       pri: boostIncrease.pri,
       instigator: boostIncrease.carActor,
@@ -507,7 +610,7 @@ function summarizeBoostPickups(parsedReplay){
       boostBefore: boostIncrease.previousBoost,
       boostAfter: boostIncrease.boostAmount,
       boostDelta: boostIncrease.boostDelta,
-      detection: "small-boost-rise"
+      detection: `${match.pad.type}-boost-rise`
     });
   }
 
@@ -515,6 +618,19 @@ function summarizeBoostPickups(parsedReplay){
 
   const nameAliases = buildReplayNameAliases(parsedReplay, [...priName.values()]);
   const censoredAliases = new Map([...nameAliases].map(([censoredName, realName]) => [realName, censoredName]));
+  for(const [rawName, spend] of supersonicBoostSpend){
+    const playerName = nameAliases.get(rawName) || rawName;
+    if(!players.has(playerName)){
+      players.set(playerName, {
+        name:playerName,
+        censoredName:censoredAliases.get(playerName) || null,
+        boostPickups:[]
+      });
+    }
+    const player = players.get(playerName);
+    player.supersonicBoostUsed = Math.round((spend.raw / 2.55) * 10) / 10;
+    player.supersonicBoostEvents = spend.events;
+  }
   for(const event of events){
     const padIndex = event.padIndex;
     if(padIndex === null || padIndex === undefined) continue;
@@ -529,6 +645,8 @@ function summarizeBoostPickups(parsedReplay){
     }
     players.get(playerName).boostPickups.push({
       time:event.time,
+      elapsedSeconds:event.elapsedSeconds,
+      scoreboardSecondsRemaining:event.scoreboardSecondsRemaining,
       padIndex,
       padActor:event.padActor,
       padName:event.padName,
@@ -583,7 +701,7 @@ function summarizeShotSamples(parsedReplay){
   const saveEvents = [];
   const distanceSamplesByPri = new Map();
   const positionSamplesByPri = new Map();
-  const lastDistanceSampleElapsedByPri = new Map();
+  const lastPhysicsSampleTimeByPri = new Map();
   const recentTouchCandidatesByPri = new Map();
   let ballSampleCount = 0;
   let latestBallLocation = null;
@@ -591,6 +709,9 @@ function summarizeShotSamples(parsedReplay){
   let scoreboardClockStartSeconds = null;
   let scoreboardClockFinalSeconds = null;
   let isOvertime = false;
+  let hasOvertime = false;
+  let observedDurationSeconds = 1;
+  let observedElapsedCount = 0;
 
   function teamForPri(pri, playerName){
     const directTeam = priTeam.get(pri);
@@ -656,12 +777,33 @@ function summarizeShotSamples(parsedReplay){
     return null;
   }
 
+  function currentGameElapsedSeconds(time){
+    const fallback = replayElapsedSeconds(time, firstFrameTime, lastFrameTime, totalSeconds);
+    const start = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
+    if(Number.isFinite(scoreboardSecondsRemaining)){
+      if(isOvertime) return start + Math.max(0, scoreboardSecondsRemaining);
+      return clampNumber(start - scoreboardSecondsRemaining, 0, start);
+    }
+    return fallback;
+  }
+
+  function noteObservedElapsed(elapsedSeconds){
+    if(Number.isFinite(elapsedSeconds)){
+      observedElapsedCount++;
+      observedDurationSeconds = Math.max(observedDurationSeconds, Math.ceil(elapsedSeconds));
+    }
+  }
+
   function makeStatEvent(kind, time, pri, value){
     const playerName = cleanName(priName.get(pri));
     const teamNumber = teamForPri(pri, playerName);
     const cars = activeCarsForPri(pri);
     const shooterLocation = cars[0]?.location || null;
     const ballLocation = currentBallLocation();
+    const elapsedSeconds = currentGameElapsedSeconds(time);
+    noteObservedElapsed(elapsedSeconds);
+    const overtimeBaseSeconds = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
+    const overtimeSeconds = isOvertime ? Math.max(0, elapsedSeconds - overtimeBaseSeconds) : null;
     const referenceLocation = ballLocation || shooterLocation;
     const opponent = nearestOpponent(referenceLocation, teamNumber, pri);
     const touchCandidates = (recentTouchCandidatesByPri.get(pri) || [])
@@ -682,10 +824,12 @@ function summarizeShotSamples(parsedReplay){
       kind,
       value,
       time: Number.isFinite(time) ? time : 0,
-      elapsedSeconds: replayElapsedSeconds(time, firstFrameTime, lastFrameTime, totalSeconds),
+      elapsedSeconds,
       scoreboardSecondsRemaining,
-      scoreboardElapsedSeconds: Number.isFinite(scoreboardSecondsRemaining) ? Math.max(0, 300 - scoreboardSecondsRemaining) : null,
-      goalTime: scoreboardClockLabel(scoreboardSecondsRemaining, isOvertime),
+      scoreboardElapsedSeconds: elapsedSeconds,
+      goalTime: scoreboardClockLabel(scoreboardSecondsRemaining, isOvertime, overtimeSeconds),
+      isOvertime,
+      overtimeSeconds,
       pri,
       playerName,
       teamNumber,
@@ -705,7 +849,8 @@ function summarizeShotSamples(parsedReplay){
     const ballLocation = currentBallLocation();
     if(!ballLocation) return;
     ballSampleCount++;
-    const elapsedSeconds = replayElapsedSeconds(time, firstFrameTime, lastFrameTime, totalSeconds);
+    const elapsedSeconds = currentGameElapsedSeconds(time);
+    noteObservedElapsed(elapsedSeconds);
     const seenPris = new Set();
     for(const pri of carPri.values()){
       if(!Number.isInteger(pri) || seenPris.has(pri)) continue;
@@ -739,16 +884,16 @@ function summarizeShotSamples(parsedReplay){
           lastCandidate.ballLocation = ballLocation;
         }
       }
-      const lastElapsed = lastDistanceSampleElapsedByPri.get(pri);
-      if(Number.isFinite(lastElapsed) && elapsedSeconds - lastElapsed < 0.22) continue;
+      const lastSampleTime = lastPhysicsSampleTimeByPri.get(pri);
+      if(Number.isFinite(lastSampleTime) && time - lastSampleTime < 0.22) continue;
 
-      lastDistanceSampleElapsedByPri.set(pri, elapsedSeconds);
+      lastPhysicsSampleTimeByPri.set(pri, time);
       if(!distanceSamplesByPri.has(pri)) distanceSamplesByPri.set(pri, []);
       if(!positionSamplesByPri.has(pri)) positionSamplesByPri.set(pri, []);
       distanceSamplesByPri.get(pri).push({
         elapsedSeconds: Number(elapsedSeconds.toFixed(3)),
         scoreboardSecondsRemaining,
-        scoreboardElapsedSeconds: Number.isFinite(scoreboardSecondsRemaining) ? Math.max(0, 300 - scoreboardSecondsRemaining) : null,
+        scoreboardElapsedSeconds: Number(elapsedSeconds.toFixed(3)),
         distanceUU: Math.round(distanceBetweenLocations(car.location, ballLocation)),
         carActor: car.carActor,
         ballLocation,
@@ -758,7 +903,7 @@ function summarizeShotSamples(parsedReplay){
       positionSamplesByPri.get(pri).push({
         elapsedSeconds: Number(elapsedSeconds.toFixed(3)),
         scoreboardSecondsRemaining,
-        scoreboardElapsedSeconds: Number.isFinite(scoreboardSecondsRemaining) ? Math.max(0, 300 - scoreboardSecondsRemaining) : null,
+        scoreboardElapsedSeconds: Number(elapsedSeconds.toFixed(3)),
         x: Math.round(car.location.x),
         y: Math.round(car.location.y),
         z: Math.round(car.location.z || 0),
@@ -835,7 +980,10 @@ function summarizeShotSamples(parsedReplay){
 
       if(objectNameMatches(objectName, "TAGame.GameEvent_Soccar_TA:bOverTime")){
         const overtimeValue = getObject(attribute, "Boolean") ?? getObject(value, "Boolean");
-        if(typeof overtimeValue === "boolean") isOvertime = overtimeValue;
+        if(typeof overtimeValue === "boolean"){
+          isOvertime = overtimeValue;
+          if(overtimeValue) hasOvertime = true;
+        }
       }
 
       const loc = decodeActorLocation(value);
@@ -967,6 +1115,9 @@ function summarizeShotSamples(parsedReplay){
       placementSource = "goal";
       shot.nearestOpponentDistanceUU = goal.nearestOpponentDistanceUU;
       shot.nearestOpponent = goal.nearestOpponent;
+      shot.goalTime = goal.goalTime || shot.goalTime;
+      shot.isOvertime = !!goal.isOvertime;
+      shot.overtimeSeconds = goal.overtimeSeconds;
     }else{
       const saveIndex = findMatchingSave(shot, teamNumber);
       if(saveIndex !== null){
@@ -978,6 +1129,9 @@ function summarizeShotSamples(parsedReplay){
         shot.nearestOpponentDistanceUU = save.nearestOpponentDistanceUU;
         shot.nearestOpponent = save.nearestOpponent;
         shot.defender = resolveName(save.playerName);
+        shot.goalTime = save.goalTime || shot.goalTime;
+        shot.isOvertime = !!save.isOvertime;
+        shot.overtimeSeconds = save.overtimeSeconds;
       }
     }
 
@@ -987,6 +1141,8 @@ function summarizeShotSamples(parsedReplay){
       elapsedSeconds: Number(shot.elapsedSeconds.toFixed(3)),
       scoreboardSecondsRemaining: shot.scoreboardSecondsRemaining,
       scoreboardElapsedSeconds: shot.scoreboardElapsedSeconds,
+      isOvertime: !!shot.isOvertime,
+      overtimeSeconds: shot.overtimeSeconds,
       goalTime: shot.goalTime || scoreboardClockLabel(shot.scoreboardSecondsRemaining),
       xPercent: Number(face.xPercent.toFixed(2)),
       yPercent: Number(face.yPercent.toFixed(2)),
@@ -1023,6 +1179,8 @@ function summarizeShotSamples(parsedReplay){
       elapsedSeconds: Number(goal.elapsedSeconds.toFixed(3)),
       scoreboardSecondsRemaining: goal.scoreboardSecondsRemaining,
       scoreboardElapsedSeconds: goal.scoreboardElapsedSeconds,
+      isOvertime: !!goal.isOvertime,
+      overtimeSeconds: goal.overtimeSeconds,
       goalTime: goal.goalTime || scoreboardClockLabel(goal.scoreboardSecondsRemaining),
       xPercent: Number(face.xPercent.toFixed(2)),
       yPercent: Number(face.yPercent.toFixed(2)),
@@ -1080,6 +1238,8 @@ function summarizeShotSamples(parsedReplay){
 
   return {
     parser: "rrrocket",
+    durationSeconds: observedElapsedCount ? observedDurationSeconds : Math.ceil(Math.max(totalSeconds, 1)),
+    hasOvertime,
     players: sortedPlayers,
     nameAliases: [...nameAliases].map(([censoredName, realName])=>({name:realName, censoredName})),
     totalShotSamples: sortedPlayers.reduce((sum, player)=>sum + player.shotSamples.length, 0),
@@ -1155,6 +1315,8 @@ function mergeReplayParserSummaries(parsedReplay, boostSummary, shotSummary){
     const player = ensurePlayer(parsedPlayer.name, parsedPlayer);
     if(!player) continue;
     player.boostPickups = Array.isArray(parsedPlayer.boostPickups) ? parsedPlayer.boostPickups : [];
+    player.supersonicBoostUsed = Number(parsedPlayer.supersonicBoostUsed || 0);
+    player.supersonicBoostEvents = Number(parsedPlayer.supersonicBoostEvents || 0);
   }
 
   for(const parsedPlayer of shotSummary?.players || []){
@@ -1172,6 +1334,8 @@ function mergeReplayParserSummaries(parsedReplay, boostSummary, shotSummary){
       .filter((alias, index, all)=>alias?.name && all.findIndex(other=>other.name === alias.name && other.censoredName === alias.censoredName) === index),
     boostSummary,
     shotSummary,
+    durationSeconds: shotSummary?.durationSeconds ?? Number(parsedReplay?.properties?.TotalSecondsPlayed) ?? null,
+    hasOvertime: !!shotSummary?.hasOvertime,
     totalBoostPickups: boostSummary?.totalBoostPickups || 0,
     mappedBoostPickups: boostSummary?.mappedBoostPickups || 0,
     totalShotSamples: shotSummary?.totalShotSamples || 0,
@@ -1262,9 +1426,47 @@ async function handleReplayParse(req, res){
   res.end(JSON.stringify(summary));
 }
 
-http.createServer(async (req,res)=>{
+async function handleClientHeartbeat(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use POST.");
+    return;
+  }
+
+  const body = await readRequestBody(req, 16 * 1024);
+  let message = {};
+  try{
+    message = JSON.parse(body.toString("utf8") || "{}");
+  }catch{
+    message = {};
+  }
+
+  const id = String(message.id || "").trim();
+  if(id){
+    hasSeenClient = true;
+    if(message.closing){
+      activeClients.delete(id);
+    }else{
+      activeClients.set(id, Date.now());
+    }
+  }
+  shutdownWhenIdle();
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify({ok:true, activeClients:activeClients.size}));
+}
+
+server = http.createServer(async (req,res)=>{
   try{
     const url = new URL(req.url, "http://127.0.0.1");
+    if(url.pathname === "/api/spark-heartbeat"){
+      await handleClientHeartbeat(req, res);
+      return;
+    }
     if(url.pathname === "/api/parse-replay-boosts"){
       await handleBoostParse(req, res);
       return;
@@ -1304,4 +1506,6 @@ http.createServer(async (req,res)=>{
     res.writeHead(isApi ? 500 : 404, isApi ? {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"} : undefined);
     res.end(isApi ? (err.message || "Replay boost parser failed.") : "Not found");
   }
-}).listen(8765, "127.0.0.1", ()=>console.log("http://127.0.0.1:8765"));
+});
+
+server.listen(8765, "127.0.0.1", ()=>console.log("http://127.0.0.1:8765"));

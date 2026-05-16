@@ -133,4 +133,4 @@ if(!(Test-Server)) {
 
 Write-Step "Opening SPARK..."
 Start-Process $AppUrl
-Write-Step "Ready. Keep this folder intact; close the hidden node.exe process from Task Manager if you need to stop the server."
+Write-Step "Ready. The local server shuts itself down after all SPARK tabs and overlay sources are closed."
