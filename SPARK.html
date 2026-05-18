@@ -608,82 +608,232 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
 
 .overviewPanel{
   display:grid;
-  gap:12px;
-}
-.overviewTitle{
-  font-size:clamp(18px,1.35vw,26px);
-  font-weight:900;
-  margin-bottom:10px;
-}
-.overviewTeams{
-  display:grid;
-  grid-template-columns:1fr 120px 1fr;
-  align-items:center;
-  margin:0 4px 6px;
-  font-weight:900;
-  font-size:clamp(13px,.9vw,16px);
-}
-.overviewTeamBlue{color:#38bdf8;text-align:left}
-.overviewTeamOrange{color:#ff7a5f;text-align:right}
-.statCompare{
-  display:grid;
-  grid-template-columns:1fr 120px 1fr;
-  min-height:34px;
-  align-items:center;
-  overflow:hidden;
-  border-bottom:1px solid rgba(0,0,0,.45);
-}
-.statSide{
+  grid-template-columns:minmax(300px,.72fr) minmax(640px,1.28fr);
+  gap:16px;
   position:relative;
-  height:100%;
-  display:flex;
-  align-items:center;
-  font-weight:900;
-  color:#fff;
-  padding:0 18px;
-  background:rgba(40,64,101,.42);
+  overflow:hidden;
 }
-.statSide.right{
-  justify-content:flex-end;
-  background:rgba(182,92,72,.42);
-}
-.statFill{
+.overviewPanel::before{
+  content:"";
   position:absolute;
-  top:0;
-  bottom:0;
-  opacity:.82;
-  z-index:0;
+  inset:4% 28%;
+  background-image:var(--spark-watermark);
+  background-repeat:no-repeat;
+  background-position:center;
+  background-size:contain;
+  opacity:.12;
+  filter:grayscale(.15) contrast(1.08) drop-shadow(0 0 18px rgba(255,208,0,.16));
+  pointer-events:none;
 }
-.statFill.left{
-  right:0;
-  background:#2f4b75;
-}
-.statFill.right{
-  left:0;
-  background:#b65c48;
-}
-.statValue{
+.overviewHero{
   position:relative;
   z-index:1;
-  text-shadow:0 2px 2px rgba(0,0,0,.55);
+  grid-column:1 / -1;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  gap:10px;
+  align-items:stretch;
 }
-.statName{
-  height:100%;
+.overviewTeamCard{
+  min-width:0;
+  border:1px solid rgba(255,255,255,.18);
+  background:linear-gradient(135deg,rgba(255,255,255,.08),rgba(0,0,0,.18));
+  padding:16px 18px;
+  border-radius:10px;
   display:flex;
   align-items:center;
-  justify-content:center;
-  font-weight:900;
-  background:#202124;
-  color:#f3f4f6;
-  text-shadow:0 2px 2px rgba(0,0,0,.75);
+  justify-content:space-between;
+  gap:18px;
+  min-height:94px;
+  box-shadow:inset 0 0 42px rgba(255,255,255,.05),0 0 22px rgba(0,0,0,.22);
+  overflow:hidden;
+}
+.overviewTeamCard.blue{
+  border-color:rgba(56,189,248,.58);
+  background:
+    linear-gradient(90deg,rgba(56,189,248,.34),rgba(56,189,248,.16) 48%,rgba(0,0,0,.18)),
+    radial-gradient(circle at 14% 50%,rgba(163,220,255,.18),transparent 46%);
+}
+.overviewTeamCard.orange{
+  justify-content:space-between;
+  border-color:rgba(255,122,95,.64);
+  background:
+    linear-gradient(270deg,rgba(255,122,95,.34),rgba(255,122,95,.16) 48%,rgba(0,0,0,.18)),
+    radial-gradient(circle at 86% 50%,rgba(255,181,152,.18),transparent 46%);
+}
+.overviewTeamName{
+  font-weight:1000;
+  font-size:clamp(28px,2.25vw,46px);
+  line-height:.94;
   white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  letter-spacing:0;
+  max-width:100%;
+}
+.overviewTeamCard.blue .overviewTeamName{
+  color:#9bd5ff;
+  text-shadow:0 0 18px rgba(56,189,248,.26),0 2px 0 rgba(0,0,0,.35);
+}
+.overviewTeamCard.orange .overviewTeamName{
+  color:#ffb09f;
+  text-align:right;
+  text-shadow:0 0 18px rgba(255,122,95,.28),0 2px 0 rgba(0,0,0,.35);
+}
+.overviewTeamScoreBlock{
+  flex:0 0 auto;
+  display:grid;
+  gap:3px;
+  min-width:94px;
+  padding-left:14px;
+  border-left:1px solid rgba(255,255,255,.18);
+  text-align:right;
+}
+.overviewTeamCard.orange .overviewTeamScoreBlock{
+  order:-1;
+  padding-left:0;
+  padding-right:14px;
+  border-left:0;
+  border-right:1px solid rgba(255,255,255,.18);
+  text-align:left;
+}
+.overviewTeamScoreBlock small{
+  color:rgba(233,237,245,.78);
+  font-size:11px;
+  font-weight:950;
+  text-transform:uppercase;
+}
+.overviewTeamScoreBlock b{
+  color:#fff;
+  font-size:clamp(20px,1.55vw,34px);
+  line-height:1;
+  font-weight:1000;
+}
+.overviewTeamRecord{
+  display:none;
+}
+.overviewScoreCore{
+  min-width:150px;
+  display:grid;
+  place-items:center;
+  padding:10px 14px;
+  border:1px solid var(--spark-yellow);
+  border-radius:10px;
+  background:linear-gradient(180deg,rgba(255,208,0,.18),rgba(0,0,0,.22));
+  box-shadow:0 0 28px rgba(255,208,0,.12);
+}
+.overviewScoreLabel{
+  color:var(--muted);
+  font-size:11px;
+  font-weight:900;
+  text-transform:uppercase;
+}
+.overviewScoreLine{
+  color:#fff;
+  font-size:clamp(30px,3.1vw,58px);
+  font-weight:1000;
+  line-height:.95;
+}
+.overviewWinner{
+  min-height:18px;
+  color:var(--spark-yellow);
+  font-size:12px;
+  font-weight:900;
+  text-align:center;
+}
+.overviewStatGrid{
+  position:relative;
+  z-index:1;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(150px,1fr));
+  gap:8px;
+}
+.overviewMetric{
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:10px;
+  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(0,0,0,.18));
+  padding:9px;
+  display:grid;
+  gap:7px;
+  min-height:88px;
+}
+.overviewMetricTop{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  color:#f7f7f7;
+  font-weight:950;
+  font-size:12px;
+}
+.overviewMetricLeader{
+  color:var(--spark-yellow);
+  font-size:11px;
+  white-space:nowrap;
+}
+.overviewMetricValues{
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  align-items:center;
+  gap:8px;
+  font-weight:1000;
+}
+.overviewMetricValues b{font-size:clamp(16px,1.15vw,23px)}
+.overviewMetricValues .right{text-align:right;color:#ffad9e}
+.overviewMetricValues .left{color:#8cc7ff}
+.overviewMetricValues span{
+  color:#e9edf5;
+  font-size:clamp(13px,.9vw,16px);
+  font-weight:950;
+  text-align:center;
+}
+.overviewMeter{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  height:9px;
+  overflow:hidden;
+  border-radius:999px;
+  background:#15171b;
+}
+.overviewMeter i{display:block;height:100%}
+.overviewMeter .left{justify-self:end;background:linear-gradient(90deg,#243449,#38bdf8)}
+.overviewMeter .right{justify-self:start;background:linear-gradient(90deg,#ff7a5f,#4a241e)}
+.overviewSpotlights{
+  position:relative;
+  z-index:1;
+  display:grid;
+  grid-template-columns:1fr;
+  gap:8px;
+}
+.overviewSpotlight{
+  border:1px solid rgba(255,208,0,.24);
+  border-radius:10px;
+  padding:8px 10px;
+  background:rgba(0,0,0,.20);
+}
+.overviewSpotlight small{
+  display:block;
+  color:var(--muted);
+  font-weight:900;
+  text-transform:uppercase;
+  margin-bottom:4px;
+}
+.overviewSpotlight b{color:#fff;font-size:13px}
+
+.overviewPanel > .tableWrap{
+  position:relative;
+  z-index:1;
+  grid-column:2;
+  grid-row:2 / span 3;
+  max-height:clamp(320px,44vh,560px);
 }
 
 .playerOverviewTable{
+  position:relative;
+  z-index:1;
   width:100%;
   border-collapse:collapse;
   font-size:clamp(11px,.72vw,13px);
-  margin-top:14px;
   overflow:hidden;
   border-radius:12px;
 }
@@ -712,7 +862,9 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
 }
 
 .overviewNote{
-  margin-top:12px;
+  position:relative;
+  z-index:1;
+  margin-top:0;
   color:var(--muted);
   font-size:12px;
   line-height:1.5;
@@ -1241,6 +1393,13 @@ body.obsOverlayMode #obsOverlayRoot{
   header{height:auto}.topbar,.dashboard,.coach{grid-template-columns:1fr}
   .span2{grid-column:auto}.kpis{grid-template-columns:repeat(2,1fr)}
   .event{grid-template-columns:1fr}.tag{text-align:left}
+  .overviewPanel{grid-template-columns:1fr}
+  .overviewPanel > .tableWrap{grid-column:auto;grid-row:auto}
+  .overviewHero{grid-template-columns:1fr}
+  .overviewScoreCore{order:-1}
+  .overviewTeamCard.orange .overviewTeamName{text-align:left}
+  .overviewTeamCard.orange .overviewTeamRecord{justify-content:flex-start}
+  .overviewStatGrid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -1309,16 +1468,33 @@ body.obsOverlayMode #obsOverlayRoot{
 
     <div class="card full" id="gameOverviewCard">
       <div class="overviewPanel">
-        <div class="overviewTitle">Team Stats Overview</div>
-        <div class="overviewTeams">
-          <div class="overviewTeamBlue" id="overviewLeftTeam">Blue</div>
-          <div></div>
-          <div class="overviewTeamOrange" id="overviewRightTeam">Orange</div>
+        <div class="overviewHero">
+          <div class="overviewTeamCard blue">
+            <div class="overviewTeamName" id="overviewLeftTeam">Blue</div>
+            <div class="overviewTeamScoreBlock">
+              <small>Team Score</small>
+              <b id="overviewLeftScore">0</b>
+            </div>
+            <div class="overviewTeamRecord" id="overviewLeftRecord"></div>
+          </div>
+          <div class="overviewScoreCore">
+            <div class="overviewScoreLabel">Team Stats Overview</div>
+            <div class="overviewScoreLine" id="overviewScoreLine">0 - 0</div>
+            <div class="overviewWinner" id="overviewWinner"></div>
+          </div>
+          <div class="overviewTeamCard orange">
+            <div class="overviewTeamScoreBlock">
+              <small>Team Score</small>
+              <b id="overviewRightScore">0</b>
+            </div>
+            <div class="overviewTeamName" id="overviewRightTeam">Orange</div>
+            <div class="overviewTeamRecord" id="overviewRightRecord"></div>
+          </div>
         </div>
-        <div id="overviewStats"></div>
-        <div class="overviewNote">Full-game overview compares both teams across match-level stats. Bar length is relative within each stat row, so the larger value fills more of that side.</div>
-        <div class="overviewTitle" style="margin-top:18px">Per Player Stats</div>
+        <div class="overviewStatGrid" id="overviewStats"></div>
+        <div class="overviewSpotlights" id="overviewSpotlights"></div>
         <div class="tableWrap"><table class="playerOverviewTable" id="overviewPlayerStats"></table></div>
+        <div class="overviewNote">Team overview uses the same replay-derived totals as the player panels. Tile bars compare each stat only against its opposite team value.</div>
       </div>
     </div>
 
@@ -3606,20 +3782,24 @@ function teamAggregate(team){
 
   const goals = sum("goals");
   const shots = sum("shots");
+  const scope = aggregate(team);
+  const pickupTotals = boostPickupTotals(scope);
   return {
     team,
+    players: ps.length,
+    score: sum("scoreboardScore"),
     goals,
     shots,
     assists: sum("assists"),
     saves: sum("saves"),
     shootingPct: shots ? Math.round((goals/shots)*100) : 0,
     possession: avg("possession"),
+    pressure: avg("pressure"),
     demos: sum("demos"),
-    bpm: Math.round(avg("boostEff") * 15 + avg("smallPads") * 5),
-    boostCollected: sum("smallPads") * 36 + ps.length * 1200,
-    boostStolen: sum("stolen"),
-    bigPads: Math.max(0, Math.round(sum("stolen") / 22)),
-    smallPads: sum("smallPads")
+    touches: sum("touches"),
+    boostCollected: pickupTotals.total ? pickupTotals.large * 100 + pickupTotals.small * 12 : sum("smallPads") * 12,
+    boostStolen: largeBoostSteals(scope),
+    bigPads: pickupTotals.large || Math.max(0, Math.round(sum("stolen") / 22))
   };
 }
 
@@ -3633,41 +3813,53 @@ function renderGameOverview(){
 
   $("overviewLeftTeam").textContent = leftName;
   $("overviewRightTeam").textContent = rightName;
+  $("overviewLeftScore").textContent = left.score.toLocaleString();
+  $("overviewRightScore").textContent = right.score.toLocaleString();
+  $("overviewScoreLine").textContent = `${left.goals} - ${right.goals}`;
+  $("overviewWinner").textContent = left.goals === right.goals
+    ? "Score tied"
+    : `${left.goals > right.goals ? leftName : rightName} +${Math.abs(left.goals - right.goals)}`;
+  $("overviewLeftRecord").innerHTML = "";
+  $("overviewRightRecord").innerHTML = "";
 
   const rows = [
-    ["Goals", left.goals, right.goals],
-    ["Shots", left.shots, right.shots],
-    ["Assists", left.assists, right.assists],
-    ["Saves", left.saves, right.saves],
-    ["Shooting %", left.shootingPct, right.shootingPct],
-    ["Possession", left.possession, right.possession],
-    ["Demos Inflicted", left.demos, right.demos],
-    ["BPM", left.bpm, right.bpm],
-    ["Boost Collected", left.boostCollected, right.boostCollected],
-    ["Boost Stolen", left.boostStolen, right.boostStolen],
-    ["Big pads collected", left.bigPads, right.bigPads],
-    ["Small pads collected", left.smallPads, right.smallPads]
+    {label:"Shots",l:left.shots,r:right.shots,note:"attempts"},
+    {label:"Shooting %",l:left.shootingPct,r:right.shootingPct,note:"goals / shots",unit:"%"},
+    {label:"Possession",l:left.possession,r:right.possession,note:"control",unit:"%"},
+    {label:"Pressure",l:left.pressure,r:right.pressure,note:"rating"},
+    {label:"Saves",l:left.saves,r:right.saves,note:"defense"},
+    {label:"Boost Steals",l:left.boostStolen,r:right.boostStolen,note:"large pads"}
   ];
 
-  $("overviewStats").innerHTML = rows.map(([label,l,r])=>{
-    const max = Math.max(1, Number(l)||0, Number(r)||0);
-    const lp = Math.max(2, Math.round((l/max)*100));
-    const rp = Math.max(2, Math.round((r/max)*100));
+  $("overviewStats").innerHTML = rows.map(row=>{
+    const max = Math.max(1, Number(row.l)||0, Number(row.r)||0);
+    const lp = Math.max(3, Math.round((row.l/max)*100));
+    const rp = Math.max(3, Math.round((row.r/max)*100));
+    const leader = row.l === row.r ? "Even" : row.l > row.r ? leftName : rightName;
 
     return `
-      <div class="statCompare">
-        <div class="statSide left">
-          <div class="statFill left" style="width:${lp}%"></div>
-          <span class="statValue">${l}</span>
+      <div class="overviewMetric">
+        <div class="overviewMetricTop"><span>${row.label}</span><span class="overviewMetricLeader">${escapeHtml(leader)}</span></div>
+        <div class="overviewMetricValues">
+          <b class="left">${Number(row.l || 0).toLocaleString()}${row.unit || ""}</b>
+          <span>${row.note}</span>
+          <b class="right">${Number(row.r || 0).toLocaleString()}${row.unit || ""}</b>
         </div>
-        <div class="statName">${label}</div>
-        <div class="statSide right">
-          <div class="statFill right" style="width:${rp}%"></div>
-          <span class="statValue">${r}</span>
+        <div class="overviewMeter">
+          <i class="left" style="width:${lp}%"></i>
+          <i class="right" style="width:${rp}%"></i>
         </div>
       </div>
     `;
   }).join("");
+
+  const allPlayers = [...data.players];
+  const topScorer = allPlayers.reduce((best,p)=>!best || (p.goals || 0) > (best.goals || 0) ? p : best, null);
+  const topSaves = allPlayers.reduce((best,p)=>!best || (p.saves || 0) > (best.saves || 0) ? p : best, null);
+  $("overviewSpotlights").innerHTML = [
+    ["Top Scorer", topScorer ? `${playerDisplayName(topScorer)} - ${topScorer.goals || 0} goal${(topScorer.goals||0)===1?"":"s"}` : "Unavailable"],
+    ["Most Saves", topSaves ? `${playerDisplayName(topSaves)} - ${topSaves.saves || 0} save${(topSaves.saves||0)===1?"":"s"}` : "Unavailable"]
+  ].map(([label,value])=>`<div class="overviewSpotlight"><small>${label}</small><b>${escapeHtml(value)}</b></div>`).join("");
 
   const playerRows = [...data.players]
     .sort((a,b)=>{
@@ -3682,16 +3874,14 @@ function renderGameOverview(){
         <tr>
           <td class="playerOverviewName ${teamClass}">${playerDisplayName(p)}</td>
           <td>${p.team}</td>
-          <td>${Number.isFinite(p.scoreboardScore) ? p.scoreboardScore : "—"}</td>
+          <td>${Number.isFinite(p.scoreboardScore) ? p.scoreboardScore : "-"}</td>
           <td>${p.goals || 0}</td>
           <td>${p.shots || 0}</td>
           <td>${p.assists || 0}</td>
           <td>${p.saves || 0}</td>
           <td>${shootingPct}%</td>
           <td>${p.demos || 0}</td>
-          <td>${p.boostEff || 0}%</td>
           <td>${p.stolen || 0}</td>
-          <td>${p.smallPads || 0}</td>
         </tr>
       `;
     }).join("");
@@ -3708,9 +3898,7 @@ function renderGameOverview(){
         <th>Saves</th>
         <th>Shooting %</th>
         <th>Demos</th>
-        <th>Boost Eff.</th>
         <th>Boost Stolen</th>
-        <th>Small Pads</th>
       </tr>
     </thead>
     <tbody>${playerRows}</tbody>
@@ -5136,7 +5324,9 @@ function ensureLivePlayer(name, team=null){
       boostingSamples:0,
       supersonicSamples:0,
       supersonicBoostSamples:0,
+      supersonicBoostUsed:0,
       currentBoost:0,
+      lastSupersonic:false,
       shortcut:null,
       shotSamples:[]
     });
@@ -5162,9 +5352,14 @@ function updateLivePlayerFromApi(player){
   p.demos = toNumber(valueByKey(player,["demos","Demos","demolitions","Demolitions"]), p.demos);
   p.touches = Math.max(p.touches, toNumber(valueByKey(player,["touches","Touches"]), p.touches));
   p.shortcut = firstDefined(valueByKey(player,["Shortcut","shortcut","Index","index"]), p.shortcut);
+  const isBoosting = valueByKey(player,["bBoosting","boosting","Boosting","isBoosting","IsBoosting"]) === true;
+  const isSupersonic = valueByKey(player,["bSupersonic","supersonic","Supersonic","isSupersonic","IsSupersonic"]) === true;
   const boost = valueByKey(player,["boost","Boost","boostAmount","BoostAmount"]);
   if(boost !== undefined){
     const currentBoost = Math.max(0, Math.min(100, toNumber(boost, 0)));
+    if(p.lastSupersonic && currentBoost < p.currentBoost){
+      p.supersonicBoostUsed += p.currentBoost - currentBoost;
+    }
     p.currentBoost = currentBoost;
     p.boostSum += currentBoost;
     p.boostSamples++;
@@ -5176,11 +5371,10 @@ function updateLivePlayerFromApi(player){
     p.speedSamples++;
     p.maxSpeed = Math.max(p.maxSpeed, n);
   }
-  const isBoosting = valueByKey(player,["bBoosting","boosting","Boosting","isBoosting","IsBoosting"]) === true;
-  const isSupersonic = valueByKey(player,["bSupersonic","supersonic","Supersonic","isSupersonic","IsSupersonic"]) === true;
   if(isBoosting) p.boostingSamples++;
   if(isSupersonic) p.supersonicSamples++;
   if(isBoosting && isSupersonic) p.supersonicBoostSamples++;
+  p.lastSupersonic = isSupersonic;
 }
 
 function extractLivePlayers(payload){
@@ -5596,7 +5790,7 @@ function applyLiveApiMetricsToData(){
     p.scoreboardScore = live.stats.score || 0;
     p.boostEff = live.boostSamples ? Math.round(live.boostSum / live.boostSamples) : p.boostEff;
     p.boostWaste = live.boostingSamples && live.speedSamples ? Math.max(0, Math.min(50, Math.round((live.boostingSamples / live.speedSamples) * 100))) : p.boostWaste;
-    p.supersonicBoostUsed = live.supersonicBoostSamples || 0;
+    p.supersonicBoostUsed = Math.round(live.supersonicBoostUsed || live.supersonicBoostSamples || 0);
     p.supersonicBoostEvents = live.supersonicBoostSamples || 0;
     p.pressure = Math.max(20, Math.min(95, Math.round((p.shots * 10) + (p.goals * 12) + (p.assists * 8) + (p.touches * 1.5) + 26)));
     p.recovery = live.speedSamples ? Math.max(35, Math.min(95, Math.round((live.speedSum / live.speedSamples) / 24))) : p.recovery;

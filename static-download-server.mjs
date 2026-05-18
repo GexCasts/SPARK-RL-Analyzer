@@ -322,6 +322,22 @@ function distanceBetweenLocations(a, b){
   return Math.hypot((a.x || 0) - (b.x || 0), (a.y || 0) - (b.y || 0), (a.z || 0) - (b.z || 0));
 }
 
+function decodedVelocity(value){
+  const rigidBody = getObject(value, "RigidBody");
+  const velocity = getObject(value, "velocity") || getObject(value, "Velocity") || getObject(rigidBody, "velocity") || getObject(rigidBody, "Velocity");
+  if(!velocity || typeof velocity !== "object") return null;
+  const x = Number(getObject(velocity, "x") ?? getObject(velocity, "X"));
+  const y = Number(getObject(velocity, "y") ?? getObject(velocity, "Y"));
+  const z = Number(getObject(velocity, "z") ?? getObject(velocity, "Z") ?? 0);
+  if(!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return {x, y, z};
+}
+
+function vectorSpeed(vector){
+  if(!vector || !Number.isFinite(vector.x) || !Number.isFinite(vector.y)) return null;
+  return Math.hypot(vector.x || 0, vector.y || 0, vector.z || 0);
+}
+
 function summarizeBoostPickups(parsedReplay){
   const frames = parsedReplay?.network_frames?.frames || parsedReplay?.frames || [];
   const objects = parsedReplay?.objects || [];
@@ -340,6 +356,8 @@ function summarizeBoostPickups(parsedReplay){
   const supersonicBoostSpend = new Map();
   const carMotion = new Map();
   const carSpeed = new Map();
+  const carSpeedSamples = new Map();
+  const carSupersonicState = new Map();
   const padSamples = new Map();
   let isOvertime = false;
   let scoreboardSecondsRemaining = null;
@@ -352,6 +370,48 @@ function summarizeBoostPickups(parsedReplay){
       return clampNumber(start - scoreboardSecondsRemaining, 0, start);
     }
     return Math.max(0, Number(time) || 0);
+  }
+
+  function rememberCarSpeed(carActor, time, speed, source="motion"){
+    if(!Number.isInteger(carActor) || !Number.isFinite(time) || !Number.isFinite(speed) || speed <= 0) return;
+    carSpeed.set(carActor, {speed, time, source});
+    if(!carSpeedSamples.has(carActor)) carSpeedSamples.set(carActor, []);
+    const samples = carSpeedSamples.get(carActor);
+    samples.push({time, speed, source});
+    while(samples.length > 80) samples.shift();
+  }
+
+  function nearestCarSpeed(carActor, time){
+    const direct = carSpeed.get(carActor);
+    let best = direct && Number.isFinite(direct.speed) ? direct : null;
+    let bestDelta = best ? Math.abs(time - best.time) : Infinity;
+    const samples = carSpeedSamples.get(carActor) || [];
+    for(let i = samples.length - 1; i >= 0; i--){
+      const sample = samples[i];
+      const delta = Math.abs(time - sample.time);
+      if(delta > 0.75 && sample.time < time) break;
+      if(delta < bestDelta){
+        best = sample;
+        bestDelta = delta;
+      }
+    }
+    return bestDelta <= 0.75 ? best : null;
+  }
+
+  function replayBoolValue(attribute, value){
+    const direct = getObject(attribute, "Boolean") ?? getObject(value, "Boolean");
+    if(typeof direct === "boolean") return direct;
+    if(typeof value === "boolean") return value;
+    return null;
+  }
+
+  function addSupersonicBoostSpend(playerName, rawBoostUsed, speedSample){
+    if(!playerName || !Number.isFinite(rawBoostUsed) || rawBoostUsed <= 0) return;
+    const previous = supersonicBoostSpend.get(playerName) || {raw:0, events:0, speedSamples:0};
+    previous.raw += rawBoostUsed;
+    previous.events += 1;
+    if(speedSample) previous.speedSamples += 1;
+    supersonicBoostSpend.set(playerName, previous);
   }
 
   for(const frame of frames){
@@ -369,8 +429,18 @@ function summarizeBoostPickups(parsedReplay){
       pickupState.delete(actorId);
       carPri.delete(actorId);
       carLoc.delete(actorId);
+      carMotion.delete(actorId);
+      carSpeed.delete(actorId);
+      carSpeedSamples.delete(actorId);
+      carSupersonicState.delete(actorId);
       const boostCarActor = boostComponentCar.get(actorId);
-      if(Number.isInteger(boostCarActor)) carBoostAmount.delete(boostCarActor);
+      if(Number.isInteger(boostCarActor)){
+        carBoostAmount.delete(boostCarActor);
+        carMotion.delete(boostCarActor);
+        carSpeed.delete(boostCarActor);
+        carSpeedSamples.delete(boostCarActor);
+        carSupersonicState.delete(boostCarActor);
+      }
       boostComponentCar.delete(actorId);
       boostComponentAmount.delete(actorId);
     }
@@ -419,11 +489,22 @@ function summarizeBoostPickups(parsedReplay){
         if(previousMotion && Number.isFinite(time)){
           const dt = time - previousMotion.time;
           if(dt > 0.01 && dt < 1.25){
-            carSpeed.set(actorId, distanceBetweenLocations(loc, previousMotion.location) / dt);
+            rememberCarSpeed(actorId, time, distanceBetweenLocations(loc, previousMotion.location) / dt, "motion");
           }
         }
         carMotion.set(actorId, {time, location:loc});
         carLoc.set(actorId, loc);
+      }
+
+      const velocity = decodedVelocity(value);
+      const speedFromVelocity = vectorSpeed(velocity);
+      if(Number.isFinite(speedFromVelocity)){
+        rememberCarSpeed(actorId, time, speedFromVelocity, "velocity");
+      }
+
+      if(/:b?SuperSonic$/i.test(objectName) || /:b?Supersonic$/i.test(objectName)){
+        const supersonicValue = replayBoolValue(attribute, value);
+        if(typeof supersonicValue === "boolean") carSupersonicState.set(actorId, supersonicValue);
       }
 
       if(objectNameMatches(objectName, "TAGame.CarComponent_Boost_TA:ReplicatedBoost")){
@@ -449,16 +530,12 @@ function summarizeBoostPickups(parsedReplay){
             });
           }
           if(Number.isInteger(carActor) && Number.isFinite(previousBoost) && previousBoost > boostAmount + 1){
-            const speed = carSpeed.get(carActor);
-            if(Number.isFinite(speed) && speed >= 2200){
+            const speedSample = nearestCarSpeed(carActor, time);
+            const isSupersonic = carSupersonicState.get(carActor) === true || (speedSample && speedSample.speed >= 2180);
+            if(isSupersonic){
               const pri = carPri.get(carActor);
               const playerName = cleanName(priName.get(pri));
-              if(playerName){
-                const previous = supersonicBoostSpend.get(playerName) || {raw:0, events:0};
-                previous.raw += previousBoost - boostAmount;
-                previous.events += 1;
-                supersonicBoostSpend.set(playerName, previous);
-              }
+              addSupersonicBoostSpend(playerName, previousBoost - boostAmount, speedSample);
             }
           }
           if(Number.isInteger(carActor)) carBoostAmount.set(carActor, boostAmount);
