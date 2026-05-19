@@ -4,7 +4,7 @@ S.P.A.R.K. (Statistical Performance Analysis & Replay Kit) is a local Rocket Lea
 
 ## SPARK Launcher on Windows
 
-Use `SPARK Launcher.exe`. to open the Launcher and HTML App.
+Use `SPARK Launcher.exe` to open the Launcher and HTML App. It is now a native Windows launcher and does not start a hidden PowerShell process.
 
 If Windows blocks unknown executables, use `SPARK Launcher.bat` instead.
 
