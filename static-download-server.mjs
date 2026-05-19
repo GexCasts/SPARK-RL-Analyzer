@@ -1,5 +1,6 @@
 import http from "node:http";
 import crypto from "node:crypto";
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
@@ -10,7 +11,15 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = here;
 const appFileName = "SPARK.html";
 const logoPath = path.join(here, "assets", "Spark Logo.png");
-const rrrocketPath = path.join(here, "tools", "rrrocket", "rrrocket-0.11.1-x86_64-pc-windows-msvc", "rrrocket.exe");
+const rrrocketVersion = "0.11.1";
+const rrrocketCandidates = [
+  process.env.SPARK_RRROCKET_PATH,
+  path.join(here, "tools", "rrrocket", `rrrocket-${rrrocketVersion}-x86_64-unknown-linux-musl`, "rrrocket"),
+  path.join(here, "tools", "rrrocket", `rrrocket-${rrrocketVersion}-x86_64-apple-darwin`, "rrrocket"),
+  path.join(here, "tools", "rrrocket", `rrrocket-${rrrocketVersion}-aarch64-apple-darwin`, "rrrocket"),
+  path.join(here, "tools", "rrrocket", `rrrocket-${rrrocketVersion}-x86_64-pc-windows-msvc`, "rrrocket.exe")
+].filter(Boolean);
+const rrrocketPath = rrrocketCandidates.find(candidate=>fsSync.existsSync(candidate));
 const tmpDir = path.join(here, ".tmp");
 const types = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -259,6 +268,10 @@ function readRequestBody(req, limitBytes=128 * 1024 * 1024){
 
 function runRrrocket(replayPath){
   return new Promise((resolve, reject)=>{
+    if(!rrrocketPath){
+      reject(new Error(`rrrocket parser not found. Checked: ${rrrocketCandidates.join(", ")}`));
+      return;
+    }
     execFile(rrrocketPath, ["--network-parse", replayPath], {maxBuffer: 512 * 1024 * 1024}, (err, stdout, stderr)=>{
       if(err){
         reject(new Error(stderr?.trim() || err.message));
