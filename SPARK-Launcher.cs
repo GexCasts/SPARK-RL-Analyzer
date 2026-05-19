@@ -26,9 +26,11 @@ namespace SparkLauncher
             ProcessStartInfo info = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = "-NoProfile -ExecutionPolicy Bypass -File \"" + script + "\"",
+                Arguments = "-STA -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File \"" + script + "\"",
                 WorkingDirectory = root,
-                UseShellExecute = true
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
             };
 
             Process.Start(info);

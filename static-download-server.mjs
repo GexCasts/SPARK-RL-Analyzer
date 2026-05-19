@@ -1,5 +1,7 @@
 import http from "node:http";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import net from "node:net";
 import path from "node:path";
 import {execFile} from "node:child_process";
 import {fileURLToPath} from "node:url";
@@ -28,6 +30,13 @@ const shutdownGraceMs = 60000;
 let hasSeenClient = false;
 let shutdownTimer = null;
 let server = null;
+const liveApiFeedHost = "127.0.0.1";
+const liveApiFeedPort = 49123;
+const liveApiClients = new Set();
+let liveApiFeedSocket = null;
+let liveApiReconnectTimer = null;
+let liveApiStreamBuffer = "";
+let liveApiLatestMessage = null;
 
 function clearShutdownTimer(){
   if(shutdownTimer){
@@ -60,6 +69,138 @@ function shutdownWhenIdle(){
 }
 
 setInterval(shutdownWhenIdle, 30000).unref();
+
+function sendLiveApiWebSocketText(socket, text){
+  if(socket.destroyed) return;
+  const payload = Buffer.from(text, "utf8");
+  let header;
+  if(payload.length < 126){
+    header = Buffer.from([0x81, payload.length]);
+  }else if(payload.length < 65536){
+    header = Buffer.alloc(4);
+    header[0] = 0x81;
+    header[1] = 126;
+    header.writeUInt16BE(payload.length, 2);
+  }else{
+    header = Buffer.alloc(10);
+    header[0] = 0x81;
+    header[1] = 127;
+    header.writeBigUInt64BE(BigInt(payload.length), 2);
+  }
+  socket.write(Buffer.concat([header, payload]));
+}
+
+function broadcastLiveApiMessage(text){
+  liveApiLatestMessage = text;
+  for(const client of liveApiClients) sendLiveApiWebSocketText(client, text);
+}
+
+function extractLiveApiJsonObjects(chunk){
+  liveApiStreamBuffer += chunk;
+  const messages = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let lastEnd = 0;
+
+  for(let i = 0; i < liveApiStreamBuffer.length; i++){
+    const char = liveApiStreamBuffer[i];
+    if(inString){
+      if(escaped) escaped = false;
+      else if(char === "\\") escaped = true;
+      else if(char === "\"") inString = false;
+      continue;
+    }
+    if(char === "\"") inString = true;
+    else if(char === "{"){
+      if(depth === 0) start = i;
+      depth++;
+    }else if(char === "}"){
+      depth--;
+      if(depth === 0 && start >= 0){
+        messages.push(liveApiStreamBuffer.slice(start, i + 1));
+        lastEnd = i + 1;
+        start = -1;
+      }
+    }
+  }
+
+  liveApiStreamBuffer = depth > 0 && start >= 0 ? liveApiStreamBuffer.slice(start) : liveApiStreamBuffer.slice(lastEnd);
+  return messages;
+}
+
+function scheduleLiveApiReconnect(){
+  if(liveApiReconnectTimer || !liveApiClients.size) return;
+  liveApiReconnectTimer = setTimeout(()=>{
+    liveApiReconnectTimer = null;
+    connectLiveApiFeed();
+  }, 1500);
+  liveApiReconnectTimer.unref();
+}
+
+function connectLiveApiFeed(){
+  if(liveApiFeedSocket && !liveApiFeedSocket.destroyed) return;
+  if(!liveApiClients.size) return;
+  liveApiFeedSocket = net.createConnection({host:liveApiFeedHost, port:liveApiFeedPort}, ()=>{
+    console.log(`SPARK Live API bridge connected to ${liveApiFeedHost}:${liveApiFeedPort}`);
+  });
+  liveApiFeedSocket.setEncoding("utf8");
+  liveApiFeedSocket.on("data", data=>{
+    for(const message of extractLiveApiJsonObjects(data)) broadcastLiveApiMessage(message);
+  });
+  liveApiFeedSocket.on("error", err=>{
+    console.warn(`SPARK Live API bridge feed error: ${err.message}`);
+  });
+  liveApiFeedSocket.on("close", ()=>{
+    liveApiFeedSocket = null;
+    liveApiStreamBuffer = "";
+    scheduleLiveApiReconnect();
+  });
+}
+
+function stopLiveApiFeedIfIdle(){
+  if(liveApiClients.size) return;
+  if(liveApiReconnectTimer){
+    clearTimeout(liveApiReconnectTimer);
+    liveApiReconnectTimer = null;
+  }
+  if(liveApiFeedSocket){
+    liveApiFeedSocket.destroy();
+    liveApiFeedSocket = null;
+  }
+}
+
+function acceptLiveApiWebSocket(req, socket){
+  const key = String(req.headers["sec-websocket-key"] || "").trim();
+  if(!key){
+    socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+    return;
+  }
+  const accept = crypto
+    .createHash("sha1")
+    .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+    .digest("base64");
+  socket.write([
+    "HTTP/1.1 101 Switching Protocols",
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    `Sec-WebSocket-Accept: ${accept}`,
+    "",
+    ""
+  ].join("\r\n"));
+  liveApiClients.add(socket);
+  if(liveApiLatestMessage) sendLiveApiWebSocketText(socket, liveApiLatestMessage);
+  connectLiveApiFeed();
+  socket.on("close", ()=>{
+    liveApiClients.delete(socket);
+    stopLiveApiFeedIfIdle();
+  });
+  socket.on("error", ()=>{
+    liveApiClients.delete(socket);
+    stopLiveApiFeedIfIdle();
+  });
+}
 
 const standardBoostPadCoords = [
   {fieldX:0,fieldY:-4240,type:"small"},
@@ -1583,6 +1724,18 @@ server = http.createServer(async (req,res)=>{
     res.writeHead(isApi ? 500 : 404, isApi ? {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"} : undefined);
     res.end(isApi ? (err.message || "Replay boost parser failed.") : "Not found");
   }
+});
+
+server.on("upgrade", (req, socket)=>{
+  try{
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    if(url.pathname === "/api/live-api"){
+      acceptLiveApiWebSocket(req, socket);
+      return;
+    }
+  }catch{
+  }
+  socket.end("HTTP/1.1 404 Not Found\r\n\r\n");
 });
 
 server.listen(8765, "127.0.0.1", ()=>console.log("http://127.0.0.1:8765"));

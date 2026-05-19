@@ -130,11 +130,63 @@ input{display:none}
 }
 .nameDisplayToggle input,.unitDisplayToggle input{display:inline-block;accent-color:var(--gold)}
 .nameDisplayToggle.disabled,.unitDisplayToggle.disabled{opacity:.45}
+.unitSwitch{
+  position:relative;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  align-items:center;
+  min-width:188px;
+  padding:3px;
+  border:1px solid rgba(255,208,0,.45);
+  border-radius:999px;
+  background:#080b10;
+  color:#dce8f7;
+  box-shadow:inset 0 0 18px rgba(0,0,0,.45);
+}
+.unitSwitch span{
+  position:relative;
+  z-index:2;
+  display:grid;
+  place-items:center;
+  min-height:28px;
+  padding:0 12px;
+  font-size:12px;
+  font-weight:950;
+  color:#f3f4f6;
+}
+.unitSwitch i{
+  position:absolute;
+  z-index:1;
+  left:3px;
+  top:3px;
+  width:calc(50% - 3px);
+  height:calc(100% - 6px);
+  border-radius:999px;
+  background:linear-gradient(90deg,var(--spark-yellow),#f3f4f6);
+  box-shadow:0 0 16px rgba(255,208,0,.24);
+  transition:transform .18s ease;
+}
+.unitSwitch.imperial i{transform:translateX(100%)}
+.unitSwitch:not(.imperial) span:first-child,
+.unitSwitch.imperial span:nth-child(2){color:#090909}
+.unitSwitch:focus-visible{
+  outline:2px solid var(--spark-yellow);
+  outline-offset:3px;
+}
 button{
   background:linear-gradient(180deg,#2b2b2b,#171717);color:#f3f4f6;border:1px solid #6b6b6b;border-radius:999px;
   padding:8px 12px;cursor:pointer;font-weight:700;font-size:12px;
 }
 button.active{background:linear-gradient(90deg,var(--spark-yellow),var(--spark-chrome));border-color:var(--spark-yellow);color:#070707}
+button.unitSwitch{
+  display:grid;
+  min-width:188px;
+  padding:3px;
+  border:1px solid rgba(255,208,0,.45);
+  background:#080b10;
+  color:#dce8f7;
+  font-weight:950;
+}
 .liveApiControls{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:12px}
 .liveApiControls button{border-radius:8px}
 .liveApiControls .danger{border-color:#ef4444;color:#fecaca}
@@ -258,6 +310,41 @@ canvas{width:100%!important;height:100%!important}
 }
 .overlayLogoTools{display:flex;gap:8px;flex-wrap:wrap}
 .overlayLogoTools button{border-radius:8px}
+.overlayTestTools{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px;
+  background:linear-gradient(180deg,#15161a,#0c0d10);
+  border:1px solid #55575d;
+  border-radius:10px;
+}
+.overlayTestTools strong{
+  color:#f3f4f6;
+  display:block;
+  font-size:13px;
+  text-transform:uppercase;
+}
+.overlayTestTools span{
+  color:var(--muted);
+  display:block;
+  font-size:12px;
+  margin-top:3px;
+  text-transform:none;
+}
+.overlayTestToggle{
+  min-width:170px;
+  border-radius:999px;
+  border-color:#6b6d73;
+  background:#17191d;
+  color:#f3f4f6;
+}
+.overlayTestToggle.active{
+  border-color:var(--spark-yellow);
+  background:linear-gradient(90deg,var(--spark-yellow),var(--spark-amber));
+  color:#050607;
+}
 .overlayFileInput{display:none!important}
 .barrow{margin:10px 0}
 .barlabel{display:flex;justify-content:space-between;font-size:clamp(11px,.72vw,13px);margin-bottom:5px;gap:12px}
@@ -996,83 +1083,170 @@ body.obsOverlayMode #obsOverlayRoot{
   mask-image:radial-gradient(circle at 50% 50%,transparent 0 52%,#000 85%);
   opacity:.22;
 }
+.obsStage.replayActive .obsScoreboard,
+.obsStage.replayActive .obsMatchTag,
+.obsStage.replayActive .obsBoostStacks,
+.obsStage.replayActive .obsPlayerCard,
+.obsStage.replayActive .obsFocusBoost,
+.obsStage.replayActive .obsStatus{
+  display:none;
+}
 .obsScoreboard{
   position:absolute;
-  top:28px;
+  top:0;
   left:50%;
   transform:translateX(-50%);
-  display:grid;
-  grid-template-columns:220px 58px 100px 58px 220px;
-  align-items:center;
-  height:62px;
-  filter:drop-shadow(0 8px 12px rgba(0,0,0,.55));
+  width:1160px;
+  height:154px;
+  filter:drop-shadow(0 10px 14px rgba(0,0,0,.62));
   z-index:2;
 }
 .obsTeamName{
-  height:42px;
+  position:absolute;
+  top:18px;
+  width:396px;
+  height:48px;
   display:flex;
   align-items:center;
-  gap:12px;
-  padding:0 14px;
-  background:#050607;
-  border:2px solid var(--spark-yellow);
-  font-size:18px;
-  font-weight:900;
-  letter-spacing:.4px;
+  justify-content:center;
+  gap:10px;
+  padding:0 22px;
+  background:linear-gradient(180deg,var(--spark-yellow),var(--spark-amber));
+  color:#fff;
+  font-size:24px;
+  font-weight:1000;
+  letter-spacing:.6px;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
+  text-shadow:0 2px 4px rgba(0,0,0,.45);
+  clip-path:polygon(0 0,100% 0,86% 100%,0 100%);
 }
-.obsTeamName.right{justify-content:flex-end}
+.obsTeamName.left{left:0}
+.obsTeamName.right{
+  right:0;
+  clip-path:polygon(14% 0,100% 0,100% 100%,0 100%);
+}
 .obsLogoBox{
-  width:72px;
-  height:34px;
-  background:transparent;
-  border:0;
+  display:none;
+}
+.obsTeamLabel{
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+.obsScoreboardCenter{
+  position:absolute;
+  left:50%;
+  top:0;
+  transform:translateX(-50%);
+  width:392px;
+  height:136px;
+  background:#050607;
+  color:#fff;
+  clip-path:polygon(0 0,100% 0,92% 72%,60% 84%,50% 100%,40% 84%,8% 72%);
+}
+.obsSeriesPlate{
+  position:absolute;
+  top:64px;
+  height:28px;
+  width:194px;
+  background:#f5f5f5;
   display:flex;
   align-items:center;
-  justify-content:center;
-  flex:0 0 auto;
-  overflow:visible;
+  z-index:1;
 }
-.obsLogoBox img{width:100%;height:100%;object-fit:cover;object-position:center 62%;filter:drop-shadow(0 4px 8px rgba(0,0,0,.55))}
+.obsSeriesPlate.left{
+  right:50%;
+  justify-content:flex-end;
+  padding-right:34px;
+  clip-path:polygon(0 0,100% 0,82% 100%,10% 100%);
+}
+.obsSeriesPlate.right{
+  left:50%;
+  justify-content:flex-start;
+  padding-left:34px;
+  clip-path:polygon(0 0,100% 0,90% 100%,18% 100%);
+}
+.obsSeriesDots{
+  display:flex;
+  gap:8px;
+}
+.obsSeriesDots.left{flex-direction:row-reverse}
+.obsSeriesDot{
+  width:20px;
+  height:18px;
+  border-radius:4px;
+  background:#050607;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.35);
+}
+.obsSeriesDot.blue.filled{background:#149ce8}
+.obsSeriesDot.orange.filled{background:#ff8a14}
+.obsScoreboardBolt{
+  position:absolute;
+  left:50%;
+  top:77px;
+  transform:translateX(-50%);
+  width:100px;
+  height:70px;
+  background:transparent;
+  z-index:2;
+  pointer-events:none;
+}
+.obsScoreboardBolt img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  object-position:center;
+  filter:drop-shadow(0 4px 6px rgba(0,0,0,.7));
+}
 .obsScore{
+  position:absolute;
+  top:18px;
   width:58px;
   height:58px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:linear-gradient(180deg,var(--spark-yellow),var(--spark-amber));
-  color:#050607;
-  font-size:34px;
-  font-weight:1000;
-  border:3px solid #050607;
-}
-.obsClock{
-  height:42px;
   display:grid;
   place-items:center;
-  background:#050607;
-  border-top:2px solid var(--spark-yellow);
-  border-bottom:2px solid var(--spark-yellow);
-  font-size:30px;
+  color:#fff;
+  font-size:32px;
+  font-weight:1000;
+  z-index:2;
+}
+.obsScore.blue{left:385px;background:#139de7}
+.obsScore.orange{right:385px;background:#ff8a14}
+.obsClock{
+  position:absolute;
+  top:20px;
+  left:50%;
+  transform:translateX(-50%);
+  width:126px;
+  height:48px;
+  display:grid;
+  place-items:center;
+  background:transparent;
+  font-size:34px;
   font-weight:1000;
   color:#fff;
+  z-index:2;
 }
 .obsMatchTag{
   position:absolute;
-  top:76px;
+  top:90px;
   left:50%;
+  width:210px;
   transform:translateX(-50%);
-  background:linear-gradient(90deg,var(--spark-yellow),var(--spark-amber));
-  color:#050607;
+  background:transparent;
+  color:#f4f4f4;
   font-size:12px;
-  font-weight:900;
-  padding:3px 24px;
+  font-weight:1000;
+  padding:0;
+  text-align:center;
+  z-index:3;
 }
 .obsBoostStacks{
   position:absolute;
-  top:76px;
+  top:112px;
   left:28px;
   right:28px;
   display:flex;
@@ -1212,6 +1386,111 @@ body.obsOverlayMode #obsOverlayRoot{
   opacity:.9;
   z-index:3;
 }
+.obsReplayOverlay{
+  display:none;
+  position:absolute;
+  inset:0;
+  z-index:4;
+  color:#fff;
+}
+.obsStage.replayActive .obsReplayOverlay{display:block}
+.obsReplayTop{
+  position:absolute;
+  top:30px;
+  left:50%;
+  transform:translateX(-50%);
+  display:grid;
+  grid-template-columns:210px 62px 112px 62px 210px;
+  align-items:center;
+  filter:drop-shadow(0 8px 14px rgba(0,0,0,.62));
+}
+.obsReplayTeam{
+  height:42px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:0 14px;
+  background:#050607;
+  border:2px solid rgba(255,208,0,.86);
+  font-size:17px;
+  font-weight:1000;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+.obsReplayTeam.right{justify-content:flex-end;text-align:right}
+.obsReplayScore{
+  height:58px;
+  display:grid;
+  place-items:center;
+  background:linear-gradient(180deg,var(--spark-yellow),var(--spark-amber));
+  border:3px solid #050607;
+  color:#050607;
+  font-size:33px;
+  font-weight:1000;
+}
+.obsReplayTag{
+  height:42px;
+  display:grid;
+  place-items:center;
+  background:#050607;
+  border-top:2px solid var(--spark-yellow);
+  border-bottom:2px solid var(--spark-yellow);
+  color:var(--spark-yellow);
+  font-size:18px;
+  font-weight:1000;
+  letter-spacing:2px;
+}
+.obsReplayCard{
+  position:absolute;
+  left:50%;
+  bottom:46px;
+  transform:translateX(-50%);
+  min-width:620px;
+  display:grid;
+  grid-template-columns:1fr auto;
+  align-items:center;
+  gap:28px;
+  padding:18px 24px;
+  background:rgba(5,6,7,.88);
+  border:2px solid rgba(255,208,0,.82);
+  border-bottom:6px solid var(--spark-yellow);
+  box-shadow:0 18px 36px rgba(0,0,0,.58);
+}
+.obsReplayEyebrow{
+  color:var(--spark-yellow);
+  font-size:13px;
+  font-weight:1000;
+  letter-spacing:2px;
+}
+.obsReplayScorer{
+  margin-top:4px;
+  color:#fff;
+  font-size:32px;
+  font-weight:1000;
+  line-height:1;
+  max-width:440px;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+.obsReplayMeta{
+  margin-top:8px;
+  color:#d7d7d7;
+  font-size:13px;
+  font-weight:900;
+}
+.obsReplaySpeed{
+  min-width:112px;
+  min-height:82px;
+  display:grid;
+  place-items:center;
+  background:linear-gradient(180deg,var(--spark-yellow),var(--spark-amber));
+  color:#050607;
+  font-weight:1000;
+}
+.obsReplaySpeed b{font-size:34px;line-height:1}
+.obsReplaySpeed span{display:block;font-size:11px;line-height:1.1;text-align:center}
 .obsFinalScreen{
   display:none;
   position:absolute;
@@ -1249,10 +1528,10 @@ body.obsOverlayMode #obsOverlayRoot{
   position:relative;
   width:100%;
   height:100%;
-  padding:84px 96px 70px;
+  padding:70px 86px 56px;
   display:grid;
-  grid-template-rows:auto 1fr auto;
-  gap:34px;
+  grid-template-rows:auto auto 1fr auto;
+  gap:24px;
 }
 .obsFinalHeader{
   display:grid;
@@ -1287,13 +1566,13 @@ body.obsOverlayMode #obsOverlayRoot{
 .obsFinalLogo img{width:100%;height:100%;object-fit:cover;object-position:center 62%}
 .obsFinalScore{
   display:grid;
-  grid-template-columns:1fr 220px 1fr;
+  grid-template-columns:1fr 190px 1fr;
   align-items:center;
-  gap:30px;
+  gap:24px;
 }
 .obsFinalTeam{
-  min-height:210px;
-  padding:26px 28px;
+  min-height:124px;
+  padding:22px 26px;
   background:rgba(5,6,7,.72);
   border:2px solid rgba(255,208,0,.68);
   box-shadow:0 16px 38px rgba(0,0,0,.48);
@@ -1308,21 +1587,15 @@ body.obsOverlayMode #obsOverlayRoot{
   text-overflow:ellipsis;
 }
 .obsFinalTeamRecord{
-  margin-top:16px;
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:10px;
+  margin-top:12px;
+  color:#d6d6d6;
+  font-size:17px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:1px;
 }
-.obsFinalTeam.right .obsFinalTeamRecord{direction:rtl}
-.obsFinalMiniStat{
-  background:rgba(255,255,255,.06);
-  border-bottom:3px solid var(--spark-yellow);
-  padding:11px 8px;
-}
-.obsFinalMiniStat b{display:block;color:var(--spark-yellow);font-size:25px;line-height:1}
-.obsFinalMiniStat span{display:block;margin-top:4px;color:#d6d6d6;font-size:11px;font-weight:900}
 .obsFinalScoreBox{
-  height:220px;
+  height:146px;
   display:grid;
   grid-template-columns:1fr 40px 1fr;
   align-items:center;
@@ -1332,44 +1605,117 @@ body.obsOverlayMode #obsOverlayRoot{
   border:8px solid #050607;
   box-shadow:0 0 0 2px var(--spark-yellow),0 18px 40px rgba(0,0,0,.56);
 }
-.obsFinalScoreBox b{font-size:96px;line-height:1;font-weight:1000}
-.obsFinalScoreBox span{font-size:56px;font-weight:1000}
+.obsFinalScoreBox b{font-size:76px;line-height:1;font-weight:1000}
+.obsFinalScoreBox span{font-size:44px;font-weight:1000}
 .obsFinalRows{
-  display:grid;
-  gap:10px;
-  align-content:start;
-}
-.obsFinalRow{
-  display:grid;
-  grid-template-columns:120px 1fr 190px 1fr 120px;
-  align-items:center;
-  gap:16px;
-  min-height:42px;
-  font-weight:1000;
-}
-.obsFinalRowValue{
-  color:#fff;
-  font-size:25px;
-  text-align:center;
-}
-.obsFinalRowLabel{
-  color:var(--spark-yellow);
-  font-size:18px;
-  text-align:center;
-  letter-spacing:1px;
-}
-.obsFinalBar{
-  position:relative;
-  height:15px;
-  background:rgba(255,255,255,.14);
+  min-height:0;
   overflow:hidden;
 }
-.obsFinalBar.left .fill{margin-left:auto}
-.obsFinalBar .fill{
+.obsFinalPlayerTable{
   height:100%;
-  width:var(--w,0%);
-  border-radius:0;
+  display:grid;
+  grid-template-rows:auto 1fr;
+  background:rgba(5,6,7,.76);
+  border:2px solid rgba(255,208,0,.52);
+  box-shadow:0 18px 42px rgba(0,0,0,.48);
+}
+.obsFinalPlayerHeader,
+.obsFinalPlayerRow{
+  display:grid;
+  grid-template-columns:minmax(200px,1.15fr) repeat(9,minmax(66px,.54fr)) minmax(200px,1.15fr);
+  align-items:center;
+  column-gap:8px;
+}
+.obsFinalPlayerHeader{
+  min-height:48px;
+  padding:0 16px;
+  background:linear-gradient(90deg,rgba(56,189,248,.18),rgba(255,208,0,.20),rgba(249,115,22,.18));
+  color:#f7f7f7;
+  font-size:15px;
+  font-weight:1000;
+  text-transform:uppercase;
+  letter-spacing:1px;
+}
+.obsFinalPlayerHeader .right{text-align:right}
+.obsFinalPlayerBody{
+  display:grid;
+  align-content:stretch;
+  min-height:0;
+}
+.obsFinalPlayerRow{
+  position:relative;
+  padding:9px 16px;
+  min-height:70px;
+  border-top:1px solid rgba(255,255,255,.10);
+}
+.obsFinalPlayerRow:nth-child(even){background:rgba(255,255,255,.035)}
+.obsFinalPlayerName{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  color:#fff;
+  font-size:23px;
+  font-weight:1000;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.obsFinalPlayerName.orange{justify-content:flex-end;text-align:right}
+.obsFinalMvp{
+  flex:none;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:50px;
+  padding:5px 9px;
+  border-radius:999px;
   background:linear-gradient(90deg,var(--spark-yellow),var(--spark-amber));
+  color:#050607;
+  font-size:13px;
+  font-weight:1000;
+  box-shadow:0 0 18px rgba(255,208,0,.55);
+}
+.obsFinalStatCell{
+  position:relative;
+  min-height:46px;
+  display:grid;
+  grid-template-columns:1fr 1px 1fr;
+  align-items:center;
+  color:#fff;
+  font-size:22px;
+  font-weight:1000;
+  background:rgba(255,255,255,.055);
+  overflow:hidden;
+}
+.obsFinalStatValue{
+  position:relative;
+  z-index:1;
+  height:100%;
+  display:grid;
+  place-items:center;
+}
+.obsFinalStatValue:first-child{background:rgba(56,189,248,.07)}
+.obsFinalStatValue:last-child{background:rgba(249,115,22,.07)}
+.obsFinalStatValue::before{
+  content:"";
+  position:absolute;
+  left:0;
+  bottom:0;
+  width:100%;
+  height:4px;
+  background:linear-gradient(90deg,var(--spark-yellow),var(--spark-amber));
+  opacity:var(--a,.22);
+}
+.obsFinalStatValue.win{
+  color:var(--spark-yellow);
+  background:rgba(255,208,0,.12);
+}
+.obsFinalStatCell.empty{color:rgba(255,255,255,.28)}
+.obsFinalStatDivider{
+  width:1px;
+  height:70%;
+  background:rgba(255,255,255,.22);
 }
 .obsFinalFooter{
   display:flex;
@@ -1379,6 +1725,221 @@ body.obsOverlayMode #obsOverlayRoot{
   font-size:18px;
   font-weight:1000;
   letter-spacing:2px;
+}
+.obsFinalScreen{
+  background:
+    linear-gradient(90deg,#f2b714 0 8.5%,transparent 8.5% 91.5%,#f2b714 91.5% 100%),
+    linear-gradient(180deg,#2c2d30,#050607 16%,#050607 100%);
+}
+.obsFinalScreen::before{
+  inset:0;
+  background:
+    linear-gradient(104deg,rgba(255,255,255,.18) 0 2px,transparent 2px 100%) left 0 top 0 / 74px 100% no-repeat,
+    linear-gradient(76deg,rgba(255,255,255,.18) 0 2px,transparent 2px 100%) right 0 top 0 / 74px 100% no-repeat;
+  transform:none;
+  opacity:.8;
+}
+.obsFinalWatermark{
+  left:18px;
+  top:34px;
+  right:auto;
+  width:150px;
+  height:150px;
+  opacity:.58;
+  filter:drop-shadow(0 6px 8px rgba(0,0,0,.35));
+}
+.obsFinalContent{
+  padding:0 118px 64px;
+  grid-template-rows:142px 1fr auto;
+  gap:0;
+}
+.obsFinalHeader{display:none}
+.obsFinalScore{
+  display:block;
+  position:relative;
+  height:142px;
+}
+.obsFinalRows{
+  height:100%;
+  min-height:0;
+  overflow:visible;
+}
+.obsFinalTopbar{
+  position:absolute;
+  left:50%;
+  top:0;
+  transform:translateX(-50%);
+  width:1120px;
+  height:142px;
+  filter:drop-shadow(0 10px 14px rgba(0,0,0,.62));
+}
+.obsFinalTopTeam{
+  position:absolute;
+  top:15px;
+  width:390px;
+  height:48px;
+  display:grid;
+  place-items:center;
+  padding:0 24px;
+  background:linear-gradient(180deg,var(--spark-yellow),var(--spark-amber));
+  color:#fff;
+  font-size:24px;
+  font-weight:1000;
+  text-shadow:0 2px 4px rgba(0,0,0,.45);
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+.obsFinalTopTeam.left{left:0;clip-path:polygon(0 0,100% 0,86% 100%,0 100%)}
+.obsFinalTopTeam.right{right:0;clip-path:polygon(14% 0,100% 0,100% 100%,0 100%)}
+.obsFinalTopCenter{
+  position:absolute;
+  top:0;
+  left:50%;
+  transform:translateX(-50%);
+  width:386px;
+  height:132px;
+  background:#050607;
+  clip-path:polygon(0 0,100% 0,92% 72%,60% 84%,50% 100%,40% 84%,8% 72%);
+}
+.obsFinalTopScore{
+  position:absolute;
+  top:15px;
+  width:58px;
+  height:58px;
+  display:grid;
+  place-items:center;
+  color:#fff;
+  font-size:32px;
+  font-weight:1000;
+}
+.obsFinalTopScore.blue{left:376px;background:#139de7}
+.obsFinalTopScore.orange{right:376px;background:#ff8a14}
+.obsFinalTopClock{
+  position:absolute;
+  top:16px;
+  left:50%;
+  transform:translateX(-50%);
+  width:120px;
+  color:#fff;
+  text-align:center;
+  font-size:34px;
+  font-weight:1000;
+  line-height:1;
+}
+.obsFinalTopClock span{
+  display:block;
+  margin-top:3px;
+  font-size:14px;
+  line-height:1;
+}
+.obsFinalTopSub{
+  position:absolute;
+  left:50%;
+  top:86px;
+  transform:translateX(-50%);
+  width:220px;
+  color:#f5f5f5;
+  text-align:center;
+  font-size:12px;
+  font-weight:1000;
+}
+.obsFinalTopBolt{
+  position:absolute;
+  left:50%;
+  top:76px;
+  transform:translateX(-50%);
+  width:100px;
+  height:66px;
+  object-fit:cover;
+  object-position:center 62%;
+  filter:drop-shadow(0 4px 7px rgba(0,0,0,.7));
+}
+.obsFinalStatsBoard{
+  position:relative;
+  height:100%;
+  min-height:0;
+  display:grid;
+  grid-template-rows:54px repeat(6,1fr);
+  background:rgba(5,6,7,.94);
+  border-left:5px solid #f5f5f5;
+  border-right:5px solid #f5f5f5;
+  clip-path:polygon(4% 0,96% 0,100% 100%,0 100%);
+  padding:0 100px 22px;
+}
+.obsFinalStatsBoard::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(90deg,rgba(255,255,255,.04),transparent 20% 80%,rgba(255,255,255,.04));
+  pointer-events:none;
+}
+.obsFinalNameRow,
+.obsFinalStatLine{
+  position:relative;
+  display:grid;
+  grid-template-columns:1fr 170px 1fr;
+  align-items:center;
+  gap:28px;
+  border-bottom:2px solid rgba(255,255,255,.72);
+}
+.obsFinalNameRow{
+  color:#d8d8d8;
+  font-size:20px;
+  font-weight:1000;
+  border-bottom:3px solid #fff;
+}
+.obsFinalStatLine:last-child{border-bottom:0}
+.obsFinalSideNames,
+.obsFinalSideNumbers{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  align-items:center;
+  gap:10px;
+}
+.obsFinalSideNumbers span{
+  color:#fff;
+  font-size:36px;
+  font-weight:1000;
+  text-align:center;
+}
+.obsFinalSideNames span{
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  text-align:center;
+}
+.obsFinalSideNames .mvp::after{
+  content:"★";
+  color:var(--spark-yellow);
+  font-size:17px;
+  margin-left:7px;
+  text-shadow:0 0 10px rgba(255,208,0,.85);
+}
+.obsFinalStatLabel{
+  display:grid;
+  justify-items:center;
+  gap:6px;
+  color:#f5f5f5;
+  font-size:22px;
+  font-weight:1000;
+}
+.obsFinalStatCompare{
+  width:132px;
+  height:12px;
+  display:grid;
+  grid-template-columns:var(--blue,1fr) var(--orange,1fr);
+  overflow:hidden;
+  border-radius:3px;
+  background:#222;
+}
+.obsFinalStatCompare i:first-child{background:#139de7}
+.obsFinalStatCompare i:last-child{background:#ff8a14}
+.obsFinalFooter{
+  padding-top:16px;
+  color:#fff;
+  font-size:15px;
 }
 @media (min-width:1920px){
   .app{padding:18px;gap:16px}
@@ -1444,10 +2005,11 @@ body.obsOverlayMode #obsOverlayRoot{
         <span id="censoredNameStatus">No censored names loaded</span>
       </div>
       <div class="unitDisplayToggle" id="unitDisplayToggle">
-        <label>
-          <input id="unitSystemToggle" type="checkbox" onchange="toggleUnitSystem(this.checked)">
-          Use imperial measurements
-        </label>
+        <button type="button" class="unitSwitch" id="unitSystemToggle" onclick="toggleUnitSystem(!useImperialUnits)" aria-pressed="false" aria-label="Measurement unit system">
+          <span>Metric</span>
+          <span>Imperial</span>
+          <i aria-hidden="true"></i>
+        </button>
         <span id="unitSystemStatus">Metric measurements</span>
       </div>
       <div class="tabs" id="tabs"></div>
@@ -1500,7 +2062,7 @@ body.obsOverlayMode #obsOverlayRoot{
 
     <div class="card span2">
       <h2>Impact on Play</h2>
-      <div class="help">Shows 5-second game-time windows. Possession and pressure use replay car and ball positions when available. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Hover a vertical line to see who made the play.</div>
+      <div class="help">Shows 2-second game-time windows. Possession and pressure use replay car and ball positions when available and are smoothed for trend readability. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Hover a vertical line to see who made the play.</div>
       <div class="chartWrap tall"><canvas id="trendChart"></canvas></div>
       <div class="note" id="trendNote"></div>
     </div>
@@ -1603,11 +2165,15 @@ body.obsOverlayMode #obsOverlayRoot{
 <div id="obsOverlayRoot" aria-hidden="true">
   <div class="obsStage">
     <div class="obsScoreboard">
-      <div class="obsTeamName left"><span class="obsLogoBox"><img src="assets/Spark%20Logo.png" alt=""></span><span id="obsBlueName">Blue</span></div>
-      <div class="obsScore" id="obsBlueScore">0</div>
+      <div class="obsTeamName left"><span class="obsTeamLabel" id="obsBlueName">Blue</span></div>
+      <div class="obsScoreboardCenter"></div>
+      <div class="obsSeriesPlate left"><div class="obsSeriesDots left" id="obsBlueSeriesDots"></div></div>
+      <div class="obsSeriesPlate right"><div class="obsSeriesDots right" id="obsOrangeSeriesDots"></div></div>
+      <div class="obsScore blue" id="obsBlueScore">0</div>
       <div class="obsClock" id="obsClock">5:00</div>
-      <div class="obsScore" id="obsOrangeScore">0</div>
-      <div class="obsTeamName right"><span id="obsOrangeName">Orange</span><span class="obsLogoBox"><img src="assets/Spark%20Logo.png" alt=""></span></div>
+      <div class="obsScore orange" id="obsOrangeScore">0</div>
+      <div class="obsTeamName right"><span class="obsTeamLabel" id="obsOrangeName">Orange</span></div>
+      <div class="obsScoreboardBolt"><img src="assets/1NE_Vector_edited.png" alt=""></div>
     </div>
     <div class="obsMatchTag" id="obsMatchTag">Live Feed</div>
     <div class="obsBoostStacks">
@@ -1617,13 +2183,30 @@ body.obsOverlayMode #obsOverlayRoot{
     <div class="obsPlayerCard" id="obsPlayerCard"></div>
     <div class="obsFocusBoost" id="obsFocusBoost" style="--boostDeg:0deg"><div class="obsFocusBoostValue"><b id="obsFocusBoostValue">0</b><span>Boost</span></div></div>
     <div class="obsStatus" id="obsStatus">Connecting to live API...</div>
+    <div class="obsReplayOverlay" id="obsReplayOverlay">
+      <div class="obsReplayTop">
+        <div class="obsReplayTeam" id="obsReplayBlueName">Blue</div>
+        <div class="obsReplayScore" id="obsReplayBlueScore">0</div>
+        <div class="obsReplayTag">REPLAY</div>
+        <div class="obsReplayScore" id="obsReplayOrangeScore">0</div>
+        <div class="obsReplayTeam right" id="obsReplayOrangeName">Orange</div>
+      </div>
+      <div class="obsReplayCard">
+        <div>
+          <div class="obsReplayEyebrow">GOAL REPLAY</div>
+          <div class="obsReplayScorer" id="obsReplayScorer">Last Goal</div>
+          <div class="obsReplayMeta" id="obsReplayMeta">Reviewing the scoring play</div>
+        </div>
+        <div class="obsReplaySpeed"><div><b id="obsReplaySpeed">--</b><span>GOAL SPEED</span></div></div>
+      </div>
+    </div>
     <div class="obsFinalScreen" id="obsFinalScreen">
-      <img class="obsFinalWatermark" src="/__spark_logo.png" alt="">
+      <img class="obsFinalWatermark" src="assets/1NE_Vector_edited.png" alt="">
       <div class="obsFinalContent">
         <div class="obsFinalHeader">
           <div>
             <div class="obsFinalEyebrow">SPARK POST GAME REPORT</div>
-            <div class="obsFinalTitle">Team Stats Overview</div>
+            <div class="obsFinalTitle">Player Matchup</div>
           </div>
           <div class="obsFinalLogo"><img src="/__spark_logo.png" alt=""></div>
         </div>
@@ -1650,9 +2233,13 @@ let physicsWorker=null;
 let liveApiSocket=null;
 let liveApiReconnectTimer=null;
 let liveApiState=null;
+const liveApiBridgeEndpoint = location.protocol.startsWith("http")
+  ? `${location.origin.replace(/^http/, "ws")}/api/live-api`
+  : "ws://127.0.0.1:8765/api/live-api";
 const liveApiEndpoints=[
-  {url:"ws://127.0.0.1:49123",label:"direct WebSocket on 49123"},
-  {url:"ws://127.0.0.1:49124",label:"local bridge to TCP feed on 49123"}
+  {url:"ws://127.0.0.1:49123",label:"direct Rocket League feed on 49123"},
+  {url:liveApiBridgeEndpoint,label:"SPARK local Live API bridge"},
+  {url:"ws://127.0.0.1:49124",label:"legacy local Live API bridge"}
 ];
 const isObsOverlayMode = new URLSearchParams(location.search).get("overlay") === "obs" || location.pathname.endsWith("/1NE_Overlay") || location.pathname.endsWith("/SPARK_Overlay");
 const forceObsFinalPreview = new URLSearchParams(location.search).get("finalPreview") === "1";
@@ -1661,6 +2248,7 @@ const obsOverlayUrl = location.protocol === "file:"
   ? "http://127.0.0.1:8765/1NE_Overlay"
   : `${location.origin}/1NE_Overlay`;
 const overlayLogoUrl = "assets/Spark%20Logo.png";
+const oneNeLogoUrl = "assets/1NE_Vector_edited.png";
 const overlayLogoRoute = "/__spark_logo.png";
 const overlayConfigKey = "oneReplayAnalyzer.overlayConfig.v1";
 const overlayDefaultConfig = {
@@ -1670,7 +2258,8 @@ const overlayDefaultConfig = {
   orangeLogoUrl:"",
   seriesBestOf:5,
   blueSeriesScore:0,
-  orangeSeriesScore:0
+  orangeSeriesScore:0,
+  testFinalStatsPreview:false
 };
 let overlayConfig = readOverlayConfig();
 
@@ -2274,6 +2863,7 @@ function buildData(seed=42, replayPlayers=null, replayTitle="Sample Replay", mat
     if(Array.isArray(p.ballDistanceSamples)) player.distanceToBallSamples = p.ballDistanceSamples;
     player.supersonicBoostUsed = Number(p.supersonicBoostUsed || p.boostUsedWhileSupersonic || 0);
     player.supersonicBoostEvents = Number(p.supersonicBoostEvents || 0);
+    applyParsedRatingsToPlayer(player, matchDurationSeconds);
     return player;
   });
   return {players, teams:["Blue","Orange"], match:replayTitle || "Replay analysis", durationSeconds: normalizeReplayDurationSeconds(matchDurationSeconds || 300)};
@@ -2374,12 +2964,13 @@ window.toggleCensoredNames = checked => {
 
 function renderUnitDisplayToggle(){
   const row = $("unitDisplayToggle");
-  const input = $("unitSystemToggle");
+  const unitSwitch = $("unitSystemToggle");
   const status = $("unitSystemStatus");
-  if(!row || !input || !status) return;
+  if(!row || !unitSwitch || !status) return;
 
   row.style.display = activeView === "overlay" ? "none" : "";
-  input.checked = useImperialUnits;
+  unitSwitch.classList.toggle("imperial", useImperialUnits);
+  unitSwitch.setAttribute("aria-pressed", useImperialUnits ? "true" : "false");
   status.textContent = useImperialUnits ? "Imperial measurements" : "Metric measurements";
 }
 
@@ -2440,6 +3031,10 @@ function setOverlaySeriesScore(side, delta){
   const maxWins = overlayMaxSeriesWins();
   const key = side === "Blue" ? "blueSeriesScore" : "orangeSeriesScore";
   updateOverlayConfigField(key, Math.max(0, Math.min(maxWins, Number(overlayConfig[key] || 0) + delta)));
+}
+
+function toggleOverlayFinalStatsPreview(){
+  updateOverlayConfigField("testFinalStatsPreview", !overlayConfig.testFinalStatsPreview);
 }
 
 function loadOverlayLogoFile(side, input){
@@ -2518,6 +3113,15 @@ function renderOverlayControl(){
           </div>
         </div>
       </div>
+    </div>
+    <div class="overlayTestTools">
+      <div>
+        <strong>End-of-game stats screen test</strong>
+        <span>Forces the OBS stats screen visible for layout checks only.</span>
+      </div>
+      <button type="button" class="overlayTestToggle ${overlayConfig.testFinalStatsPreview ? "active" : ""}" onclick="toggleOverlayFinalStatsPreview()">
+        ${overlayConfig.testFinalStatsPreview ? "Stats Test On" : "Stats Test Off"}
+      </button>
     </div>
     <div class="note">
       OBS URL: <b>${obsOverlayUrl}</b><br>
@@ -2718,6 +3322,160 @@ function secondNormalizedDistanceSamples(player){
     .sort((left,right)=>left.second - right.second);
 }
 
+const ratingBenchmarks = {
+  // Calibrated from 1194ae53...: KC blue = elite defense, NRG orange = elite attack/pressure.
+  pressureFloor:28,
+  pressureElite:84,
+  possessionFloor:18,
+  possessionElite:76,
+  playerPressureFloor:34,
+  playerPressureElite:48,
+  playerPossessionFloor:26,
+  playerPossessionElite:52,
+  defensiveDistanceElite:2200,
+  defensiveDistanceFloor:4300,
+  averageDistanceElite:2520,
+  averageDistanceLoose:4600,
+  largePadsPerFiveElite:17.5,
+  smallPadsPerFiveElite:78,
+  smallPadsPerFiveFloor:28,
+  supersonicBoostReasonablePerFive:520,
+  supersonicBoostWastefulPerFive:900,
+  ratingCurvePower:1.28,
+  impactCurvePower:1.08
+};
+
+function eliteScaledT(value, floor, elite, power=ratingBenchmarks.ratingCurvePower){
+  if(!Number.isFinite(value)) return null;
+  const t = clampValue((value - floor) / Math.max(1e-9, elite - floor), 0, 1);
+  return Math.pow(t, power);
+}
+
+function scaleRating(value, floor, elite, min=25, max=95, power=ratingBenchmarks.ratingCurvePower){
+  if(!Number.isFinite(value)) return null;
+  const t = eliteScaledT(value, floor, elite, power);
+  return Math.round(min + t * (max - min));
+}
+
+function inverseScaleRating(value, elite, floor, min=25, max=95, power=ratingBenchmarks.ratingCurvePower){
+  if(!Number.isFinite(value)) return null;
+  const t = clampValue((floor - value) / Math.max(1e-9, floor - elite), 0, 1);
+  return Math.round(min + Math.pow(t, power) * (max - min));
+}
+
+function benchmarkedImpactRating20(value, kind="pressure"){
+  const floor = kind === "possession" ? ratingBenchmarks.possessionFloor : ratingBenchmarks.pressureFloor;
+  const elite = kind === "possession" ? ratingBenchmarks.possessionElite : ratingBenchmarks.pressureElite;
+  if(!Number.isFinite(value)) return value;
+  const t = clampValue((value - floor) / Math.max(1e-9, elite - floor), 0, 1);
+  return Math.round(Math.pow(t, ratingBenchmarks.impactCurvePower) * 20 * 10) / 10;
+}
+
+function averageFinite(values){
+  const finite = values.filter(Number.isFinite);
+  if(!finite.length) return null;
+  return finite.reduce((sum,value)=>sum + value, 0) / finite.length;
+}
+
+function smoothedNullableSeries(values, radius=2){
+  return values.map((value, index)=>{
+    let sum = 0;
+    let weightTotal = 0;
+    for(let offset = -radius; offset <= radius; offset++){
+      const candidate = values[index + offset];
+      if(!Number.isFinite(candidate)) continue;
+      const weight = radius + 1 - Math.abs(offset);
+      sum += candidate * weight;
+      weightTotal += weight;
+    }
+    if(!weightTotal) return Number.isFinite(value) ? value : null;
+    return Math.round((sum / weightTotal) * 10) / 10;
+  });
+}
+
+function parsedPlayerRatingSignals(player, durationSeconds=300){
+  const samples = secondNormalizedDistanceSamples(player);
+  if(!samples.length) return null;
+
+  const pressureValues = [];
+  const distances = [];
+  const defensiveDistances = [];
+  let closePossessionSamples = 0;
+
+  samples.forEach(sample=>{
+    const distance = Number(sample.distance);
+    if(!Number.isFinite(distance)) return;
+    distances.push(distance);
+    if(distance < 2200) closePossessionSamples++;
+
+    const ball = sample.ballLocation;
+    const team = player.team;
+    if(ball && Number.isFinite(ball.y) && team){
+      const attackingProgress = team === "Blue"
+        ? clampValue(((ball.y + 5120) / 10240) * 100)
+        : clampValue(((5120 - ball.y) / 10240) * 100);
+      const proximity = clampValue(100 - (distance / 35));
+      pressureValues.push((attackingProgress * .55) + (proximity * .45));
+
+      const ownThird = team === "Blue" ? ball.y < -1700 : ball.y > 1700;
+      if(ownThird) defensiveDistances.push(distance);
+    }
+  });
+
+  const pickups = Array.isArray(player.boostPickups) ? player.boostPickups : [];
+  const largePickups = pickups.filter(pickup=>{
+    const idx = pickupPadIndex(pickup);
+    return (pickup?.type || (idx !== null ? boostPadLayout[idx]?.type : "")) === "large";
+  }).length;
+  const smallPickups = pickups.filter(pickup=>{
+    const idx = pickupPadIndex(pickup);
+    return (pickup?.type || (idx !== null ? boostPadLayout[idx]?.type : "")) === "small";
+  }).length;
+  const perFive = 300 / Math.max(1, Number(durationSeconds) || 300);
+
+  return {
+    averageDistance: averageFinite(distances),
+    defensiveDistance: averageFinite(defensiveDistances),
+    pressureRaw: averageFinite(pressureValues),
+    possessionRaw: samples.length ? (closePossessionSamples / samples.length) * 100 : null,
+    largePadsPerFive: largePickups * perFive,
+    smallPadsPerFive: smallPickups * perFive,
+    supersonicBoostPerFive: Number(player.supersonicBoostUsed || 0) * perFive,
+    sampleCount: samples.length
+  };
+}
+
+function applyParsedRatingsToPlayer(player, durationSeconds=300){
+  const signals = parsedPlayerRatingSignals(player, durationSeconds);
+  if(!signals) return;
+
+  const pressure = scaleRating(signals.pressureRaw, ratingBenchmarks.playerPressureFloor, ratingBenchmarks.playerPressureElite, 30, 94);
+  const possession = scaleRating(signals.possessionRaw, ratingBenchmarks.playerPossessionFloor, ratingBenchmarks.playerPossessionElite, 25, 92);
+  const defense = inverseScaleRating(signals.defensiveDistance, ratingBenchmarks.defensiveDistanceElite, ratingBenchmarks.defensiveDistanceFloor, 30, 94);
+  const distanceDiscipline = inverseScaleRating(signals.averageDistance, ratingBenchmarks.averageDistanceElite, ratingBenchmarks.averageDistanceLoose, 35, 92);
+  const largeBoostRating = scaleRating(signals.largePadsPerFive, 8, ratingBenchmarks.largePadsPerFiveElite, 35, 94);
+  const smallPadRating = scaleRating(signals.smallPadsPerFive, ratingBenchmarks.smallPadsPerFiveFloor, ratingBenchmarks.smallPadsPerFiveElite, 35, 94);
+  const supersonicPenalty = clampValue(
+    ((signals.supersonicBoostPerFive - ratingBenchmarks.supersonicBoostReasonablePerFive) /
+      Math.max(1, ratingBenchmarks.supersonicBoostWastefulPerFive - ratingBenchmarks.supersonicBoostReasonablePerFive)) * 24,
+    0,
+    24
+  );
+
+  if(Number.isFinite(pressure)) player.pressure = pressure;
+  if(Number.isFinite(possession)) player.possession = possession;
+  if(Number.isFinite(defense)) player.defense = defense;
+
+  const boostEff = Math.round(((largeBoostRating || 45) * .38) + ((smallPadRating || 45) * .42) + ((distanceDiscipline || 50) * .20) - supersonicPenalty);
+  player.boostEff = clampValue(boostEff, 20, 94);
+  player.boostWaste = clampValue(Math.round(18 + supersonicPenalty * 2.2 + Math.max(0, 45 - (smallPadRating || 45)) * .35), 6, 82);
+  player.recovery = clampValue(Math.round(((smallPadRating || 45) * .45) + ((defense || 50) * .35) + ((distanceDiscipline || 50) * .20)), 25, 94);
+  player.spacing = clampValue(Math.round(((distanceDiscipline || 50) * .55) + ((possession || 50) * .20) + ((pressure || 50) * .25)), 25, 94);
+  player.rotation = clampValue(Math.round(((player.recovery || 50) * .38) + ((defense || 50) * .34) + ((distanceDiscipline || 50) * .28)), 25, 94);
+
+  player.parsedRatingSignals = signals;
+}
+
 function distanceToBallSeries(a, durationSeconds=300, stepSeconds=5){
   const labels = gameTimeLabels(durationSeconds, stepSeconds);
   const chartDuration = chartDurationSeconds(durationSeconds);
@@ -2778,7 +3536,7 @@ function buildParsedImpactSeries(a, durationSeconds=300, stepSeconds=5){
     });
   });
 
-  const possessionBins = labels.map(()=>({wins:0,total:0}));
+  const possessionBins = labels.map(()=>({sum:0,count:0}));
   const pressureBins = labels.map(()=>({sum:0,count:0}));
 
   snapshots.forEach((samples, second)=>{
@@ -2805,8 +3563,14 @@ function buildParsedImpactSeries(a, durationSeconds=300, stepSeconds=5){
       : selectedNames.has(overallNearest.playerName);
     const binIndex = elapsedBinIndex(second + 0.5, durationSeconds, stepSeconds);
 
-    possessionBins[binIndex].total++;
-    if(selectedHasPossession) possessionBins[binIndex].wins++;
+    const opponentDistance = opponentNearest?.distance;
+    const possessionProximity = clampValue(100 - (selectedNearest.distance / 45));
+    const possessionAdvantage = Number.isFinite(opponentDistance)
+      ? clampValue(((opponentDistance - selectedNearest.distance + 1400) / 2800) * 100)
+      : (selectedHasPossession ? 65 : 35);
+    const possessionControl = clampValue((possessionProximity * 0.68) + (possessionAdvantage * 0.22) + (selectedHasPossession ? 10 : 0));
+    possessionBins[binIndex].sum += possessionControl;
+    possessionBins[binIndex].count++;
 
     const ball = selectedNearest.ballLocation || overallNearest.ballLocation;
     const team = selectedNearest.team || [...selectedTeams][0] || null;
@@ -2815,7 +3579,6 @@ function buildParsedImpactSeries(a, durationSeconds=300, stepSeconds=5){
         ? clampValue(((ball.y + 5120) / 10240) * 100)
         : clampValue(((5120 - ball.y) / 10240) * 100);
       const proximity = clampValue(100 - (selectedNearest.distance / 35));
-      const opponentDistance = opponentNearest?.distance;
       const distanceAdvantage = Number.isFinite(opponentDistance)
         ? clampValue(((opponentDistance - selectedNearest.distance + 1000) / 2000) * 100)
         : (selectedHasPossession ? 70 : 30);
@@ -2827,14 +3590,14 @@ function buildParsedImpactSeries(a, durationSeconds=300, stepSeconds=5){
   });
 
   const possessionValues = possessionBins.map(bin=>{
-    if(!bin.total) return null;
-    return Math.round((bin.wins / bin.total) * 100);
+    if(!bin.count) return null;
+    return Math.round(bin.sum / bin.count);
   });
   const pressureValues = pressureBins.map(bin=>{
     if(!bin.count) return null;
     return Math.round(bin.sum / bin.count);
   });
-  const sampleCount = possessionBins.reduce((sum,bin)=>sum + bin.total, 0);
+  const sampleCount = possessionBins.reduce((sum,bin)=>sum + bin.count, 0);
 
   return {
     labels,
@@ -2887,21 +3650,17 @@ function touchSeriesFromDistanceSamples(scope, durationSeconds=300, stepSeconds=
     if(!samples.length) return;
     sampleCount += samples.length;
 
-    let inTouchRange = false;
     let lastTouchElapsed = -Infinity;
     samples.forEach(sample=>{
       if(sample.elapsed < 0 || sample.elapsed > chartDuration + 0.001) return;
-      if(sample.distance > 1150){
-        inTouchRange = false;
-        return;
-      }
-      if(sample.distance > 750 || inTouchRange || sample.elapsed - lastTouchElapsed < 0.55) return;
+      const strongContact = sample.distance <= 820;
+      const glancingContact = sample.distance <= 980 && sample.elapsed - lastTouchElapsed >= 0.42;
+      if((!strongContact && !glancingContact) || sample.elapsed - lastTouchElapsed < 0.22) return;
 
       const binIndex = elapsedBinIndex(sample.elapsed, durationSeconds, stepSeconds);
       values[binIndex] += 1;
       touchCount++;
       lastTouchElapsed = sample.elapsed;
-      inTouchRange = true;
     });
   });
 
@@ -2920,9 +3679,10 @@ function buildImpactChartValues(scope, durationSeconds, stepSeconds){
   const pressurePercentClock = impact.parsed
     ? impact.pressureValues
     : averagePercentAcrossWindows(scope.pressure, durationSeconds, stepSeconds, scope.pressure + 73);
-  const toTwentyPointRating = value => Number.isFinite(value) ? Math.round((value / 5) * 10) / 10 : value;
-  const possessionClock = possessionPercentClock.map(toTwentyPointRating);
-  const pressureClock = pressurePercentClock.map(toTwentyPointRating);
+  const possessionClock = smoothedNullableSeries(possessionPercentClock, 2)
+    .map(value=>benchmarkedImpactRating20(value, "possession"));
+  const pressureClock = smoothedNullableSeries(pressurePercentClock, 2)
+    .map(value=>benchmarkedImpactRating20(value, "pressure"));
 
   return {impact, touchClock, possessionClock, pressureClock, parsedTouches};
 }
@@ -3823,12 +4583,12 @@ function renderGameOverview(){
   $("overviewRightRecord").innerHTML = "";
 
   const rows = [
-    {label:"Shots",l:left.shots,r:right.shots,note:"attempts"},
-    {label:"Shooting %",l:left.shootingPct,r:right.shootingPct,note:"goals / shots",unit:"%"},
-    {label:"Possession",l:left.possession,r:right.possession,note:"control",unit:"%"},
-    {label:"Pressure",l:left.pressure,r:right.pressure,note:"rating"},
-    {label:"Saves",l:left.saves,r:right.saves,note:"defense"},
-    {label:"Boost Steals",l:left.boostStolen,r:right.boostStolen,note:"large pads"}
+    {label:"Shots",l:left.shots,r:right.shots,note:"Shots"},
+    {label:"Shooting %",l:left.shootingPct,r:right.shootingPct,note:"Shooting Percentage",unit:"%"},
+    {label:"Possession",l:left.possession,r:right.possession,note:"Possession",unit:"%"},
+    {label:"Pressure",l:left.pressure,r:right.pressure,note:"Pressure"},
+    {label:"Saves",l:left.saves,r:right.saves,note:"Saves"},
+    {label:"Boost Steals",l:left.boostStolen,r:right.boostStolen,note:"Full Boosts Stolen"}
   ];
 
   $("overviewStats").innerHTML = rows.map(row=>{
@@ -3839,7 +4599,6 @@ function renderGameOverview(){
 
     return `
       <div class="overviewMetric">
-        <div class="overviewMetricTop"><span>${row.label}</span><span class="overviewMetricLeader">${escapeHtml(leader)}</span></div>
         <div class="overviewMetricValues">
           <b class="left">${Number(row.l || 0).toLocaleString()}${row.unit || ""}</b>
           <span>${row.note}</span>
@@ -4331,9 +5090,8 @@ function render(){
 
   const durationSeconds = replayObservedDurationSeconds();
   const goalSaveEvents = buildGoalSaveEvents(durationSeconds, selected);
-  // Impact on Play uses realistic 5-second windows.
-  // Touches are distributed from the selected player/team total, so no 5s window can imply more touches than the whole replay.
-  const impactStepSeconds = 5;
+  // Impact on Play uses realistic 5-second windows from decoded replay position samples.
+  const impactStepSeconds = 2;
   const impactChartValues = buildImpactChartValues(a, durationSeconds, impactStepSeconds);
   const impactResult = impactChartValues.impact;
   const impactLabels = impactResult.labels;
@@ -4345,13 +5103,13 @@ function render(){
   chart("trendChart",{
     type:"line",
     data:{labels:impactLabels,datasets:[
-      {label:"Touches per 5s window",data:touchClock,borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.18)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9},
+      {label:"Touches per 2s window",data:touchClock,borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.18)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9},
       {label:"Possession rating /20",data:possClock,borderColor:"#f2f2f2",backgroundColor:"rgba(242,242,242,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true},
       {label:"Pressure rating /20",data:pressureClock,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true}
     ]},
     options:{
       maintainAspectRatio:false,
-      plugins:{legend,eventMarkers:{events:goalSaveEvents,stepSeconds:5}},
+      plugins:{legend,eventMarkers:{events:goalSaveEvents,stepSeconds:2}},
       scales:{
         x:{...axis,ticks:{...axis.ticks,maxRotation:0,autoSkip:true,maxTicksLimit:11}},
         y:{...axis,beginAtZero:true,max:impactScaleMax}
@@ -4360,7 +5118,7 @@ function render(){
   });
 
   $("trendNote").textContent = impactResult.parsed
-    ? `${a.label}: possession and pressure ratings are scaled from 0-20 and calculated from ${impactResult.sampleCount.toLocaleString()} replay position snapshots. ${impactAdvice(a, impactChartValues, followupSpeed)}`
+    ? `${a.label}: possession and pressure ratings are benchmarked from 0-20, smoothed across nearby 2-second windows, and calculated from ${impactResult.sampleCount.toLocaleString()} replay position snapshots. ${impactAdvice(a, impactChartValues, followupSpeed)}`
     : (a.touches > 260
       ? "Team-level view: touch counts are distributed into realistic 5-second windows."
       : a.touches > 110 ? "Player view: high involvement."
@@ -4459,6 +5217,8 @@ function render(){
 
 
 
+
+const POSITIONING_HEAT_FIXED_SCALE = 8;
 
 function renderPositioningHeatmap(a){
   const map = $("positioningMap");
@@ -4572,8 +5332,6 @@ function renderPositioningHeatmap(a){
   });
 
   const trendDensity = new Float32Array(density.length);
-  const trendValues = [];
-  let max = 0;
   for(let gy=0; gy<gridH; gy++){
     for(let gx=0; gx<gridW; gx++){
       const index = gy * gridW + gx;
@@ -4601,21 +5359,18 @@ function renderPositioningHeatmap(a){
       const repeatMass = Math.max(0, neighborTotal - raw);
       const trend = (raw * .55) + (neighborAverage * 1.35) + (repeatMass * .08);
       trendDensity[index] = trend;
-      trendValues.push(trend);
-      max = Math.max(max, trend);
     }
   }
-  trendValues.sort((a,b)=>a-b);
-  const percentileIndex = Math.max(0, Math.min(trendValues.length - 1, Math.floor(trendValues.length * .94)));
-  const heatScale = Math.max(3.2, trendValues[percentileIndex] || max || 1);
+  const heatScale = POSITIONING_HEAT_FIXED_SCALE;
 
   function colourFor(v){
     if(v <= 0) return null;
-    if(v < .34) return `rgba(80,130,230,${(.52 + v * .44).toFixed(2)})`;
-    if(v < .52) return `rgba(65,210,135,${(.58 + v * .35).toFixed(2)})`;
-    if(v < .72) return `rgba(255,208,0,${(.66 + v * .28).toFixed(2)})`;
-    if(v < .90) return `rgba(240,150,28,${(.72 + v * .24).toFixed(2)})`;
-    return "rgba(255,56,56,1)";
+    const alpha = (.70 + Math.min(1, v) * .25).toFixed(2);
+    if(v < .34) return `rgba(80,130,230,${alpha})`;
+    if(v < .52) return `rgba(65,210,135,${alpha})`;
+    if(v < .72) return `rgba(255,208,0,${alpha})`;
+    if(v < .90) return `rgba(240,150,28,${alpha})`;
+    return `rgba(255,56,56,${alpha})`;
   }
 
   function roundedRect(x, y, w, h, r){
@@ -4647,7 +5402,7 @@ function renderPositioningHeatmap(a){
   for(let gy=0; gy<gridH; gy++){
     for(let gx=0; gx<gridW; gx++){
       const raw = density[gy * gridW + gx];
-      if(raw <= 0 || max <= 0) continue;
+      if(raw <= 0) continue;
       const px = (gx / Math.max(1, gridW - 1)) * 100;
       const py = (gy / Math.max(1, gridH - 1)) * 100;
       if(!pointInField({x:px,y:py})) continue;
@@ -4691,12 +5446,6 @@ function renderTable(){
       <td>${read}</td>
     </tr>`
   }).join("")+"</tbody>";
-}
-
-function averageFinite(values){
-  const finite = values.filter(Number.isFinite);
-  if(!finite.length) return null;
-  return finite.reduce((sum,value)=>sum + value, 0) / finite.length;
 }
 
 function scopePlayersForAdvice(a){
@@ -5222,7 +5971,11 @@ function makeEmptyLiveApiState(){
     focusedPlayerName:null,
     ballHits: [],
     shotSamples: [],
+    lastGoal: null,
+    replayActive: false,
+    replayStartedAt: null,
     title: "Rocket League Live API Feed",
+    matchGuid: null,
     durationSeconds: 300,
     lastBallSpeed: 0,
     lastKnownClock: null,
@@ -5251,6 +6004,73 @@ function valueByKey(obj, names){
 function toNumber(value, fallback=0){
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function toBoolean(value){
+  return value === true || value === 1 || value === "1" || String(value).toLowerCase() === "true";
+}
+
+function liveApiMatchGuid(payload){
+  const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
+  const guid = firstDefined(
+    valueByKey(payload,["MatchGuid","MatchGUID","matchGuid","matchGUID","Guid","guid"]),
+    valueByKey(game,["MatchGuid","MatchGUID","matchGuid","matchGUID","Guid","guid"])
+  );
+  return guid === undefined ? "" : String(guid).trim();
+}
+
+function resetLiveApiForNewMatch(matchGuid){
+  const previousMessageTime = liveApiState?.lastMessageAt || Date.now();
+  liveApiState = makeEmptyLiveApiState();
+  liveApiState.matchGuid = matchGuid || null;
+  liveApiState.lastMessageAt = previousMessageTime;
+  if(liveRenderTimer){
+    clearTimeout(liveRenderTimer);
+    liveRenderTimer = null;
+  }
+}
+
+function syncLiveApiMatchBoundary(payload){
+  const matchGuid = liveApiMatchGuid(payload);
+  if(!matchGuid) return "";
+  if(liveApiState.matchGuid && matchGuid !== liveApiState.matchGuid){
+    resetLiveApiForNewMatch(matchGuid);
+  }else if(!liveApiState.matchGuid){
+    liveApiState.matchGuid = matchGuid;
+  }
+  return matchGuid;
+}
+
+function livePayloadGame(payload){
+  return firstDefined(valueByKey(payload,["Game","game"]), payload);
+}
+
+function liveApiFieldHasPlayers(payload){
+  return extractLivePlayers(payload).some(player=>toBoolean(valueByKey(player,["bHasCar","hasCar","HasCar","inGame","InGame"])));
+}
+
+function liveApiReplayFlag(payload){
+  const game = livePayloadGame(payload);
+  const value = firstDefined(
+    valueByKey(payload,["bReplay","replay","Replay","isReplay","IsReplay"]),
+    valueByKey(game,["bReplay","replay","Replay","isReplay","IsReplay"])
+  );
+  return value === undefined ? null : toBoolean(value);
+}
+
+function setLiveReplayActive(active){
+  if(!liveApiState) liveApiState = makeEmptyLiveApiState();
+  liveApiState.replayActive = !!active && !liveApiState.matchEnded;
+  liveApiState.replayStartedAt = liveApiState.replayActive ? (liveApiState.replayStartedAt || Date.now()) : null;
+}
+
+function clearLivePostGameIfNextFieldState(payload){
+  if(!liveApiState?.matchEnded) return;
+  const clock = liveGameClockSeconds(payload);
+  const looksLikeFreshKickoff = clock === null || clock >= 285;
+  if(looksLikeFreshKickoff && liveApiFieldHasPlayers(payload)){
+    resetLiveApiForNewMatch(liveApiMatchGuid(payload) || liveApiState.matchGuid || "");
+  }
 }
 
 function normalizeLiveTeam(value){
@@ -5404,7 +6224,8 @@ function readOverlayConfig(){
       ...stored,
       seriesBestOf:bestOf,
       blueSeriesScore:Math.max(0, Math.min(maxWins, Number(stored.blueSeriesScore) || 0)),
-      orangeSeriesScore:Math.max(0, Math.min(maxWins, Number(stored.orangeSeriesScore) || 0))
+      orangeSeriesScore:Math.max(0, Math.min(maxWins, Number(stored.orangeSeriesScore) || 0)),
+      testFinalStatsPreview:stored.testFinalStatsPreview === true || stored.testFinalStatsPreview === "true"
     };
   }catch(err){
     return {...overlayDefaultConfig};
@@ -5419,7 +6240,8 @@ function saveOverlayConfig(nextConfig){
     ...nextConfig,
     seriesBestOf:bestOf,
     blueSeriesScore:Math.max(0, Math.min(maxWins, Number(nextConfig.blueSeriesScore) || 0)),
-    orangeSeriesScore:Math.max(0, Math.min(maxWins, Number(nextConfig.orangeSeriesScore) || 0))
+    orangeSeriesScore:Math.max(0, Math.min(maxWins, Number(nextConfig.orangeSeriesScore) || 0)),
+    testFinalStatsPreview:nextConfig.testFinalStatsPreview === true
   };
   try{ localStorage.setItem(overlayConfigKey, JSON.stringify(overlayConfig)); }
   catch(err){ console.warn("Could not save overlay config:", err); }
@@ -5446,7 +6268,14 @@ function overlayTeamName(side, fallback){
 
 function overlaySeriesLabel(){
   const cfg = overlayConfig || overlayDefaultConfig;
-  return `Best of ${cfg.seriesBestOf} | ${cfg.blueSeriesScore}-${cfg.orangeSeriesScore}`;
+  return `Best of ${cfg.seriesBestOf}`;
+}
+
+function overlayGameLabel(){
+  const cfg = overlayConfig || overlayDefaultConfig;
+  const bestOf = Number(cfg.seriesBestOf) || 5;
+  const played = Math.max(0, Number(cfg.blueSeriesScore) || 0) + Math.max(0, Number(cfg.orangeSeriesScore) || 0);
+  return `Game ${Math.min(bestOf, played + 1)}`;
 }
 
 function overlayMaxSeriesWins(){
@@ -5503,6 +6332,7 @@ function markLiveMatchEnded(){
   liveApiState.matchEnded = true;
   liveApiState.endedAt = liveApiState.endedAt || Date.now();
   liveApiState.lastKnownClock = 0;
+  setLiveReplayActive(false);
 }
 
 function livePlayersByTeam(team){
@@ -5532,16 +6362,123 @@ function overlayBoostRows(players, side){
   }).join("");
 }
 
+function renderObsSeriesDots(side){
+  const cfg = overlayConfig || overlayDefaultConfig;
+  const winsNeeded = Math.ceil((Number(cfg.seriesBestOf) || 5) / 2);
+  const score = Math.max(0, Math.min(winsNeeded, Number(side === "Blue" ? cfg.blueSeriesScore : cfg.orangeSeriesScore) || 0));
+  const colorClass = side === "Blue" ? "blue" : "orange";
+  return Array.from({length:winsNeeded}, (_,index)=>{
+    const filled = index < score ? "filled" : "";
+    return `<span class="obsSeriesDot ${colorClass} ${filled}"></span>`;
+  }).join("");
+}
+
+function renderObsReplayOverlay(){
+  if(!isObsOverlayMode || !liveApiState) return;
+  const stage = document.querySelector(".obsStage");
+  if(stage) stage.classList.toggle("replayActive", !!liveApiState.replayActive && !liveApiState.matchEnded);
+  const blueTeam = liveApiState.teams?.Blue || {name:"Blue",score:0};
+  const orangeTeam = liveApiState.teams?.Orange || {name:"Orange",score:0};
+  if($("obsReplayBlueName")) $("obsReplayBlueName").textContent = overlayTeamName("Blue", blueTeam.name || "Blue");
+  if($("obsReplayOrangeName")) $("obsReplayOrangeName").textContent = overlayTeamName("Orange", orangeTeam.name || "Orange");
+  if($("obsReplayBlueScore")) $("obsReplayBlueScore").textContent = blueTeam.score ?? 0;
+  if($("obsReplayOrangeScore")) $("obsReplayOrangeScore").textContent = orangeTeam.score ?? 0;
+  const goal = liveApiState.lastGoal || {};
+  if($("obsReplayScorer")) $("obsReplayScorer").textContent = goal.player ? `${goal.player} scores` : "Goal Replay";
+  const teamText = goal.team ? `${goal.team} goal` : "Reviewing the scoring play";
+  const clockText = Number.isFinite(goal.clock) ? ` | ${formatGameClock(goal.clock)}` : "";
+  if($("obsReplayMeta")) $("obsReplayMeta").textContent = `${teamText}${clockText}`;
+  if($("obsReplaySpeed")){
+    const speed = Number(goal.speed);
+    $("obsReplaySpeed").textContent = Number.isFinite(speed) && speed > 0 ? Math.round(speed) : "--";
+  }
+}
+
+function obsFinalPlayerScore(player){
+  return Number(player?.stats?.score || 0);
+}
+
+function obsFinalShootingPercent(player){
+  const goals = Number(player?.stats?.goals || 0);
+  const shots = Number(player?.stats?.shots || 0);
+  return shots ? Math.round((goals / shots) * 100) : 0;
+}
+
+function obsFinalAverageBoost(player){
+  if(!player) return 0;
+  if(player.boostSamples) return Math.round(player.boostSum / Math.max(1, player.boostSamples));
+  return Math.round(Math.max(0, Math.min(100, player.currentBoost || 0)));
+}
+
+function obsFinalPlayerNameCell(player, mvpName, side){
+  if(!player) return `<div class="obsFinalPlayerName ${side === "Orange" ? "orange" : ""}"><span>--</span></div>`;
+  const isMvp = player.name === mvpName;
+  const marker = isMvp ? `<span class="obsFinalMvp">MVP</span>` : "";
+  const name = `<span>${escapeHtml(player.name)}</span>`;
+  return `<div class="obsFinalPlayerName ${side === "Orange" ? "orange" : ""}">${side === "Orange" ? marker + name : name + marker}</div>`;
+}
+
+function obsFinalStatValue(player, stat, statMax){
+  const raw = player ? stat.value(player) : null;
+  const value = raw === null || raw === undefined ? 0 : raw;
+  const max = Math.max(1, statMax || value);
+  const isBest = player && value > 0 && value === statMax;
+  const alpha = player ? Math.max(.18, Math.min(.92, value / max)) : .1;
+  const display = player ? stat.format(value) : "--";
+  return `<span class="obsFinalStatValue ${isBest ? "win" : ""}" style="--a:${alpha.toFixed(2)}">${escapeHtml(display)}</span>`;
+}
+
+function obsFinalStatCell(bluePlayer, orangePlayer, stat, statMax){
+  return `
+    <div class="obsFinalStatCell ${!bluePlayer && !orangePlayer ? "empty" : ""}">
+      ${obsFinalStatValue(bluePlayer, stat, statMax)}
+      <i class="obsFinalStatDivider"></i>
+      ${obsFinalStatValue(orangePlayer, stat, statMax)}
+    </div>`;
+}
+
+function obsFinalPlayerSlots(players, slots=3){
+  return Array.from({length:slots}, (_,index)=>players[index] || null);
+}
+
+function obsFinalPlayerStat(player, stat){
+  return player ? stat.value(player) : 0;
+}
+
+function obsFinalNameRow(players, mvpName){
+  return players.map(player=>{
+    if(!player) return "<span>--</span>";
+    const mvpClass = player.name === mvpName ? " class=\"mvp\"" : "";
+    return `<span${mvpClass}>${escapeHtml(player.name)}</span>`;
+  }).join("");
+}
+
+function obsFinalNumberRow(players, stat){
+  return players.map(player=>{
+    const value = obsFinalPlayerStat(player, stat);
+    return `<span>${escapeHtml(stat.format(value))}</span>`;
+  }).join("");
+}
+
+function obsFinalCompareBar(left, right){
+  const total = Math.max(1, left + right);
+  const blue = Math.max(6, Math.round((left / total) * 100));
+  const orange = Math.max(6, Math.round((right / total) * 100));
+  return `<div class="obsFinalStatCompare" style="--blue:${blue}fr;--orange:${orange}fr"><i></i><i></i></div>`;
+}
+
 function renderObsFinalScreen(){
   if(!isObsOverlayMode || !liveApiState) return;
   overlayConfig = readOverlayConfig();
   const screen = $("obsFinalScreen");
   if(!screen) return;
-  screen.classList.toggle("active", !!liveApiState.matchEnded);
-  if(!liveApiState.matchEnded) return;
+  const manualPreview = !!overlayConfig.testFinalStatsPreview;
+  const showFinalScreen = !!((liveApiState.matchEnded || forceObsFinalPreview || manualPreview) && !liveApiState.replayActive);
+  screen.classList.toggle("active", showFinalScreen);
+  if(!showFinalScreen) return;
 
   document.querySelectorAll(".obsFinalScreen img").forEach(img=>{
-    img.src = location.protocol.startsWith("http") ? "/__spark_logo.png" : overlayLogoUrl;
+    img.src = oneNeLogoUrl;
   });
 
   const blueTeam = liveApiState.teams?.Blue || {name:"Blue",score:0};
@@ -5550,63 +6487,75 @@ function renderObsFinalScreen(){
   const orangeDisplayName = overlayTeamName("Orange", orangeTeam.name || "Orange");
   const blue = liveTeamTotals("Blue");
   const orange = liveTeamTotals("Orange");
+  const bluePlayers = livePlayersByTeam("Blue");
+  const orangePlayers = livePlayersByTeam("Orange");
+  const allPlayers = [...bluePlayers, ...orangePlayers];
+  const mvpName = allPlayers.slice().sort((a,b)=>obsFinalPlayerScore(b) - obsFinalPlayerScore(a))[0]?.name || "";
   const blueScore = Math.max(blueTeam.score || 0, blue.goals || 0);
   const orangeScore = Math.max(orangeTeam.score || 0, orange.goals || 0);
   const winner = blueScore === orangeScore ? "Draw" : blueScore > orangeScore ? blueDisplayName : orangeDisplayName;
 
+  const stats = [
+    {label:"Score",value:p=>Number(p.stats.score || 0),format:v=>String(Math.round(v))},
+    {label:"Goals",value:p=>Number(p.stats.goals || 0),format:v=>String(Math.round(v))},
+    {label:"Shots",value:p=>Number(p.stats.shots || 0),format:v=>String(Math.round(v))},
+    {label:"Assists",value:p=>Number(p.stats.assists || 0),format:v=>String(Math.round(v))},
+    {label:"Saves",value:p=>Number(p.stats.saves || 0),format:v=>String(Math.round(v))},
+    {label:"Demos",value:p=>Number(p.demos || 0),format:v=>String(Math.round(v))}
+  ];
+  const blueSlots = obsFinalPlayerSlots(bluePlayers, 3);
+  const orangeSlots = obsFinalPlayerSlots(orangePlayers, 3);
+
   if($("obsFinalScore")){
     $("obsFinalScore").innerHTML = `
-      <div class="obsFinalTeam">
-        <div class="obsFinalTeamName">${escapeHtml(blueDisplayName)}</div>
-        <div class="obsFinalTeamRecord">
-          <div class="obsFinalMiniStat"><b>${blue.shots}</b><span>Shots</span></div>
-          <div class="obsFinalMiniStat"><b>${blue.assists}</b><span>Assists</span></div>
-          <div class="obsFinalMiniStat"><b>${blue.saves}</b><span>Saves</span></div>
-          <div class="obsFinalMiniStat"><b>${Math.round(blue.boost / Math.max(1, blue.players))}</b><span>Avg Boost</span></div>
-        </div>
-      </div>
-      <div class="obsFinalScoreBox"><b>${blueScore}</b><span>:</span><b>${orangeScore}</b></div>
-      <div class="obsFinalTeam right">
-        <div class="obsFinalTeamName">${escapeHtml(orangeDisplayName)}</div>
-        <div class="obsFinalTeamRecord">
-          <div class="obsFinalMiniStat"><b>${orange.shots}</b><span>Shots</span></div>
-          <div class="obsFinalMiniStat"><b>${orange.assists}</b><span>Assists</span></div>
-          <div class="obsFinalMiniStat"><b>${orange.saves}</b><span>Saves</span></div>
-          <div class="obsFinalMiniStat"><b>${Math.round(orange.boost / Math.max(1, orange.players))}</b><span>Avg Boost</span></div>
-        </div>
+      <div class="obsFinalTopbar">
+        <div class="obsFinalTopTeam left">${escapeHtml(blueDisplayName)}</div>
+        <div class="obsFinalTopCenter"></div>
+        <div class="obsSeriesPlate left"><div class="obsSeriesDots left">${renderObsSeriesDots("Blue")}</div></div>
+        <div class="obsSeriesPlate right"><div class="obsSeriesDots right">${renderObsSeriesDots("Orange")}</div></div>
+        <div class="obsFinalTopScore blue">${blueScore}</div>
+        <div class="obsFinalTopClock">${formatGameClock(liveApiState.lastKnownClock ?? 0)}<span>${Number(liveApiState.lastKnownClock) < 0 ? "OVERTIME" : ""}</span></div>
+        <div class="obsFinalTopScore orange">${orangeScore}</div>
+        <div class="obsFinalTopTeam right">${escapeHtml(orangeDisplayName)}</div>
+        <div class="obsFinalTopSub">${overlayGameLabel()} &nbsp;&nbsp; ${overlaySeriesLabel()}</div>
+        <img class="obsFinalTopBolt" src="${oneNeLogoUrl}" alt="">
       </div>`;
   }
 
-  const rows = [
-    ["Scoreboard",blue.score,orange.score],
-    ["Goals",blueScore,orangeScore],
-    ["Shots",blue.shots,orange.shots],
-    ["Assists",blue.assists,orange.assists],
-    ["Saves",blue.saves,orange.saves],
-    ["Demos",blue.demos,orange.demos],
-    ["Touches",blue.touches,orange.touches],
-    ["Avg Boost",Math.round(blue.boost / Math.max(1, blue.players)),Math.round(orange.boost / Math.max(1, orange.players))]
-  ];
   if($("obsFinalRows")){
-    $("obsFinalRows").innerHTML = rows.map(([label,left,right])=>{
-      const max = Math.max(1, left, right);
-      return `
-        <div class="obsFinalRow">
-          <div class="obsFinalRowValue">${left}</div>
-          <div class="obsFinalBar left"><div class="fill" style="--w:${Math.round((left / max) * 100)}%"></div></div>
-          <div class="obsFinalRowLabel">${escapeHtml(label)}</div>
-          <div class="obsFinalBar"><div class="fill" style="--w:${Math.round((right / max) * 100)}%"></div></div>
-          <div class="obsFinalRowValue">${right}</div>
-        </div>`;
-    }).join("");
+    $("obsFinalRows").innerHTML = `
+      <div class="obsFinalStatsBoard">
+        <div class="obsFinalNameRow">
+          <div class="obsFinalSideNames">${obsFinalNameRow(blueSlots, mvpName)}</div>
+          <div></div>
+          <div class="obsFinalSideNames">${obsFinalNameRow(orangeSlots, mvpName)}</div>
+        </div>
+        ${stats.map(stat=>{
+          const leftTotal = blueSlots.reduce((sum, player)=>sum + obsFinalPlayerStat(player, stat), 0);
+          const rightTotal = orangeSlots.reduce((sum, player)=>sum + obsFinalPlayerStat(player, stat), 0);
+          return `
+            <div class="obsFinalStatLine">
+              <div class="obsFinalSideNumbers">${obsFinalNumberRow(blueSlots, stat)}</div>
+              <div class="obsFinalStatLabel">
+                <span>${escapeHtml(stat.label)}</span>
+                ${obsFinalCompareBar(leftTotal, rightTotal)}
+              </div>
+              <div class="obsFinalSideNumbers">${obsFinalNumberRow(orangeSlots, stat)}</div>
+            </div>`;
+        }).join("")}
+      </div>`;
   }
   if($("obsFinalFooterLeft")) $("obsFinalFooterLeft").textContent = winner === "Draw" ? "Final result" : `${winner} wins`;
-  if($("obsFinalFooterRight")) $("obsFinalFooterRight").textContent = `${overlaySeriesLabel()} | Messages ${liveApiState.updateCount}`;
+  if($("obsFinalFooterRight")){
+    const modeLabel = manualPreview && !liveApiState.matchEnded ? "Stats test" : "Messages";
+    $("obsFinalFooterRight").textContent = `${overlaySeriesLabel()} | ${modeLabel} ${manualPreview && !liveApiState.matchEnded ? "on" : liveApiState.updateCount}`;
+  }
 }
 
 function renderObsOverlay(){
   if(!isObsOverlayMode || !liveApiState) return;
   overlayConfig = readOverlayConfig();
+  renderObsReplayOverlay();
   document.querySelectorAll(".obsLogoBox img").forEach(img=>{
     const side = img.closest(".obsTeamName")?.classList.contains("right") ? "Orange" : "Blue";
     img.src = overlayLogoFor(side);
@@ -5617,8 +6566,10 @@ function renderObsOverlay(){
   if($("obsOrangeName")) $("obsOrangeName").textContent = overlayTeamName("Orange", orangeTeam.name || "Orange");
   if($("obsBlueScore")) $("obsBlueScore").textContent = blueTeam.score ?? 0;
   if($("obsOrangeScore")) $("obsOrangeScore").textContent = orangeTeam.score ?? 0;
+  if($("obsBlueSeriesDots")) $("obsBlueSeriesDots").innerHTML = renderObsSeriesDots("Blue");
+  if($("obsOrangeSeriesDots")) $("obsOrangeSeriesDots").innerHTML = renderObsSeriesDots("Orange");
   if($("obsClock")) $("obsClock").textContent = formatGameClock(liveApiState.lastKnownClock ?? 300);
-  if($("obsMatchTag")) $("obsMatchTag").textContent = liveApiState.updateCount ? overlaySeriesLabel() : "Waiting for feed";
+  if($("obsMatchTag")) $("obsMatchTag").textContent = liveApiState.updateCount ? `${overlayGameLabel()}     ${overlaySeriesLabel()}` : "Waiting for feed";
   if($("obsBlueBoosts")) $("obsBlueBoosts").innerHTML = overlayBoostRows(livePlayersByTeam("Blue"), "left");
   if($("obsOrangeBoosts")) $("obsOrangeBoosts").innerHTML = overlayBoostRows(livePlayersByTeam("Orange"), "right");
 
@@ -5672,9 +6623,13 @@ function liveGameClockSeconds(payload){
 }
 
 function handleLiveUpdateState(payload){
+  syncLiveApiMatchBoundary(payload);
+  clearLivePostGameIfNextFieldState(payload);
   liveApiState.updateCount++;
   updateLiveTeamsFromPayload(payload);
   if(liveApiGameEnded(payload, "updatestate")) markLiveMatchEnded();
+  const replayFlag = liveApiReplayFlag(payload);
+  if(replayFlag !== null) setLiveReplayActive(replayFlag);
   const clock = liveGameClockSeconds(payload);
   if(clock !== null){
     liveApiState.lastKnownClock = clock;
@@ -5744,6 +6699,12 @@ function handleLiveGoal(payload){
   };
   p.shotSamples.push(sample);
   liveApiState.shotSamples.push({...sample, player:scorer, team:p.team});
+  liveApiState.lastGoal = {
+    player: scorer,
+    team: p.team,
+    clock: liveApiState.lastKnownClock,
+    speed: toNumber(firstDefined(valueByKey(payload,["Speed","speed","BallSpeed","ballSpeed","GoalSpeed","goalSpeed"]), liveApiState.lastBallSpeed), null)
+  };
 }
 
 function handleLiveCrossbar(payload){
@@ -5769,6 +6730,29 @@ function handleLiveCrossbar(payload){
   liveApiState.shotSamples.push({...sample, player, team:p.team});
 }
 
+function handleLiveStatfeedEvent(payload){
+  const type = String(firstDefined(valueByKey(payload,["Type","type","EventName","eventName"]), "")).toLowerCase();
+  const main = firstDefined(payload?.MainTarget, payload?.mainTarget, payload?.Player, payload?.player);
+  const secondary = firstDefined(payload?.SecondaryTarget, payload?.secondaryTarget);
+  const player = liveApiPlayerName(main);
+  const team = normalizeLiveTeam(firstDefined(valueByKey(main,["TeamNum","teamNum","team","Team"]), valueByKey(payload,["team","Team"])));
+  if(!player) return;
+  const p = ensureLivePlayer(player, team);
+  if(type.includes("demo")) p.demos++;
+  if(type.includes("save")) p.stats.saves++;
+  if(type.includes("shot")) p.stats.shots++;
+  if(type.includes("assist")) p.stats.assists++;
+  if(secondary && type.includes("demo")){
+    const victim = liveApiPlayerName(secondary);
+    if(victim) ensureLivePlayer(victim, normalizeLiveTeam(valueByKey(secondary,["TeamNum","teamNum","team","Team"])));
+  }
+}
+
+function handleLiveReplayEvent(event){
+  if(event.includes("goalreplaystart")) setLiveReplayActive(true);
+  if(event.includes("goalreplaywillend") || event.includes("goalreplayend")) setLiveReplayActive(false);
+}
+
 function livePlayersForBuildData(){
   const players = Array.from(liveApiState.players.values());
   return players.length ? players.map(p=>({name:p.name,team:p.team,stats:p.stats,shotSamples:p.shotSamples})) : null;
@@ -5792,8 +6776,8 @@ function applyLiveApiMetricsToData(){
     p.boostWaste = live.boostingSamples && live.speedSamples ? Math.max(0, Math.min(50, Math.round((live.boostingSamples / live.speedSamples) * 100))) : p.boostWaste;
     p.supersonicBoostUsed = Math.round(live.supersonicBoostUsed || live.supersonicBoostSamples || 0);
     p.supersonicBoostEvents = live.supersonicBoostSamples || 0;
-    p.pressure = Math.max(20, Math.min(95, Math.round((p.shots * 10) + (p.goals * 12) + (p.assists * 8) + (p.touches * 1.5) + 26)));
-    p.recovery = live.speedSamples ? Math.max(35, Math.min(95, Math.round((live.speedSum / live.speedSamples) / 24))) : p.recovery;
+    p.pressure = scaleRating((p.shots * 5) + (p.goals * 8) + (p.assists * 5) + (p.touches * 0.9) + 18, 26, 88, 20, 92) || p.pressure;
+    p.recovery = live.speedSamples ? scaleRating((live.speedSum / live.speedSamples) / 24, 25, 92, 35, 92) : p.recovery;
     p.nearMiss = Math.max(0, p.shots - p.goals - p.saves);
     p.forcedSaves = p.saves;
   });
@@ -5809,6 +6793,7 @@ function scheduleLiveRender(){
     selected = selected === "overview" || !data.players.some(p=>p.id === selected || p.team === selected) ? "overview" : selected;
     $("fileStatus").innerHTML =
       `Live API feed active.<br>` +
+      (liveApiState.matchGuid ? `Current match: <b>${escapeHtml(liveApiState.matchGuid.slice(0,8))}</b><br>` : "") +
       `Messages received: <b>${liveApiState.updateCount.toLocaleString()}</b><br>` +
       `Players tracked: <b>${liveApiState.players.size}</b><br>` +
       `Live shot samples: <b>${liveApiState.shotSamples.length}</b><br>` +
@@ -5823,6 +6808,7 @@ function handleLiveApiMessage(raw){
   let msg;
   try{ msg = normalizeLiveApiMessage(raw); }
   catch(err){ console.warn("Bad Live API message:", err); return; }
+  syncLiveApiMatchBoundary(msg.payload);
   if(liveApiGameEnded(msg.payload, msg.event)) markLiveMatchEnded();
   if(msg.event.includes("updatestate")) handleLiveUpdateState(msg.payload);
   else if(msg.event.includes("clockupdatedseconds")){
@@ -5832,6 +6818,8 @@ function handleLiveApiMessage(raw){
   else if(msg.event.includes("ballhit")) handleLiveBallHit(msg.payload);
   else if(msg.event.includes("goalscored")) handleLiveGoal(msg.payload);
   else if(msg.event.includes("crossbar")) handleLiveCrossbar(msg.payload);
+  else if(msg.event.includes("statfeedevent")) handleLiveStatfeedEvent(msg.payload);
+  else if(msg.event.includes("goalreplay")) handleLiveReplayEvent(msg.event);
   renderObsOverlay();
   if(isObsOverlayMode) return;
   scheduleLiveRender();
@@ -5869,7 +6857,7 @@ function connectLiveApiEndpoint(endpointIndex){
   }
   liveApiSocket.onopen = ()=>{
     opened = true;
-    const statusLabel = endpointIndex === 0 ? "Connected to 49123" : "Connected through bridge";
+    const statusLabel = endpointIndex === 0 ? "Connected to 49123" : "Connected through SPARK bridge";
     liveApiSetStatus("connected", statusLabel);
     if(isObsOverlayMode){
       renderObsOverlay();
@@ -5879,7 +6867,7 @@ function connectLiveApiEndpoint(endpointIndex){
     selected = "overview";
     $("fileStatus").innerHTML = endpointIndex === 0
       ? `Connected to Rocket League Stats API on <b>127.0.0.1:49123</b>. Waiting for UpdateState messages from a live match or replay playback.`
-      : `Connected to Rocket League Stats API via local bridge.<br>Bridge WebSocket: <b>127.0.0.1:49124</b><br>Rocket League feed: <b>127.0.0.1:49123</b>`;
+      : `Connected to Rocket League Stats API through the SPARK local bridge.<br>Bridge WebSocket: <b>${escapeHtml(endpoint.url.replace(/^ws:\/\//,""))}</b><br>Rocket League feed: <b>127.0.0.1:49123</b>`;
     render();
   };
   liveApiSocket.onmessage = event=>handleLiveApiMessage(event.data);
@@ -5918,8 +6906,8 @@ function tryNextLiveEndpoint(endpointIndex, reason){
   }
   liveApiSetStatus("error", "Connection failed");
   $("fileStatus").innerHTML =
-    `Rocket League is open on <b>127.0.0.1:49123</b>, but that port is a raw TCP JSON stream, not a browser WebSocket endpoint.<br>` +
-    `Start the local bridge, then press <b>Start Live API Feed</b> again.`;
+    `Could not connect to Rocket League Stats API at <b>127.0.0.1:49123</b> or through SPARK's local bridge.<br>` +
+    `Open SPARK with <b>SPARK Launcher</b>, make sure Rocket League is running with the Stats API enabled, then press <b>Start Live API Feed</b> again.`;
 }
 
 function toggleLiveApiFeed(){

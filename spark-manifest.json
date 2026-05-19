@@ -1,0 +1,147 @@
+﻿{
+    "schemaVersion":  1,
+    "appName":  "SPARK RL Analyzer",
+    "appVersion":  "2026.05.19.0539",
+    "generatedUtc":  "2026-05-19T05:39:26.7556462Z",
+    "source":  {
+                   "branch":  "main",
+                   "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
+                   "repository":  "https://github.com/GexCasts/SPARK-RL-Analyzer"
+               },
+    "notes":  "Generated from distributable SPARK files. Local .git, .tmp, and portable Node cache are intentionally excluded.",
+    "files":  [
+                  {
+                      "path":  ".gitattributes",
+                      "version":  "48012c3d3bf5",
+                      "sha256":  "48012c3d3bf5b68ea9a18420c463509b39f24ee0c5ecc020840676548ec880d8",
+                      "size":  118,
+                      "modifiedUtc":  "2026-05-13T06:50:22.2418914Z"
+                  },
+                  {
+                      "path":  ".gitignore",
+                      "version":  "c378ce468fbd",
+                      "sha256":  "c378ce468fbda332731c7ebc05058af43b0acc7379be6a0cc0fce7bb3944632f",
+                      "size":  81,
+                      "modifiedUtc":  "2026-05-13T06:05:30.2880038Z"
+                  },
+                  {
+                      "path":  "assets/1NE_Vector_edited.png",
+                      "version":  "cb11739ebe9d",
+                      "sha256":  "cb11739ebe9d2b4cf0934fd65787937ec513000fea2ecf52b71caa46aa60ed3e",
+                      "size":  97516,
+                      "modifiedUtc":  "2022-02-25T05:29:48.3444373Z"
+                  },
+                  {
+                      "path":  "assets/Field background.png",
+                      "version":  "1f96c053c68c",
+                      "sha256":  "1f96c053c68cb7dbc7a46302d62b6b3345c95e3bb55897ed24eb60c950918f79",
+                      "size":  150645,
+                      "modifiedUtc":  "2026-05-14T11:58:16.6184284Z"
+                  },
+                  {
+                      "path":  "assets/SPARK app logo transparent.png",
+                      "version":  "94036d2ef4dc",
+                      "sha256":  "94036d2ef4dc1d36e8ed61bedb0e66f01db6e8a4391ba0a5b9fccc4fba38d0ec",
+                      "size":  217733,
+                      "modifiedUtc":  "2026-05-13T07:01:36.1588397Z"
+                  },
+                  {
+                      "path":  "assets/SPARK Launcher.ico",
+                      "version":  "5af7a61e4730",
+                      "sha256":  "5af7a61e47302a6657a4c686a619519c915e15b4825df4b0d5046ae52c11387a",
+                      "size":  14598,
+                      "modifiedUtc":  "2026-05-13T07:57:11.9295201Z"
+                  },
+                  {
+                      "path":  "assets/Spark Logo.png",
+                      "version":  "1100ffcac5b2",
+                      "sha256":  "1100ffcac5b2b4fc982322b0ada1cb9f8c0974a290eebf4ae1693655bc83d04b",
+                      "size":  633466,
+                      "modifiedUtc":  "2026-05-11T08:33:46.1238560Z"
+                  },
+                  {
+                      "path":  "LICENSE",
+                      "version":  "6852c5660e8b",
+                      "sha256":  "6852c5660e8b1091694e5350f2cbb7fff8f0e067d5fb1581982d5c78f90a655c",
+                      "size":  35802,
+                      "modifiedUtc":  "2026-05-11T15:02:57.9645842Z"
+                  },
+                  {
+                      "path":  "README.md",
+                      "version":  "2075114b221e",
+                      "sha256":  "2075114b221ef7cce0515db93f6a1d62e4b1d1fca0ae98567e7b7339dae7fb47",
+                      "size":  1809,
+                      "modifiedUtc":  "2026-05-19T02:12:23.7192678Z"
+                  },
+                  {
+                      "path":  "rocket-league-stats-api-bridge.mjs",
+                      "version":  "8a9edc24bf43",
+                      "sha256":  "8a9edc24bf43832eafead1d9a797e2becfc967c7a6402c0ef37a49deb32323d6",
+                      "size":  3833,
+                      "modifiedUtc":  "2026-05-09T14:13:31.0703904Z"
+                  },
+                  {
+                      "path":  "shot-samples-schema.example.json",
+                      "version":  "60b03de8ea3d",
+                      "sha256":  "60b03de8ea3ddf0d07307d49cd531bdbcf725d3a8e3d35af0d67675b72ba61be",
+                      "size":  742,
+                      "modifiedUtc":  "2026-05-09T13:43:23.9567683Z"
+                  },
+                  {
+                      "path":  "SPARK Launcher.bat",
+                      "version":  "7a5d5ecc2328",
+                      "sha256":  "7a5d5ecc23283417abebb19abaa29f44e3e079dfaab30c7e11efe157dfb33a5a",
+                      "size":  141,
+                      "modifiedUtc":  "2026-05-19T03:57:32.3638767Z"
+                  },
+                  {
+                      "path":  "SPARK Launcher.exe",
+                      "version":  "258bdc10103e",
+                      "sha256":  "258bdc10103e978318624895d9d343586f5cd4db37039aa56a68ba32d1edada3",
+                      "size":  19456,
+                      "modifiedUtc":  "2026-05-19T03:58:13.9252392Z"
+                  },
+                  {
+                      "path":  "SPARK.html",
+                      "version":  "92a8243b0118",
+                      "sha256":  "92a8243b0118322aab43919c05f86d723c612c8c6a6c35a93b625829931a82e4",
+                      "size":  3386152,
+                      "modifiedUtc":  "2026-05-19T05:38:59.0083594Z"
+                  },
+                  {
+                      "path":  "SPARK-Launcher.cs",
+                      "version":  "5a9fd5a0cc95",
+                      "sha256":  "5a9fd5a0cc95c7d67a6447b37b3713a8507ab2caab2fe68f3eb5589cb02ca03a",
+                      "size":  1160,
+                      "modifiedUtc":  "2026-05-19T03:57:32.3638767Z"
+                  },
+                  {
+                      "path":  "SPARK-Launcher.ps1",
+                      "version":  "1951905af8af",
+                      "sha256":  "1951905af8af6bbe344ee9e0ece597f1d77feeaa1b93e336aefae664f47fbc2b",
+                      "size":  17175,
+                      "modifiedUtc":  "2026-05-19T05:22:20.2956086Z"
+                  },
+                  {
+                      "path":  "static-download-server.mjs",
+                      "version":  "9353d028306e",
+                      "sha256":  "9353d028306eea917f3ca1b5be549d8df73d43f5fd87381f70ed9bb6435c01d3",
+                      "size":  67528,
+                      "modifiedUtc":  "2026-05-18T15:41:39.0717977Z"
+                  },
+                  {
+                      "path":  "tools/New-SparkManifest.ps1",
+                      "version":  "5d6dfb0796a4",
+                      "sha256":  "5d6dfb0796a4b271748570bf5e8a2e0f8932120c0f4e239b2a3b0b40611cab34",
+                      "size":  2340,
+                      "modifiedUtc":  "2026-05-19T02:10:19.9946575Z"
+                  },
+                  {
+                      "path":  "tools/rrrocket/rrrocket-0.11.1-x86_64-pc-windows-msvc/rrrocket.exe",
+                      "version":  "f41185b62d9c",
+                      "sha256":  "f41185b62d9c956f9e704f516f70970c245e37286b673c535553ca9e71bba348",
+                      "size":  2213888,
+                      "modifiedUtc":  "2026-04-28T12:48:50.0000000Z"
+                  }
+              ]
+}
