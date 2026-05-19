@@ -1,6 +1,6 @@
 # SPARK RL Analyzer
 
-SPARK is a local Rocket League replay coaching dashboard.
+S.P.A.R.K. (Statistical Performance Analysis & Replay Kit) is a local Rocket League replay coaching dashboard.
 
 ## SPARK Launcher on Windows
 
