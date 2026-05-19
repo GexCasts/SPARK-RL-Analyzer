@@ -3631,13 +3631,32 @@ function comparableChartScopes(isTeamView){
   return (data?.players || []).map(player=>aggregate(player.id));
 }
 
-function touchSeriesFromDistanceSamples(scope, durationSeconds=300, stepSeconds=5){
+function ballInvolvementScoreFromDistance(distance, sustainedSeconds=0){
+  if(!Number.isFinite(distance)) return null;
+  let score = 0;
+  if(distance <= 430){
+    score = 20;
+  }else if(distance <= 700){
+    score = 16 + ((700 - distance) / 270) * 4;
+  }else if(distance <= 1050){
+    score = 11 + ((1050 - distance) / 350) * 5;
+  }else if(distance <= 1600){
+    score = 5 + ((1600 - distance) / 550) * 6;
+  }else if(distance <= 2400){
+    score = ((2400 - distance) / 800) * 5;
+  }
+  const sustainedBonus = distance <= 1150 ? clampValue(sustainedSeconds * 1.4, 0, 4) : 0;
+  return clampValue(score + sustainedBonus, 0, 20);
+}
+
+function ballInvolvementSeriesFromDistanceSamples(scope, durationSeconds=300, stepSeconds=5){
   const labels = gameTimeLabels(durationSeconds, stepSeconds);
   const chartDuration = chartDurationSeconds(durationSeconds);
-  const values = labels.map(()=>0);
+  const bins = labels.map(()=>({sum:0,count:0,max:0}));
   const players = Array.isArray(scope?.ps) ? scope.ps : (scope ? [scope] : []);
+  const isTeamView = Array.isArray(scope?.ps);
   let sampleCount = 0;
-  let touchCount = 0;
+  let involvementSamples = 0;
 
   players.forEach(player=>{
     const samples = (Array.isArray(player?.distanceToBallSamples) ? player.distanceToBallSamples : [])
@@ -3650,29 +3669,45 @@ function touchSeriesFromDistanceSamples(scope, durationSeconds=300, stepSeconds=
     if(!samples.length) return;
     sampleCount += samples.length;
 
-    let lastTouchElapsed = -Infinity;
+    let sustainedSeconds = 0;
+    let previousCloseSample = null;
     samples.forEach(sample=>{
       if(sample.elapsed < 0 || sample.elapsed > chartDuration + 0.001) return;
-      const strongContact = sample.distance <= 820;
-      const glancingContact = sample.distance <= 980 && sample.elapsed - lastTouchElapsed >= 0.42;
-      if((!strongContact && !glancingContact) || sample.elapsed - lastTouchElapsed < 0.22) return;
+      if(previousCloseSample && sample.distance <= 1350 && previousCloseSample.distance <= 1450){
+        const gap = sample.elapsed - previousCloseSample.elapsed;
+        sustainedSeconds = gap > 0 && gap <= 2.4 ? sustainedSeconds + gap : 0;
+      }else if(sample.distance > 1600){
+        sustainedSeconds = 0;
+      }
 
+      const score = ballInvolvementScoreFromDistance(sample.distance, sustainedSeconds);
+      previousCloseSample = sample.distance <= 1450 ? sample : null;
+      if(!Number.isFinite(score) || score <= 0) return;
       const binIndex = elapsedBinIndex(sample.elapsed, durationSeconds, stepSeconds);
-      values[binIndex] += 1;
-      touchCount++;
-      lastTouchElapsed = sample.elapsed;
+      bins[binIndex].sum += score;
+      bins[binIndex].count++;
+      bins[binIndex].max = Math.max(bins[binIndex].max, score);
+      involvementSamples++;
     });
   });
 
-  return {values, parsed:sampleCount > 0, sampleCount, touchCount};
+  const values = bins.map(bin=>{
+    if(!bin.count) return null;
+    const average = bin.sum / bin.count;
+    const value = isTeamView ? (bin.max * 0.82) + (average * 0.18) : (bin.max * 0.58) + (average * 0.42);
+    return Math.round(value * 10) / 10;
+  });
+
+  return {values:smoothedNullableSeries(values, 1), parsed:sampleCount > 0, sampleCount, involvementSamples};
 }
 
 function buildImpactChartValues(scope, durationSeconds, stepSeconds){
   const impact = buildParsedImpactSeries(scope, durationSeconds, stepSeconds);
-  const parsedTouches = touchSeriesFromDistanceSamples(scope, durationSeconds, stepSeconds);
-  const touchClock = parsedTouches.parsed
-    ? parsedTouches.values
-    : distributeTotalAcrossWindows(scope.touches, durationSeconds, stepSeconds, scope.touches + 17);
+  const ballInvolvement = ballInvolvementSeriesFromDistanceSamples(scope, durationSeconds, stepSeconds);
+  const involvementClock = ballInvolvement.parsed
+    ? ballInvolvement.values
+    : smoothedNullableSeries(averagePercentAcrossWindows(scope.touches, durationSeconds, stepSeconds, scope.touches + 17), 1)
+      .map(value=>benchmarkedImpactRating20(value, "possession"));
   const possessionPercentClock = impact.parsed
     ? impact.possessionValues
     : averagePercentAcrossWindows(scope.possession, durationSeconds, stepSeconds, scope.possession + 41);
@@ -3684,7 +3719,7 @@ function buildImpactChartValues(scope, durationSeconds, stepSeconds){
   const pressureClock = smoothedNullableSeries(pressurePercentClock, 2)
     .map(value=>benchmarkedImpactRating20(value, "pressure"));
 
-  return {impact, touchClock, possessionClock, pressureClock, parsedTouches};
+  return {impact, touchClock:involvementClock, possessionClock, pressureClock, parsedTouches:ballInvolvement};
 }
 
 function replayChartMax(chartType, isTeamView, durationSeconds, stepSeconds=5){
@@ -5103,7 +5138,7 @@ function render(){
   chart("trendChart",{
     type:"line",
     data:{labels:impactLabels,datasets:[
-      {label:"Touches per 2s window",data:touchClock,borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.18)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9},
+      {label:"Ball involvement rating /20",data:touchClock,borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.18)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true},
       {label:"Possession rating /20",data:possClock,borderColor:"#f2f2f2",backgroundColor:"rgba(242,242,242,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true},
       {label:"Pressure rating /20",data:pressureClock,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true}
     ]},
@@ -5118,9 +5153,9 @@ function render(){
   });
 
   $("trendNote").textContent = impactResult.parsed
-    ? `${a.label}: possession and pressure ratings are benchmarked from 0-20, smoothed across nearby 2-second windows, and calculated from ${impactResult.sampleCount.toLocaleString()} replay position snapshots. ${impactAdvice(a, impactChartValues, followupSpeed)}`
+    ? `${a.label}: ball involvement, possession, and pressure ratings are benchmarked from 0-20, smoothed across nearby replay windows, and calculated from ${impactResult.sampleCount.toLocaleString()} replay position snapshots. ${impactAdvice(a, impactChartValues, followupSpeed)}`
     : (a.touches > 260
-      ? "Team-level view: touch counts are distributed into realistic 5-second windows."
+      ? "Team-level view: ball involvement is estimated from replay stat totals."
       : a.touches > 110 ? "Player view: high involvement."
       : "Lower involvement.");
 
