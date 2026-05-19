@@ -1,8 +1,8 @@
-﻿{
+{
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.05.19.0539",
-    "generatedUtc":  "2026-05-19T05:39:26.7556462Z",
+    "appVersion":  "2026.05.19.1207",
+    "generatedUtc":  "2026-05-19T12:07:37.8938560Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -68,10 +68,10 @@
                   },
                   {
                       "path":  "README.md",
-                      "version":  "2075114b221e",
-                      "sha256":  "2075114b221ef7cce0515db93f6a1d62e4b1d1fca0ae98567e7b7339dae7fb47",
-                      "size":  1809,
-                      "modifiedUtc":  "2026-05-19T02:12:23.7192678Z"
+                      "version":  "51e547ffb49a",
+                      "sha256":  "51e547ffb49a436ec981d91c6d249ea1a86acf1ce8a40ecab31fae52a70c8124",
+                      "size":  1702,
+                      "modifiedUtc":  "2026-05-19T12:00:50.3811594Z"
                   },
                   {
                       "path":  "rocket-league-stats-api-bridge.mjs",
@@ -117,10 +117,10 @@
                   },
                   {
                       "path":  "SPARK-Launcher.ps1",
-                      "version":  "1951905af8af",
-                      "sha256":  "1951905af8af6bbe344ee9e0ece597f1d77feeaa1b93e336aefae664f47fbc2b",
-                      "size":  17175,
-                      "modifiedUtc":  "2026-05-19T05:22:20.2956086Z"
+                      "version":  "f3accccc29fc",
+                      "sha256":  "f3accccc29fc647e54d5409e3cb0b02d4ae925b7de9deeb81de89be7fccf1d66",
+                      "size":  17259,
+                      "modifiedUtc":  "2026-05-19T12:07:09.1029609Z"
                   },
                   {
                       "path":  "static-download-server.mjs",
@@ -131,10 +131,10 @@
                   },
                   {
                       "path":  "tools/New-SparkManifest.ps1",
-                      "version":  "5d6dfb0796a4",
-                      "sha256":  "5d6dfb0796a4b271748570bf5e8a2e0f8932120c0f4e239b2a3b0b40611cab34",
-                      "size":  2340,
-                      "modifiedUtc":  "2026-05-19T02:10:19.9946575Z"
+                      "version":  "96c497f61ec6",
+                      "sha256":  "96c497f61ec658c3d3db3eaa7f4548935b3f4ad4cb793fe9b39898475cbd0e3b",
+                      "size":  2422,
+                      "modifiedUtc":  "2026-05-19T12:07:09.1039571Z"
                   },
                   {
                       "path":  "tools/rrrocket/rrrocket-0.11.1-x86_64-pc-windows-msvc/rrrocket.exe",

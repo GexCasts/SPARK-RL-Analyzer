@@ -185,7 +185,9 @@ function Start-SPARK {
 }
 
 function ConvertFrom-ManifestJson($JsonText) {
-  return $JsonText | ConvertFrom-Json
+  $cleanJson = [string]$JsonText
+  $cleanJson = $cleanJson.TrimStart([char]0xFEFF)
+  return $cleanJson | ConvertFrom-Json
 }
 
 function Get-LocalFileSha256($Path) {
