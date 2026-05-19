@@ -418,7 +418,7 @@ function teamNumberFromActorObject(objectName){
 }
 
 function replayIntValue(attribute, value){
-  const raw = getObject(value, "Int") ?? getObject(attribute, "Int");
+  const raw = getObject(value, "Int") ?? getObject(attribute, "Int") ?? getObject(value, "Byte") ?? getObject(attribute, "Byte");
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
 }
@@ -930,8 +930,11 @@ function summarizeShotSamples(parsedReplay){
   const shotEvents = [];
   const goalEvents = [];
   const saveEvents = [];
+  const touchEvents = [];
+  const touchEventKeys = new Set();
   const distanceSamplesByPri = new Map();
   const positionSamplesByPri = new Map();
+  const touchEventsByPri = new Map();
   const lastPhysicsSampleTimeByPri = new Map();
   const recentTouchCandidatesByPri = new Map();
   let ballSampleCount = 0;
@@ -998,6 +1001,19 @@ function summarizeShotSamples(parsedReplay){
       }
     }
     return Number.isFinite(best.distance) ? best : {distance:null, playerName:null};
+  }
+
+  function nearestTouchPlayer(referenceLocation, hitTeamNumber){
+    if(!referenceLocation || normalizeTeamNumber(hitTeamNumber) === null) return null;
+    let best = null;
+    for(const player of activePlayerSnapshots()){
+      if(normalizeTeamNumber(player.teamNumber) !== normalizeTeamNumber(hitTeamNumber)) continue;
+      const distance = distanceBetweenLocations(referenceLocation, player.location);
+      if(!best || distance < best.distance){
+        best = {...player, distance};
+      }
+    }
+    return best && best.distance <= 2200 ? best : null;
   }
 
   function currentBallLocation(){
@@ -1076,6 +1092,40 @@ function summarizeShotSamples(parsedReplay){
     };
   }
 
+  function addTouchEvent(time, hitTeamNumber){
+    const normalizedTeam = normalizeTeamNumber(hitTeamNumber);
+    if(normalizedTeam === null) return;
+    const ballLocation = currentBallLocation();
+    const touchedBy = nearestTouchPlayer(ballLocation, normalizedTeam);
+    if(!touchedBy?.playerName) return;
+    const elapsedSeconds = currentGameElapsedSeconds(time);
+    noteObservedElapsed(elapsedSeconds);
+    const key = `${touchedBy.pri}:${normalizedTeam}:${Math.round(time * 20)}`;
+    if(touchEventKeys.has(key)) return;
+    touchEventKeys.add(key);
+    const overtimeBaseSeconds = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
+    const overtimeSeconds = isOvertime ? Math.max(0, elapsedSeconds - overtimeBaseSeconds) : null;
+    const event = {
+      time: Number.isFinite(time) ? time : 0,
+      elapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+      scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+      isOvertime,
+      overtimeSeconds,
+      pri: touchedBy.pri,
+      playerName: touchedBy.playerName,
+      teamNumber: normalizedTeam,
+      carActor: touchedBy.carActor,
+      carLocation: touchedBy.location,
+      ballLocation,
+      carBallDistance: Math.round(touchedBy.distance),
+      source: "ball-hit-team"
+    };
+    touchEvents.push(event);
+    if(!touchEventsByPri.has(touchedBy.pri)) touchEventsByPri.set(touchedBy.pri, []);
+    touchEventsByPri.get(touchedBy.pri).push(event);
+  }
+
   function pushPhysicsSamples(time){
     const ballLocation = currentBallLocation();
     if(!ballLocation) return;
@@ -1145,6 +1195,7 @@ function summarizeShotSamples(parsedReplay){
 
   for(const frame of frames){
     const time = Number(frame.time ?? frame.seconds ?? frame.delta ?? 0);
+    const frameTouchHits = [];
 
     for(const actor of frame.new_actors || []){
       if(!Number.isInteger(actor.actor_id)) continue;
@@ -1226,6 +1277,11 @@ function summarizeShotSamples(parsedReplay){
         }
       }
 
+      if(objectNameMatches(objectName, "TAGame.Ball_TA:HitTeamNum")){
+        const hitTeamNumber = replayIntValue(attribute, value);
+        if(normalizeTeamNumber(hitTeamNumber) !== null) frameTouchHits.push(hitTeamNumber);
+      }
+
       const statMatch = /TAGame\.PRI_TA:Match(Shots|Goals|Saves)$/.exec(objectName);
       if(!statMatch) continue;
       const statValue = replayIntValue(attribute, value);
@@ -1244,6 +1300,7 @@ function summarizeShotSamples(parsedReplay){
       }
     }
 
+    frameTouchHits.forEach(hitTeamNumber=>addTouchEvent(time, hitTeamNumber));
     pushPhysicsSamples(time);
   }
 
@@ -1253,6 +1310,7 @@ function summarizeShotSamples(parsedReplay){
       ...shotEvents.map(event=>event.playerName),
       ...goalEvents.map(event=>event.playerName),
       ...saveEvents.map(event=>event.playerName),
+      ...touchEvents.map(event=>event.playerName),
       ...[...distanceSamplesByPri.keys()].map(pri=>priName.get(pri))
     ])
   ]);
@@ -1276,6 +1334,7 @@ function summarizeShotSamples(parsedReplay){
         name: cleanPlayerName,
         censoredName: censoredName || censoredAliases.get(cleanPlayerName) || null,
         shotSamples: [],
+        touchEvents: [],
         distanceToBallSamples: [],
         positionSamples: []
       });
@@ -1456,12 +1515,53 @@ function summarizeShotSamples(parsedReplay){
       y: sample.y,
       z: sample.z
     }));
+    player.touchEvents = (touchEventsByPri.get(pri) || []).map(event=>({
+      time: event.time,
+      elapsedSeconds: event.elapsedSeconds,
+      scoreboardSecondsRemaining: event.scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: event.scoreboardElapsedSeconds,
+      isOvertime: event.isOvertime,
+      overtimeSeconds: event.overtimeSeconds,
+      carBallDistance: event.carBallDistance,
+      carLocation: event.carLocation,
+      ballLocation: event.ballLocation,
+      source: event.source
+    }));
+    player.stats = {
+      ...(player.stats || {}),
+      touches: player.touchEvents.length
+    };
+  }
+
+  for(const [pri, events] of touchEventsByPri){
+    const rawName = cleanName(events[0]?.playerName || priName.get(pri));
+    const playerName = resolveName(rawName);
+    const censoredName = censoredAliases.get(playerName) || (isMaskedReplayName(rawName) ? rawName : null);
+    const player = ensurePlayer(playerName, censoredName);
+    if(!player || player.touchEvents.length) continue;
+    player.touchEvents = events.map(event=>({
+      time: event.time,
+      elapsedSeconds: event.elapsedSeconds,
+      scoreboardSecondsRemaining: event.scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: event.scoreboardElapsedSeconds,
+      isOvertime: event.isOvertime,
+      overtimeSeconds: event.overtimeSeconds,
+      carBallDistance: event.carBallDistance,
+      carLocation: event.carLocation,
+      ballLocation: event.ballLocation,
+      source: event.source
+    }));
+    player.stats = {
+      ...(player.stats || {}),
+      touches: player.touchEvents.length
+    };
   }
 
   const sortedPlayers = [...players.values()]
     .map(player=>({
       ...player,
       shotSamples: player.shotSamples.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0)),
+      touchEvents: player.touchEvents.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0)),
       distanceToBallSamples: player.distanceToBallSamples.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0)),
       positionSamples: player.positionSamples.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0))
     }))
@@ -1474,6 +1574,7 @@ function summarizeShotSamples(parsedReplay){
     players: sortedPlayers,
     nameAliases: [...nameAliases].map(([censoredName, realName])=>({name:realName, censoredName})),
     totalShotSamples: sortedPlayers.reduce((sum, player)=>sum + player.shotSamples.length, 0),
+    totalTouchEvents: sortedPlayers.reduce((sum, player)=>sum + player.touchEvents.length, 0),
     totalDistanceSamples: sortedPlayers.reduce((sum, player)=>sum + player.distanceToBallSamples.length, 0),
     totalPositionSamples: sortedPlayers.reduce((sum, player)=>sum + player.positionSamples.length, 0),
     totalBallSamples: ballSampleCount,

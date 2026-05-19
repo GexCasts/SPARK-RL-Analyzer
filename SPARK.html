@@ -2857,6 +2857,12 @@ function buildData(seed=42, replayPlayers=null, replayTitle="Sample Replay", mat
     if(Array.isArray(p.boostPickups)) player.boostPickups = p.boostPickups;
     if(Array.isArray(p.boostPadPickups)) player.boostPadPickups = p.boostPadPickups;
     if(Array.isArray(p.shotSamples)) player.shotSamples = p.shotSamples;
+    if(Array.isArray(p.touchEvents)){
+      player.touchEvents = p.touchEvents;
+      player.touches = p.touchEvents.length;
+    }else if(Number.isFinite(Number(p.stats?.touches ?? p.touches))){
+      player.touches = Number(p.stats?.touches ?? p.touches);
+    }
     if(Array.isArray(p.positionSamples)) player.positionSamples = p.positionSamples;
     if(Array.isArray(p.ballSamples)) player.ballSamples = p.ballSamples;
     if(Array.isArray(p.distanceToBallSamples)) player.distanceToBallSamples = p.distanceToBallSamples;
@@ -3631,83 +3637,34 @@ function comparableChartScopes(isTeamView){
   return (data?.players || []).map(player=>aggregate(player.id));
 }
 
-function ballInvolvementScoreFromDistance(distance, sustainedSeconds=0){
-  if(!Number.isFinite(distance)) return null;
-  let score = 0;
-  if(distance <= 430){
-    score = 20;
-  }else if(distance <= 700){
-    score = 16 + ((700 - distance) / 270) * 4;
-  }else if(distance <= 1050){
-    score = 11 + ((1050 - distance) / 350) * 5;
-  }else if(distance <= 1600){
-    score = 5 + ((1600 - distance) / 550) * 6;
-  }else if(distance <= 2400){
-    score = ((2400 - distance) / 800) * 5;
-  }
-  const sustainedBonus = distance <= 1150 ? clampValue(sustainedSeconds * 1.4, 0, 4) : 0;
-  return clampValue(score + sustainedBonus, 0, 20);
-}
-
-function ballInvolvementSeriesFromDistanceSamples(scope, durationSeconds=300, stepSeconds=5){
+function exactTouchSeriesFromReplayEvents(scope, durationSeconds=300, stepSeconds=5){
   const labels = gameTimeLabels(durationSeconds, stepSeconds);
   const chartDuration = chartDurationSeconds(durationSeconds);
-  const bins = labels.map(()=>({sum:0,count:0,max:0}));
+  const values = labels.map(()=>0);
   const players = Array.isArray(scope?.ps) ? scope.ps : (scope ? [scope] : []);
-  const isTeamView = Array.isArray(scope?.ps);
-  let sampleCount = 0;
-  let involvementSamples = 0;
+  let eventCount = 0;
 
   players.forEach(player=>{
-    const samples = (Array.isArray(player?.distanceToBallSamples) ? player.distanceToBallSamples : [])
-      .map(sample=>({
-        elapsed:sampleElapsedSeconds(sample),
-        distance:sampleDistanceUU(sample)
-      }))
-      .filter(sample=>Number.isFinite(sample.elapsed) && Number.isFinite(sample.distance))
+    const events = (Array.isArray(player?.touchEvents) ? player.touchEvents : [])
+      .map(event=>({elapsed:sampleElapsedSeconds(event)}))
+      .filter(event=>Number.isFinite(event.elapsed))
       .sort((a,b)=>a.elapsed - b.elapsed);
-    if(!samples.length) return;
-    sampleCount += samples.length;
-
-    let sustainedSeconds = 0;
-    let previousCloseSample = null;
-    samples.forEach(sample=>{
-      if(sample.elapsed < 0 || sample.elapsed > chartDuration + 0.001) return;
-      if(previousCloseSample && sample.distance <= 1350 && previousCloseSample.distance <= 1450){
-        const gap = sample.elapsed - previousCloseSample.elapsed;
-        sustainedSeconds = gap > 0 && gap <= 2.4 ? sustainedSeconds + gap : 0;
-      }else if(sample.distance > 1600){
-        sustainedSeconds = 0;
-      }
-
-      const score = ballInvolvementScoreFromDistance(sample.distance, sustainedSeconds);
-      previousCloseSample = sample.distance <= 1450 ? sample : null;
-      if(!Number.isFinite(score) || score <= 0) return;
-      const binIndex = elapsedBinIndex(sample.elapsed, durationSeconds, stepSeconds);
-      bins[binIndex].sum += score;
-      bins[binIndex].count++;
-      bins[binIndex].max = Math.max(bins[binIndex].max, score);
-      involvementSamples++;
+    events.forEach(event=>{
+      if(event.elapsed < 0 || event.elapsed > chartDuration + 0.001) return;
+      values[elapsedBinIndex(event.elapsed, durationSeconds, stepSeconds)] += 1;
+      eventCount++;
     });
   });
 
-  const values = bins.map(bin=>{
-    if(!bin.count) return null;
-    const average = bin.sum / bin.count;
-    const value = isTeamView ? (bin.max * 0.82) + (average * 0.18) : (bin.max * 0.58) + (average * 0.42);
-    return Math.round(value * 10) / 10;
-  });
-
-  return {values:smoothedNullableSeries(values, 1), parsed:sampleCount > 0, sampleCount, involvementSamples};
+  return {values, parsed:eventCount > 0, sampleCount:eventCount, touchCount:eventCount};
 }
 
 function buildImpactChartValues(scope, durationSeconds, stepSeconds){
   const impact = buildParsedImpactSeries(scope, durationSeconds, stepSeconds);
-  const ballInvolvement = ballInvolvementSeriesFromDistanceSamples(scope, durationSeconds, stepSeconds);
-  const involvementClock = ballInvolvement.parsed
-    ? ballInvolvement.values
-    : smoothedNullableSeries(averagePercentAcrossWindows(scope.touches, durationSeconds, stepSeconds, scope.touches + 17), 1)
-      .map(value=>benchmarkedImpactRating20(value, "possession"));
+  const exactTouches = exactTouchSeriesFromReplayEvents(scope, durationSeconds, stepSeconds);
+  const touchClock = exactTouches.parsed
+    ? exactTouches.values
+    : distributeTotalAcrossWindows(scope.touches, durationSeconds, stepSeconds, scope.touches + 17);
   const possessionPercentClock = impact.parsed
     ? impact.possessionValues
     : averagePercentAcrossWindows(scope.possession, durationSeconds, stepSeconds, scope.possession + 41);
@@ -3719,7 +3676,7 @@ function buildImpactChartValues(scope, durationSeconds, stepSeconds){
   const pressureClock = smoothedNullableSeries(pressurePercentClock, 2)
     .map(value=>benchmarkedImpactRating20(value, "pressure"));
 
-  return {impact, touchClock:involvementClock, possessionClock, pressureClock, parsedTouches:ballInvolvement};
+  return {impact, touchClock, possessionClock, pressureClock, parsedTouches:exactTouches};
 }
 
 function replayChartMax(chartType, isTeamView, durationSeconds, stepSeconds=5){
@@ -5125,8 +5082,8 @@ function render(){
 
   const durationSeconds = replayObservedDurationSeconds();
   const goalSaveEvents = buildGoalSaveEvents(durationSeconds, selected);
-  // Impact on Play uses realistic 5-second windows from decoded replay position samples.
-  const impactStepSeconds = 2;
+  // Impact on Play uses replay-derived windows; exact ball touches are counted from decoded ball-hit events.
+  const impactStepSeconds = 5;
   const impactChartValues = buildImpactChartValues(a, durationSeconds, impactStepSeconds);
   const impactResult = impactChartValues.impact;
   const impactLabels = impactResult.labels;
@@ -5138,13 +5095,13 @@ function render(){
   chart("trendChart",{
     type:"line",
     data:{labels:impactLabels,datasets:[
-      {label:"Ball involvement rating /20",data:touchClock,borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.18)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true},
+      {label:"Exact ball touches per 5s window",data:touchClock,borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.18)",fill:true,tension:.24,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9},
       {label:"Possession rating /20",data:possClock,borderColor:"#f2f2f2",backgroundColor:"rgba(242,242,242,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true},
       {label:"Pressure rating /20",data:pressureClock,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true}
     ]},
     options:{
       maintainAspectRatio:false,
-      plugins:{legend,eventMarkers:{events:goalSaveEvents,stepSeconds:2}},
+      plugins:{legend,eventMarkers:{events:goalSaveEvents,stepSeconds:impactStepSeconds}},
       scales:{
         x:{...axis,ticks:{...axis.ticks,maxRotation:0,autoSkip:true,maxTicksLimit:11}},
         y:{...axis,beginAtZero:true,max:impactScaleMax}
@@ -5153,10 +5110,10 @@ function render(){
   });
 
   $("trendNote").textContent = impactResult.parsed
-    ? `${a.label}: ball involvement, possession, and pressure ratings are benchmarked from 0-20, smoothed across nearby replay windows, and calculated from ${impactResult.sampleCount.toLocaleString()} replay position snapshots. ${impactAdvice(a, impactChartValues, followupSpeed)}`
+    ? `${a.label}: exact ball touches are counted from decoded ball-hit events; possession and pressure ratings are benchmarked from 0-20 and calculated from ${impactResult.sampleCount.toLocaleString()} replay position snapshots. ${impactAdvice(a, impactChartValues, followupSpeed)}`
     : (a.touches > 260
-      ? "Team-level view: ball involvement is estimated from replay stat totals."
-      : a.touches > 110 ? "Player view: high involvement."
+      ? "Team-level view: ball touches are distributed from replay stat totals because decoded touch events were unavailable."
+      : a.touches > 110 ? "Player view: high touch volume."
       : "Lower involvement.");
 
   const phase = inferGamePhase(a);
@@ -5906,9 +5863,11 @@ function normalizeParsedReplayPlayer(raw, index=0){
       goals: Number(stats.goals ?? 0),
       assists: Number(stats.assists ?? 0),
       saves: Number(stats.saves ?? 0),
-      shots: Number(stats.shots ?? 0)
+      shots: Number(stats.shots ?? 0),
+      touches: Number(stats.touches ?? raw.touches ?? 0)
     },
     shotSamples: Array.isArray(raw.shotSamples) ? raw.shotSamples : Array.isArray(raw.shotsDetailed) ? raw.shotsDetailed : [],
+    touchEvents: Array.isArray(raw.touchEvents) ? raw.touchEvents : Array.isArray(raw.ballTouchEvents) ? raw.ballTouchEvents : [],
     positionSamples: Array.isArray(raw.positionSamples) ? raw.positionSamples : Array.isArray(raw.carSamples) ? raw.carSamples : [],
     ballSamples: Array.isArray(raw.ballSamples) ? raw.ballSamples : [],
     distanceToBallSamples: Array.isArray(raw.distanceToBallSamples) ? raw.distanceToBallSamples : Array.isArray(raw.ballDistanceSamples) ? raw.ballDistanceSamples : [],
@@ -5964,6 +5923,10 @@ function applyParsedShotSamplesToData(parsed){
     }
     if(player && Array.isArray(parsedPlayer.shotSamples)){
       player.shotSamples = parsedPlayer.shotSamples;
+    }
+    if(player && Array.isArray(parsedPlayer.touchEvents)){
+      player.touchEvents = parsedPlayer.touchEvents;
+      player.touches = parsedPlayer.touchEvents.length;
     }
     if(player && Array.isArray(parsedPlayer.positionSamples)){
       player.positionSamples = parsedPlayer.positionSamples;
@@ -7015,7 +6978,7 @@ function findReplayMetaPlayer(replayMeta, parsedPlayer, aliases){
 }
 
 function parsedPlayerHasDecodedData(player){
-  return ["boostPickups","shotSamples","positionSamples","distanceToBallSamples","ballSamples"].some(key=>Array.isArray(player?.[key]) && player[key].length)
+  return ["boostPickups","shotSamples","touchEvents","positionSamples","distanceToBallSamples","ballSamples"].some(key=>Array.isArray(player?.[key]) && player[key].length)
     || Number(player?.supersonicBoostUsed || player?.boostUsedWhileSupersonic || 0) > 0;
 }
 
@@ -7024,15 +6987,16 @@ function copyParsedPlayerData(target, parsedPlayer){
   if(parsedPlayer.censoredName) target.censoredName = cleanReplayName(parsedPlayer.censoredName);
   if(parsedPlayer.team && (!target.team || target.team === "Spectator")) target.team = parsedPlayer.team;
   if(parsedPlayer.stats) target.stats = {...(target.stats || {}), ...parsedPlayer.stats};
-  ["boostPickups","shotSamples","positionSamples","distanceToBallSamples","ballSamples"].forEach(key=>{
+  ["boostPickups","shotSamples","touchEvents","positionSamples","distanceToBallSamples","ballSamples"].forEach(key=>{
     if(Array.isArray(parsedPlayer[key])) target[key] = parsedPlayer[key];
   });
+  if(Array.isArray(parsedPlayer.touchEvents)) target.stats = {...(target.stats || {}), touches:parsedPlayer.touchEvents.length};
   if(Number.isFinite(Number(parsedPlayer.supersonicBoostUsed))) target.supersonicBoostUsed = Number(parsedPlayer.supersonicBoostUsed);
   if(Number.isFinite(Number(parsedPlayer.supersonicBoostEvents))) target.supersonicBoostEvents = Number(parsedPlayer.supersonicBoostEvents);
 }
 
 function applyParsedReplayToReplayMeta(replayMeta, parsedReplay){
-  const counts = {boostPickups:0, shotSamples:0, positionSamples:0, distanceSamples:0, addedPlayers:0};
+  const counts = {boostPickups:0, shotSamples:0, touchEvents:0, positionSamples:0, distanceSamples:0, addedPlayers:0};
   if(!parsedReplay || !Array.isArray(parsedReplay.players) || !replayMeta) return counts;
   if(!Array.isArray(replayMeta.players)) replayMeta.players = [];
 
@@ -7053,6 +7017,7 @@ function applyParsedReplayToReplayMeta(replayMeta, parsedReplay){
     copyParsedPlayerData(target, parsedPlayer);
     counts.boostPickups += Array.isArray(parsedPlayer.boostPickups) ? parsedPlayer.boostPickups.length : 0;
     counts.shotSamples += Array.isArray(parsedPlayer.shotSamples) ? parsedPlayer.shotSamples.length : 0;
+    counts.touchEvents += Array.isArray(parsedPlayer.touchEvents) ? parsedPlayer.touchEvents.length : 0;
     counts.positionSamples += Array.isArray(parsedPlayer.positionSamples) ? parsedPlayer.positionSamples.length : 0;
     counts.distanceSamples += Array.isArray(parsedPlayer.distanceToBallSamples) ? parsedPlayer.distanceToBallSamples.length : 0;
   });
@@ -7076,7 +7041,7 @@ async function loadFile(file){
   let matchDurationSeconds = 300;
   let parsedJson = null;
   let parsedReplay = null;
-  let parsedCounts = {boostPickups:0, shotSamples:0, positionSamples:0, distanceSamples:0, addedPlayers:0};
+  let parsedCounts = {boostPickups:0, shotSamples:0, touchEvents:0, positionSamples:0, distanceSamples:0, addedPlayers:0};
 
   if(file.name.toLowerCase().endsWith(".json")){
     try{
@@ -7089,6 +7054,7 @@ async function loadFile(file){
       parsedCounts = {
         boostPickups: parsedJson.players.reduce((s,p)=>s+(p.boostPickups?.length||0),0),
         shotSamples: parsedJson.players.reduce((s,p)=>s+(p.shotSamples?.length||0),0),
+        touchEvents: parsedJson.players.reduce((s,p)=>s+(p.touchEvents?.length||0),0),
         positionSamples: parsedJson.players.reduce((s,p)=>s+(p.positionSamples?.length||0),0),
         distanceSamples: parsedJson.players.reduce((s,p)=>s+(p.distanceToBallSamples?.length||0),0),
         addedPlayers:0
