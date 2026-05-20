@@ -3168,6 +3168,7 @@ function formatGameClock(secondsRemaining){
 }
 
 function chartDurationSeconds(durationSeconds=300){
+  if(liveApiDashboardActive()) return liveApiChartDurationSeconds();
   const rawDuration = Math.max(1, Number(durationSeconds) || 300);
   const scoreboardStart = Number(data?.scoreboardClockStartSeconds);
   const scoreboardFinal = Number(data?.scoreboardClockFinalSeconds);
@@ -3255,6 +3256,7 @@ function sampleElapsedSeconds(sample){
 }
 
 function replayObservedDurationSeconds(){
+  if(liveApiDashboardActive()) return liveApiChartDurationSeconds();
   let maxDuration = normalizeReplayDurationSeconds(data?.durationSeconds || 300);
   const addElapsed = sample=>{
     const elapsed = sampleElapsedSeconds(sample);
@@ -3673,7 +3675,75 @@ function exactTouchSeriesFromReplayEvents(scope, durationSeconds=300, stepSecond
   return {values, parsed:eventCount > 0, sampleCount:eventCount, touchCount:eventCount};
 }
 
+function liveScopeMatches(scope, event){
+  const players = Array.isArray(scope?.ps) ? scope.ps : (scope ? [scope] : []);
+  const selectedNames = new Set(players.map(p=>cleanReplayName(p.name || "").toLowerCase()).filter(Boolean));
+  const selectedTeams = new Set(players.map(p=>p.team).filter(Boolean));
+  if(scope?.isTeam) return selectedTeams.has(event.team);
+  return selectedNames.has(cleanReplayName(event.player || "").toLowerCase());
+}
+
+function buildLiveImpactChartValues(scope, durationSeconds=300, stepSeconds=5){
+  const labels = gameTimeLabels(durationSeconds, stepSeconds);
+  const chartDuration = chartDurationSeconds(durationSeconds);
+  const touchClock = labels.map(()=>0);
+  const allTouchClock = labels.map(()=>0);
+  const possessionClock = labels.map(()=>null);
+  const pressureRaw = labels.map(()=>0);
+  const events = Array.isArray(liveApiState?.events) ? liveApiState.events : [];
+  let selectedEventCount = 0;
+
+  const pressureWeights = {
+    touch:1,
+    shot:5,
+    near_miss:4,
+    goal:10,
+    demo:2,
+    bump:1.5,
+    save:1.5
+  };
+
+  events.forEach(event=>{
+    const elapsed = Number(event.elapsedSeconds);
+    if(!Number.isFinite(elapsed) || elapsed < 0 || elapsed > chartDuration + 0.001) return;
+    const binIndex = elapsedBinIndex(elapsed, durationSeconds, stepSeconds);
+    const isTouch = event.type === "touch";
+    if(isTouch) allTouchClock[binIndex] += 1;
+    if(!liveScopeMatches(scope, event)) return;
+    selectedEventCount++;
+    if(isTouch) touchClock[binIndex] += 1;
+    pressureRaw[binIndex] += pressureWeights[event.type] || 0;
+  });
+
+  labels.forEach((_, index)=>{
+    if(allTouchClock[index] > 0){
+      possessionClock[index] = Math.round((touchClock[index] / allTouchClock[index]) * 20 * 10) / 10;
+    }
+  });
+
+  const pressureClock = smoothedNullableSeries(
+    pressureRaw.map(value=>Math.min(20, Math.round(value * 1.75 * 10) / 10)),
+    1
+  );
+
+  return {
+    impact:{
+      labels,
+      possessionValues:possessionClock,
+      pressureValues:pressureClock,
+      sampleCount:events.length,
+      parsed:false,
+      live:true
+    },
+    touchClock,
+    possessionClock:smoothedNullableSeries(possessionClock, 1),
+    pressureClock,
+    parsedTouches:{values:touchClock, parsed:true, sampleCount:selectedEventCount, touchCount:touchClock.reduce((sum,value)=>sum + value, 0), live:true}
+  };
+}
+
 function buildImpactChartValues(scope, durationSeconds, stepSeconds){
+  if(liveApiDashboardActive()) return buildLiveImpactChartValues(scope, durationSeconds, stepSeconds);
   const impact = buildParsedImpactSeries(scope, durationSeconds, stepSeconds);
   const exactTouches = exactTouchSeriesFromReplayEvents(scope, durationSeconds, stepSeconds);
   const touchClock = exactTouches.parsed
@@ -3982,6 +4052,15 @@ function supersonicBoostUsed(a){
 }
 
 function boostManagementMetrics(a){
+  if(liveApiDashboardActive()){
+    const supersonicUsed = Math.round(supersonicBoostUsed(a));
+    return [
+      {label:"Average Boost",value:a.boostEff || 0,display:`${a.boostEff || 0}%`,kind:"percent"},
+      {label:"Boost Used Supersonic",value:supersonicUsed,display:`${supersonicUsed.toLocaleString()} boost`,kind:"count",scaleGroup:"supersonicBoost",warning:supersonicUsed > 20},
+      {label:"Boost Wasted",value:a.boostWaste || 0,display:`${a.boostWaste || 0}%`,kind:"percent",warning:true},
+      {label:"Low-Boost Recovery",value:a.recovery || 0,display:`${a.recovery || 0}%`,kind:"percent"}
+    ];
+  }
   const totals = boostPickupTotals(a);
   const largeStolen = largeBoostSteals(a);
   const supersonicUsed = Math.round(supersonicBoostUsed(a));
@@ -4018,8 +4097,9 @@ function renderBoostManagement(a, isTeamView){
   const totals = boostPickupTotals(a);
   const largeStolen = largeBoostSteals(a);
   const supersonicUsed = Math.round(supersonicBoostUsed(a));
-  $("boostNote").textContent =
-    `${a.label}: ${totals.small.toLocaleString()} small pad pickup${totals.small===1?"":"s"}, ${totals.large.toLocaleString()} large pad pickup${totals.large===1?"":"s"}, ${largeStolen.toLocaleString()} large boost steal${largeStolen===1?"":"s"}, ${supersonicUsed.toLocaleString()} boost used while already supersonic, ${a.boostEff || 0}% boost efficiency, and ${a.recovery || 0}% low-boost recovery.`;
+  $("boostNote").textContent = liveApiDashboardActive()
+    ? `${a.label}: live boost management uses current boost, boost use, speed, and supersonic flags from the API. Exact small/full pad pickups and stolen-pad locations require replay parsing.`
+    : `${a.label}: ${totals.small.toLocaleString()} small pad pickup${totals.small===1?"":"s"}, ${totals.large.toLocaleString()} large pad pickup${totals.large===1?"":"s"}, ${largeStolen.toLocaleString()} large boost steal${largeStolen===1?"":"s"}, ${supersonicUsed.toLocaleString()} boost used while already supersonic, ${a.boostEff || 0}% boost efficiency, and ${a.recovery || 0}% low-boost recovery.`;
 }
 
 
@@ -4028,8 +4108,20 @@ function renderBoostPickupMap(a){
   const map = $("boostMap");
   if(!map) return;
 
-  map.querySelectorAll(".boostPad").forEach(e=>e.remove());
+  map.querySelectorAll(".boostPad,.heatmapUnavailable").forEach(e=>e.remove());
   ensureSparkMapWatermark(map);
+
+  if(liveApiDashboardActive()){
+    const unavailable = document.createElement("div");
+    unavailable.className = "heatmapUnavailable";
+    unavailable.innerHTML = `
+      <b>Boost pickup map unavailable from Live API</b><br>
+      The live feed exposes current boost amounts, but not which pad was collected. Upload a replay to calculate per-pad pickups.
+    `;
+    map.appendChild(unavailable);
+    $("boostPickupNote").textContent = `${a.label}: live boost amount and boost usage can be tracked, but exact pad locations require replay parsing.`;
+    return;
+  }
 
   const pads = boostPickupCounts(a);
   const maxCount = Math.max(1, ...pads.map(p=>p.count));
@@ -4299,6 +4391,7 @@ function getFrameAccurateShootingSamples(a){
 }
 
 function makeShootingSamples(a){
+  if(liveApiDashboardActive()) return [];
   // Do not synthesize shot placement or distance values from scoreboard totals.
   // Goal-face coordinates, closest-defender distance, and shooter last-touch distance
   // require frame-level physics/touch decoding. Until the parser supplies
@@ -4400,6 +4493,29 @@ function renderShootingHeatmap(a){
   `;
 
   const samples = makeShootingSamples(a);
+
+  if(liveApiDashboardActive()){
+    const goals = a.goals || 0;
+    const shots = a.shots || 0;
+    const saves = a.forcedSaves || 0;
+    const nearMisses = a.nearMiss || 0;
+    const unavailable = document.createElement("div");
+    unavailable.className = "heatmapUnavailable";
+    unavailable.innerHTML = `
+      <b>Live shooting summary</b><br>
+      Live API mode does not provide reliable shot placement or defender-distance data, so SPARK shows basic shooting totals instead of plotting guessed locations.
+      <div class="heatmapStats">
+        <span><strong>${shots}</strong>shots</span>
+        <span><strong>${goals}</strong>goals</span>
+        <span><strong>${saves}</strong>saves</span>
+        <span><strong>${nearMisses}</strong>near misses</span>
+      </div>
+    `;
+    el.appendChild(unavailable);
+    $("shootingHeatmapNote").textContent =
+      `${a.label}: live shooting is limited to API scoreboard/statfeed totals; upload a replay for placement and defender-distance analysis.`;
+    return;
+  }
 
   if(!samples.length){
     const goals = a.goals || 0;
@@ -5066,6 +5182,7 @@ function render(){
 
   const a=aggregate(selected);
   const followupSpeed = followupSpeedFromTeammateTouches(a);
+  const liveMode = liveApiDashboardActive();
 
   const isTeamView = a.isTeam;
 
@@ -5130,6 +5247,8 @@ function render(){
 
   $("trendNote").textContent = impactResult.parsed
     ? `${a.label}: exact ball touches are counted from decoded ball-hit events; possession and pressure ratings are benchmarked from 0-20 and calculated from ${impactResult.sampleCount.toLocaleString()} replay position snapshots. ${impactAdvice(a, impactChartValues, followupSpeed)}`
+    : impactResult.live
+      ? `${a.label}: live impact is updating from API events as they happen. Touches are live ball-hit events, possession is touch share in each window, and pressure is event-based from touches, shots, goals, saves, demos, and bumps.`
     : (a.touches > 260
       ? "Team-level view: ball touches are distributed from replay stat totals because decoded touch events were unavailable."
       : a.touches > 110 ? "Player view: high touch volume."
@@ -5137,7 +5256,7 @@ function render(){
 
   const phase = inferGamePhase(a);
   renderBoostManagement(a, isTeamView);
-  $("boostNote").textContent += ` Inferred game phase from boost use, pressure, saves, and recovery: attack ${phase.attack}%, defence ${phase.defence}%, neutral ${phase.neutral}%.`;
+  if(!liveMode) $("boostNote").textContent += ` Inferred game phase from boost use, pressure, saves, and recovery: attack ${phase.attack}%, defence ${phase.defence}%, neutral ${phase.neutral}%.`;
   renderBoostPickupMap(a);
   if(!isTeamView) renderPositioningHeatmap(a);
 
@@ -5152,42 +5271,53 @@ function render(){
 
   const distanceStepSeconds = 5;
   const clockLabels = gameTimeLabels(durationSeconds, distanceStepSeconds);
-  const distanceResult = distanceToBallSeries(a, durationSeconds, distanceStepSeconds);
-  const distanceSeries = distanceResult.values;
-  const distanceScaleMax = replayChartMax("distance", isTeamView, durationSeconds, distanceStepSeconds);
-  chart("distanceChart",{
-    type:"line",
-    data:{labels:clockLabels,datasets:[
-      {label:"Distance to ball",data:distanceSeries,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.16)",fill:true,tension:.35,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true}
-    ]},
-    options:{
-      maintainAspectRatio:false,
-      plugins:{
-        legend,
-        eventMarkers:{events:goalSaveEvents,stepSeconds:distanceStepSeconds},
-        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${formatDistanceFromUU(ctx.parsed.y)}`}}
-      },
-      scales:{
-        x:{...axis,ticks:{...axis.ticks,maxRotation:0,autoSkip:true,maxTicksLimit:11}},
-        y:{
-          ...axis,
-          beginAtZero:true,
-          max:distanceScaleMax,
-          ticks:{...axis.ticks,callback:value=>formatDistanceFromUU(value)},
-          title:{display:true,text:"Distance from ball",color:"#b8bcc4"}
+  if(liveMode){
+    chart("distanceChart",{
+      type:"line",
+      data:{labels:clockLabels,datasets:[
+        {label:"Distance to ball unavailable from Live API",data:clockLabels.map(()=>null),borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.08)",fill:true,spanGaps:true}
+      ]},
+      options:{maintainAspectRatio:false,plugins:{legend},scales:{x:{...axis,ticks:{...axis.ticks,maxRotation:0,autoSkip:true,maxTicksLimit:11}},y:{...axis,beginAtZero:true}}}
+    });
+    $("distanceNote").textContent = `${a.label}: Distance to Ball needs synchronized car and ball positions. The Live API feed does not provide enough positional data for this panel, so SPARK leaves it blank while connected.`;
+  }else{
+    const distanceResult = distanceToBallSeries(a, durationSeconds, distanceStepSeconds);
+    const distanceSeries = distanceResult.values;
+    const distanceScaleMax = replayChartMax("distance", isTeamView, durationSeconds, distanceStepSeconds);
+    chart("distanceChart",{
+      type:"line",
+      data:{labels:clockLabels,datasets:[
+        {label:"Distance to ball",data:distanceSeries,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.16)",fill:true,tension:.35,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true}
+      ]},
+      options:{
+        maintainAspectRatio:false,
+        plugins:{
+          legend,
+          eventMarkers:{events:goalSaveEvents,stepSeconds:distanceStepSeconds},
+          tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${formatDistanceFromUU(ctx.parsed.y)}`}}
+        },
+        scales:{
+          x:{...axis,ticks:{...axis.ticks,maxRotation:0,autoSkip:true,maxTicksLimit:11}},
+          y:{
+            ...axis,
+            beginAtZero:true,
+            max:distanceScaleMax,
+            ticks:{...axis.ticks,callback:value=>formatDistanceFromUU(value)},
+            title:{display:true,text:"Distance from ball",color:"#b8bcc4"}
+          }
         }
       }
-    }
-  });
+    });
 
-  const validDistanceValues = distanceSeries.filter(Number.isFinite);
-  if(validDistanceValues.length){
-    const avgDistance = Math.round(validDistanceValues.reduce((sum,value)=>sum + value,0)/validDistanceValues.length);
-    $("distanceNote").textContent = distanceResult.parsed
-      ? `${a.label}: average distance to ball is ${formatDistanceFromUU(avgDistance)}, based on ${distanceResult.sampleCount.toLocaleString()} replay position samples and binned into ${distanceStepSeconds}-second game-time windows.`
-      : `${a.label}: average distance to ball is approximately ${formatDistanceFromUU(avgDistance)}.`;
-  }else{
-    $("distanceNote").textContent = `${a.label}: distance-to-ball data is not available for this view.`;
+    const validDistanceValues = distanceSeries.filter(Number.isFinite);
+    if(validDistanceValues.length){
+      const avgDistance = Math.round(validDistanceValues.reduce((sum,value)=>sum + value,0)/validDistanceValues.length);
+      $("distanceNote").textContent = distanceResult.parsed
+        ? `${a.label}: average distance to ball is ${formatDistanceFromUU(avgDistance)}, based on ${distanceResult.sampleCount.toLocaleString()} replay position samples and binned into ${distanceStepSeconds}-second game-time windows.`
+        : `${a.label}: average distance to ball is approximately ${formatDistanceFromUU(avgDistance)}.`;
+    }else{
+      $("distanceNote").textContent = `${a.label}: distance-to-ball data is not available for this view.`;
+    }
   }
 
   const shotQuality = shotQualityBreakdown(a);
@@ -5198,6 +5328,8 @@ function render(){
   });
   $("shotNote").textContent = shotQuality.hasSamples
     ? `${a.label}: shot quality uses ${shotQuality.samples.length.toLocaleString()} replay shot sample${shotQuality.samples.length===1?"":"s"}. ${shootingAdvice(a)}`
+    : liveMode
+      ? `${a.label}: live shot quality uses API scoreboard/statfeed totals as they arrive. Placement-specific categories stay empty until replay parsing is available. ${shootingAdvice(a)}`
     : `${a.label}: using scoreboard shooting totals for this view. ${shootingAdvice(a)}`;
   renderShootingHeatmap(a);
 
@@ -5236,8 +5368,20 @@ function renderPositioningHeatmap(a){
   const note = $("positioningMapNote");
   if(!map || !note) return;
 
-  map.querySelectorAll(".positioningGridCanvas").forEach(e=>e.remove());
+  map.querySelectorAll(".positioningGridCanvas,.heatmapUnavailable").forEach(e=>e.remove());
   ensureSparkMapWatermark(map);
+
+  if(liveApiDashboardActive()){
+    const unavailable = document.createElement("div");
+    unavailable.className = "heatmapUnavailable";
+    unavailable.innerHTML = `
+      <b>Positioning heatmap unavailable from Live API</b><br>
+      This panel needs car-position samples. SPARK will render it again when a replay file is uploaded and parsed.
+    `;
+    map.appendChild(unavailable);
+    note.textContent = `${a.label}: player positioning requires replay positional data, so it is disabled while connected to the live feed.`;
+    return;
+  }
 
   const players = Array.isArray(a?.ps) ? a.ps : [];
   const samples = [];
@@ -5999,18 +6143,32 @@ function makeEmptyLiveApiState(){
     },
     focusedPlayerName:null,
     ballHits: [],
+    events: [],
     shotSamples: [],
     lastGoal: null,
     replayActive: false,
     replayStartedAt: null,
     title: "Rocket League Live API Feed",
     matchGuid: null,
-    durationSeconds: 300,
+    durationSeconds: 0,
     lastBallSpeed: 0,
     lastKnownClock: null,
     matchEnded: false,
     endedAt: null
   };
+}
+
+function liveApiDashboardActive(){
+  return !!liveApiSocket && !!liveApiState && !isObsOverlayMode;
+}
+
+function liveApiChartDurationSeconds(){
+  const elapsed = Number.isFinite(liveApiState?.lastKnownClock)
+    ? Math.max(0, 300 - Number(liveApiState.lastKnownClock))
+    : liveApiState
+      ? Math.max(0, (Date.now() - liveApiState.startedAt) / 1000)
+      : 0;
+  return Math.max(1, Math.ceil(elapsed));
 }
 
 function firstDefined(...values){
@@ -6165,6 +6323,7 @@ function ensureLivePlayer(name, team=null){
       stats:{team:team || null,score:0,goals:0,assists:0,saves:0,shots:0},
       touches:0,
       demos:0,
+      bumps:0,
       boostSum:0,
       boostSamples:0,
       speedSum:0,
@@ -6193,13 +6352,46 @@ function updateLivePlayerFromApi(player){
   const p = ensureLivePlayer(livePlayerKeyFromApi(player), team);
   p.team = team || p.team;
   p.stats.team = p.team;
+
+  const elapsedNow = liveElapsedSeconds();
+  function applyCountStat(target, keys, eventType=null){
+    const raw = valueByKey(player, keys);
+    if(raw === undefined) return target.current;
+    const next = Math.max(0, toNumber(raw, target.current));
+    const previous = Number.isFinite(target.api) ? target.api : target.current;
+    const delta = Math.max(0, Math.round(next - previous));
+    if(eventType && delta > 0){
+      for(let i=0; i<Math.min(delta, 20); i++){
+        addLiveTimelineEvent(eventType, p.name, p.team, {elapsedSeconds:elapsedNow + i * 0.01, dedupeMs:0, source:"update-state-delta"});
+      }
+    }
+    target.api = next;
+    return next;
+  }
+
   p.stats.score = toNumber(valueByKey(player,["score","Score","points","Points"]), p.stats.score);
-  p.stats.goals = toNumber(valueByKey(player,["goals","Goals"]), p.stats.goals);
-  p.stats.assists = toNumber(valueByKey(player,["assists","Assists"]), p.stats.assists);
-  p.stats.saves = toNumber(valueByKey(player,["saves","Saves"]), p.stats.saves);
-  p.stats.shots = toNumber(valueByKey(player,["shots","Shots"]), p.stats.shots);
-  p.demos = toNumber(valueByKey(player,["demos","Demos","demolitions","Demolitions"]), p.demos);
-  p.touches = Math.max(p.touches, toNumber(valueByKey(player,["touches","Touches"]), p.touches));
+  p.stats.goals = applyCountStat({current:p.stats.goals,api:p.apiGoals}, ["goals","Goals"], "goal");
+  p.apiGoals = p.stats.goals;
+  p.stats.assists = applyCountStat({current:p.stats.assists,api:p.apiAssists}, ["assists","Assists"], "assist");
+  p.apiAssists = p.stats.assists;
+  p.stats.saves = applyCountStat({current:p.stats.saves,api:p.apiSaves}, ["saves","Saves"], "save");
+  p.apiSaves = p.stats.saves;
+  p.stats.shots = applyCountStat({current:p.stats.shots,api:p.apiShots}, ["shots","Shots"], "shot");
+  p.apiShots = p.stats.shots;
+  p.demos = applyCountStat({current:p.demos,api:p.apiDemos}, ["demos","Demos","demolitions","Demolitions"], "demo");
+  p.apiDemos = p.demos;
+  p.touches = applyCountStat({current:p.touches,api:p.apiTouches}, ["touches","Touches"], "touch");
+  p.apiTouches = p.touches;
+
+  const demolished = toBoolean(valueByKey(player,["bDemolished","demolished","Demolished","isDemolished","IsDemolished"]));
+  const attackerName = liveApiPlayerName(valueByKey(player,["Attacker","attacker","Demolisher","demolisher"]));
+  if(demolished && !p.lastDemolished && attackerName && attackerName !== p.name){
+    const attacker = ensureLivePlayer(attackerName, null);
+    attacker.demos = Math.max(attacker.demos || 0, (attacker.apiDemos || attacker.demos || 0) + 1);
+    addLiveTimelineEvent("demo", attacker.name, attacker.team, {victim:p.name, dedupeMs:950, source:"demolished-attacker"});
+  }
+  p.lastDemolished = demolished;
+
   p.shortcut = firstDefined(valueByKey(player,["Shortcut","shortcut","Index","index"]), p.shortcut);
   const isBoosting = valueByKey(player,["bBoosting","boosting","Boosting","isBoosting","IsBoosting"]) === true;
   const isSupersonic = valueByKey(player,["bSupersonic","supersonic","Supersonic","isSupersonic","IsSupersonic"]) === true;
@@ -6662,7 +6854,7 @@ function handleLiveUpdateState(payload){
   const clock = liveGameClockSeconds(payload);
   if(clock !== null){
     liveApiState.lastKnownClock = clock;
-    liveApiState.durationSeconds = Math.max(liveApiState.durationSeconds, Math.round(300 - clock));
+    liveApiState.durationSeconds = Math.max(liveApiState.durationSeconds, Math.round(liveElapsedSeconds()));
   }
   const ball = firstDefined(valueByKey(payload,["ball","Ball"]), valueByKey(payload?.Game,["Ball","ball"]));
   if(ball) liveApiState.lastBallSpeed = toNumber(valueByKey(ball,["speed","Speed"]), liveApiState.lastBallSpeed);
@@ -6685,7 +6877,9 @@ function handleLiveBallHit(payload){
       const p = ensureLivePlayer(player, team);
       liveApiState.focusedPlayerName = p.name;
       p.touches++;
-      liveApiState.ballHits.push({player,team,location,time:Date.now(),clock:liveApiState.lastKnownClock});
+      const elapsedSeconds = liveElapsedSeconds();
+      liveApiState.ballHits.push({player,team,location,time:Date.now(),clock:liveApiState.lastKnownClock,elapsedSeconds});
+      addLiveTimelineEvent("touch", p.name, p.team || team, {location, elapsedSeconds, dedupeMs:120});
     }
   });
   if(liveApiState.ballHits.length > 200) liveApiState.ballHits.shift();
@@ -6702,6 +6896,36 @@ function lastLiveHitForPlayer(name){
 function liveElapsedSeconds(){
   if(Number.isFinite(liveApiState.lastKnownClock)) return Math.max(0, 300 - liveApiState.lastKnownClock);
   return Math.max(0, (Date.now() - liveApiState.startedAt) / 1000);
+}
+
+function addLiveTimelineEvent(type, player, team=null, extra={}){
+  if(!liveApiState) return null;
+  const cleanPlayer = cleanReplayName(player || "");
+  const elapsedSeconds = Number(extra.elapsedSeconds ?? liveElapsedSeconds());
+  if(!cleanPlayer || !Number.isFinite(elapsedSeconds)) return null;
+  const normalizedTeam = team || normalizeLiveTeam(extra.team) || null;
+  const dedupeMs = Number(extra.dedupeMs ?? 850);
+  const now = Date.now();
+  if(dedupeMs > 0){
+    const recent = liveApiState.events.find(event=>
+      event.type === type &&
+      event.player === cleanPlayer &&
+      Math.abs((event.wallTime || 0) - now) <= dedupeMs
+    );
+    if(recent) return recent;
+  }
+  const event = {
+    type,
+    player:cleanPlayer,
+    team:normalizedTeam,
+    elapsedSeconds,
+    clock:Number.isFinite(liveApiState.lastKnownClock) ? liveApiState.lastKnownClock : null,
+    wallTime:now,
+    ...extra
+  };
+  liveApiState.events.push(event);
+  if(liveApiState.events.length > 2500) liveApiState.events.splice(0, liveApiState.events.length - 2500);
+  return event;
 }
 
 function handleLiveGoal(payload){
@@ -6728,6 +6952,8 @@ function handleLiveGoal(payload){
   };
   p.shotSamples.push(sample);
   liveApiState.shotSamples.push({...sample, player:scorer, team:p.team});
+  addLiveTimelineEvent("shot", scorer, p.team, {elapsedSeconds:elapsed, dedupeMs:650});
+  addLiveTimelineEvent("goal", scorer, p.team, {elapsedSeconds:elapsed, dedupeMs:650});
   liveApiState.lastGoal = {
     player: scorer,
     team: p.team,
@@ -6757,6 +6983,8 @@ function handleLiveCrossbar(payload){
   };
   p.shotSamples.push(sample);
   liveApiState.shotSamples.push({...sample, player, team:p.team});
+  addLiveTimelineEvent("shot", player, p.team, {dedupeMs:650});
+  addLiveTimelineEvent("near_miss", player, p.team, {dedupeMs:650});
 }
 
 function handleLiveStatfeedEvent(payload){
@@ -6767,9 +6995,22 @@ function handleLiveStatfeedEvent(payload){
   const team = normalizeLiveTeam(firstDefined(valueByKey(main,["TeamNum","teamNum","team","Team"]), valueByKey(payload,["team","Team"])));
   if(!player) return;
   const p = ensureLivePlayer(player, team);
-  if(type.includes("demo")) p.demos++;
-  if(type.includes("save")) p.stats.saves++;
-  if(type.includes("shot")) p.stats.shots++;
+  if(type.includes("demo")){
+    p.demos++;
+    addLiveTimelineEvent("demo", p.name, p.team || team, {dedupeMs:900});
+  }
+  if(type.includes("bump")){
+    p.bumps++;
+    addLiveTimelineEvent("bump", p.name, p.team || team, {dedupeMs:650});
+  }
+  if(type.includes("save")){
+    p.stats.saves++;
+    addLiveTimelineEvent("save", p.name, p.team || team, {dedupeMs:700});
+  }
+  if(type.includes("shot")){
+    p.stats.shots++;
+    addLiveTimelineEvent("shot", p.name, p.team || team, {dedupeMs:700});
+  }
   if(type.includes("assist")) p.stats.assists++;
   if(secondary && type.includes("demo")){
     const victim = liveApiPlayerName(secondary);
@@ -6784,18 +7025,37 @@ function handleLiveReplayEvent(event){
 
 function livePlayersForBuildData(){
   const players = Array.from(liveApiState.players.values());
-  return players.length ? players.map(p=>({name:p.name,team:p.team,stats:p.stats,shotSamples:p.shotSamples})) : null;
+  return players.length ? players.map(p=>({
+    name:p.name,
+    team:p.team,
+    stats:{...p.stats,touches:p.touches || 0,demos:p.demos || 0,bumps:p.bumps || 0},
+    touches:p.touches || 0,
+    demos:p.demos || 0,
+    bumps:p.bumps || 0
+  })) : null;
 }
 
 function applyLiveApiMetricsToData(){
   if(!liveApiState || !data) return;
-  const liveByName = new Map(Array.from(liveApiState.players.values()).map(p=>[p.name,p]));
+  const livePlayers = Array.from(liveApiState.players.values());
+  const liveByName = new Map(livePlayers.map(p=>[p.name,p]));
+  const touchTotalsByTeam = livePlayers.reduce((map, player)=>{
+    const team = player.team || "Unknown";
+    map[team] = (map[team] || 0) + (player.touches || 0);
+    return map;
+  }, {});
+  const totalTouches = livePlayers.reduce((sum, player)=>sum + (player.touches || 0), 0);
   data.players.forEach(p=>{
     const live = liveByName.get(p.name);
     if(!live) return;
-    p.shotSamples = live.shotSamples || [];
-    p.touches = live.touches || p.touches;
+    p.shotSamples = [];
+    p.touchEvents = [];
+    p.boostPickups = [];
+    p.positionSamples = [];
+    p.distanceToBallSamples = [];
+    p.touches = live.touches || 0;
     p.demos = live.demos || 0;
+    p.bumps = live.bumps || 0;
     p.goals = live.stats.goals || 0;
     p.shots = live.stats.shots || p.goals;
     p.assists = live.stats.assists || 0;
@@ -6805,6 +7065,8 @@ function applyLiveApiMetricsToData(){
     p.boostWaste = live.boostingSamples && live.speedSamples ? Math.max(0, Math.min(50, Math.round((live.boostingSamples / live.speedSamples) * 100))) : p.boostWaste;
     p.supersonicBoostUsed = Math.round(live.supersonicBoostUsed || live.supersonicBoostSamples || 0);
     p.supersonicBoostEvents = live.supersonicBoostSamples || 0;
+    const scopeTouchTotal = p.team ? (touchTotalsByTeam[p.team] || totalTouches) : totalTouches;
+    p.possession = scopeTouchTotal ? Math.round(((live.touches || 0) / scopeTouchTotal) * 100) : 0;
     p.pressure = scaleRating((p.shots * 5) + (p.goals * 8) + (p.assists * 5) + (p.touches * 0.9) + 18, 26, 88, 20, 92) || p.pressure;
     p.recovery = live.speedSamples ? scaleRating((live.speedSum / live.speedSamples) / 24, 25, 92, 35, 92) : p.recovery;
     p.nearMiss = Math.max(0, p.shots - p.goals - p.saves);
@@ -6817,7 +7079,9 @@ function scheduleLiveRender(){
   if(liveRenderTimer) return;
   liveRenderTimer = setTimeout(()=>{
     liveRenderTimer = null;
-    data = buildData(Date.now() % 100000, livePlayersForBuildData(), liveApiState.title, Math.max(300, liveApiState.durationSeconds || 300));
+    const liveDuration = liveApiChartDurationSeconds();
+    data = buildData(Date.now() % 100000, livePlayersForBuildData(), liveApiState.title, Math.max(30, liveDuration));
+    data.hasOvertime = liveDuration > 300;
     applyLiveApiMetricsToData();
     selected = selected === "overview" || !data.players.some(p=>p.id === selected || p.team === selected) ? "overview" : selected;
     $("fileStatus").innerHTML =
@@ -6825,8 +7089,8 @@ function scheduleLiveRender(){
       (liveApiState.matchGuid ? `Current match: <b>${escapeHtml(liveApiState.matchGuid.slice(0,8))}</b><br>` : "") +
       `Messages received: <b>${liveApiState.updateCount.toLocaleString()}</b><br>` +
       `Players tracked: <b>${liveApiState.players.size}</b><br>` +
-      `Live shot samples: <b>${liveApiState.shotSamples.length}</b><br>` +
-      `<span style='color:#ffd000'>Note:</span> Goal and ball-hit placement are live API data. Closest-defender distance and full car-position heatmaps still require car coordinates, which the Stats API does not expose.`;
+      `Live events tracked: <b>${liveApiState.events.length.toLocaleString()}</b><br>` +
+      `<span style='color:#ffd000'>Note:</span> Live charts use API events as they arrive. Replay-only position, distance, pad-map, and shot-placement views stay disabled until a replay is uploaded.`;
     render();
   }, 250);
 }
@@ -6842,7 +7106,10 @@ function handleLiveApiMessage(raw){
   if(msg.event.includes("updatestate")) handleLiveUpdateState(msg.payload);
   else if(msg.event.includes("clockupdatedseconds")){
     const clock = liveGameClockSeconds(msg.payload);
-    if(clock !== null) liveApiState.lastKnownClock = clock;
+    if(clock !== null){
+      liveApiState.lastKnownClock = clock;
+      liveApiState.durationSeconds = Math.max(liveApiState.durationSeconds, Math.round(liveElapsedSeconds()));
+    }
   }
   else if(msg.event.includes("ballhit")) handleLiveBallHit(msg.payload);
   else if(msg.event.includes("goalscored")) handleLiveGoal(msg.payload);
