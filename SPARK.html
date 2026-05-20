@@ -2833,6 +2833,8 @@ function makePlayerFromReplay(name, team, i, seed, stats=null){
     p.assists = stats.assists ?? 0;
     p.saves = stats.saves ?? 0;
     p.scoreboardScore = stats.score ?? 0;
+    p.demos = Number.isFinite(Number(stats.demos)) ? Number(stats.demos) : p.demos;
+    p.bumps = Number.isFinite(Number(stats.bumps)) ? Number(stats.bumps) : p.bumps;
 
     // Keep coaching metrics plausible relative to the real scoreboard.
     p.pressure = Math.max(20, Math.min(95, Math.round((p.shots * 8) + (p.goals * 12) + (p.assists * 8) + (p.saves * 4) + 28)));
@@ -2862,6 +2864,18 @@ function buildData(seed=42, replayPlayers=null, replayTitle="Sample Replay", mat
       player.touches = p.touchEvents.length;
     }else if(Number.isFinite(Number(p.stats?.touches ?? p.touches))){
       player.touches = Number(p.stats?.touches ?? p.touches);
+    }
+    if(Array.isArray(p.demoEvents)){
+      player.demoEvents = p.demoEvents;
+      player.demos = p.demoEvents.length;
+    }else if(Number.isFinite(Number(p.stats?.demos ?? p.demos))){
+      player.demos = Number(p.stats?.demos ?? p.demos);
+    }
+    if(Array.isArray(p.bumpEvents)){
+      player.bumpEvents = p.bumpEvents;
+      player.bumps = p.bumpEvents.length;
+    }else if(Number.isFinite(Number(p.stats?.bumps ?? p.bumps))){
+      player.bumps = Number(p.stats?.bumps ?? p.bumps);
     }
     if(Array.isArray(p.positionSamples)) player.positionSamples = p.positionSamples;
     if(Array.isArray(p.ballSamples)) player.ballSamples = p.ballSamples;
@@ -4548,6 +4562,7 @@ function teamAggregate(team){
     possession: avg("possession"),
     pressure: avg("pressure"),
     demos: sum("demos"),
+    bumps: sum("bumps"),
     touches: sum("touches"),
     boostCollected: pickupTotals.total ? pickupTotals.large * 100 + pickupTotals.small * 12 : sum("smallPads") * 12,
     boostStolen: largeBoostSteals(scope),
@@ -4580,6 +4595,8 @@ function renderGameOverview(){
     {label:"Possession",l:left.possession,r:right.possession,note:"Possession",unit:"%"},
     {label:"Pressure",l:left.pressure,r:right.pressure,note:"Pressure"},
     {label:"Saves",l:left.saves,r:right.saves,note:"Saves"},
+    {label:"Demos",l:left.demos,r:right.demos,note:"Demos"},
+    {label:"Bumps",l:left.bumps,r:right.bumps,note:"Confirmed Bumps"},
     {label:"Boost Steals",l:left.boostStolen,r:right.boostStolen,note:"Full Boosts Stolen"}
   ];
 
@@ -4632,6 +4649,7 @@ function renderGameOverview(){
           <td>${p.saves || 0}</td>
           <td>${shootingPct}%</td>
           <td>${p.demos || 0}</td>
+          <td>${p.bumps || 0}</td>
           <td>${p.stolen || 0}</td>
         </tr>
       `;
@@ -4649,6 +4667,7 @@ function renderGameOverview(){
         <th>Saves</th>
         <th>Shooting %</th>
         <th>Demos</th>
+        <th>Bumps</th>
         <th>Boost Stolen</th>
       </tr>
     </thead>
@@ -5864,10 +5883,14 @@ function normalizeParsedReplayPlayer(raw, index=0){
       assists: Number(stats.assists ?? 0),
       saves: Number(stats.saves ?? 0),
       shots: Number(stats.shots ?? 0),
-      touches: Number(stats.touches ?? raw.touches ?? 0)
+      touches: Number(stats.touches ?? raw.touches ?? 0),
+      demos: Number(stats.demos ?? raw.demos ?? raw.demolitions ?? 0),
+      bumps: Number(stats.bumps ?? raw.bumps ?? 0)
     },
     shotSamples: Array.isArray(raw.shotSamples) ? raw.shotSamples : Array.isArray(raw.shotsDetailed) ? raw.shotsDetailed : [],
     touchEvents: Array.isArray(raw.touchEvents) ? raw.touchEvents : Array.isArray(raw.ballTouchEvents) ? raw.ballTouchEvents : [],
+    demoEvents: Array.isArray(raw.demoEvents) ? raw.demoEvents : Array.isArray(raw.demolitionEvents) ? raw.demolitionEvents : [],
+    bumpEvents: Array.isArray(raw.bumpEvents) ? raw.bumpEvents : [],
     positionSamples: Array.isArray(raw.positionSamples) ? raw.positionSamples : Array.isArray(raw.carSamples) ? raw.carSamples : [],
     ballSamples: Array.isArray(raw.ballSamples) ? raw.ballSamples : [],
     distanceToBallSamples: Array.isArray(raw.distanceToBallSamples) ? raw.distanceToBallSamples : Array.isArray(raw.ballDistanceSamples) ? raw.ballDistanceSamples : [],
@@ -5927,6 +5950,14 @@ function applyParsedShotSamplesToData(parsed){
     if(player && Array.isArray(parsedPlayer.touchEvents)){
       player.touchEvents = parsedPlayer.touchEvents;
       player.touches = parsedPlayer.touchEvents.length;
+    }
+    if(player && Array.isArray(parsedPlayer.demoEvents)){
+      player.demoEvents = parsedPlayer.demoEvents;
+      player.demos = parsedPlayer.demoEvents.length;
+    }
+    if(player && Array.isArray(parsedPlayer.bumpEvents)){
+      player.bumpEvents = parsedPlayer.bumpEvents;
+      player.bumps = parsedPlayer.bumpEvents.length;
     }
     if(player && Array.isArray(parsedPlayer.positionSamples)){
       player.positionSamples = parsedPlayer.positionSamples;
@@ -6978,7 +7009,7 @@ function findReplayMetaPlayer(replayMeta, parsedPlayer, aliases){
 }
 
 function parsedPlayerHasDecodedData(player){
-  return ["boostPickups","shotSamples","touchEvents","positionSamples","distanceToBallSamples","ballSamples"].some(key=>Array.isArray(player?.[key]) && player[key].length)
+  return ["boostPickups","shotSamples","touchEvents","demoEvents","bumpEvents","positionSamples","distanceToBallSamples","ballSamples"].some(key=>Array.isArray(player?.[key]) && player[key].length)
     || Number(player?.supersonicBoostUsed || player?.boostUsedWhileSupersonic || 0) > 0;
 }
 
@@ -6987,16 +7018,18 @@ function copyParsedPlayerData(target, parsedPlayer){
   if(parsedPlayer.censoredName) target.censoredName = cleanReplayName(parsedPlayer.censoredName);
   if(parsedPlayer.team && (!target.team || target.team === "Spectator")) target.team = parsedPlayer.team;
   if(parsedPlayer.stats) target.stats = {...(target.stats || {}), ...parsedPlayer.stats};
-  ["boostPickups","shotSamples","touchEvents","positionSamples","distanceToBallSamples","ballSamples"].forEach(key=>{
+  ["boostPickups","shotSamples","touchEvents","demoEvents","bumpEvents","positionSamples","distanceToBallSamples","ballSamples"].forEach(key=>{
     if(Array.isArray(parsedPlayer[key])) target[key] = parsedPlayer[key];
   });
   if(Array.isArray(parsedPlayer.touchEvents)) target.stats = {...(target.stats || {}), touches:parsedPlayer.touchEvents.length};
+  if(Array.isArray(parsedPlayer.demoEvents)) target.stats = {...(target.stats || {}), demos:parsedPlayer.demoEvents.length};
+  if(Array.isArray(parsedPlayer.bumpEvents)) target.stats = {...(target.stats || {}), bumps:parsedPlayer.bumpEvents.length};
   if(Number.isFinite(Number(parsedPlayer.supersonicBoostUsed))) target.supersonicBoostUsed = Number(parsedPlayer.supersonicBoostUsed);
   if(Number.isFinite(Number(parsedPlayer.supersonicBoostEvents))) target.supersonicBoostEvents = Number(parsedPlayer.supersonicBoostEvents);
 }
 
 function applyParsedReplayToReplayMeta(replayMeta, parsedReplay){
-  const counts = {boostPickups:0, shotSamples:0, touchEvents:0, positionSamples:0, distanceSamples:0, addedPlayers:0};
+  const counts = {boostPickups:0, shotSamples:0, touchEvents:0, demoEvents:0, bumpEvents:0, positionSamples:0, distanceSamples:0, addedPlayers:0};
   if(!parsedReplay || !Array.isArray(parsedReplay.players) || !replayMeta) return counts;
   if(!Array.isArray(replayMeta.players)) replayMeta.players = [];
 
@@ -7018,6 +7051,8 @@ function applyParsedReplayToReplayMeta(replayMeta, parsedReplay){
     counts.boostPickups += Array.isArray(parsedPlayer.boostPickups) ? parsedPlayer.boostPickups.length : 0;
     counts.shotSamples += Array.isArray(parsedPlayer.shotSamples) ? parsedPlayer.shotSamples.length : 0;
     counts.touchEvents += Array.isArray(parsedPlayer.touchEvents) ? parsedPlayer.touchEvents.length : 0;
+    counts.demoEvents += Array.isArray(parsedPlayer.demoEvents) ? parsedPlayer.demoEvents.length : 0;
+    counts.bumpEvents += Array.isArray(parsedPlayer.bumpEvents) ? parsedPlayer.bumpEvents.length : 0;
     counts.positionSamples += Array.isArray(parsedPlayer.positionSamples) ? parsedPlayer.positionSamples.length : 0;
     counts.distanceSamples += Array.isArray(parsedPlayer.distanceToBallSamples) ? parsedPlayer.distanceToBallSamples.length : 0;
   });
@@ -7041,7 +7076,7 @@ async function loadFile(file){
   let matchDurationSeconds = 300;
   let parsedJson = null;
   let parsedReplay = null;
-  let parsedCounts = {boostPickups:0, shotSamples:0, touchEvents:0, positionSamples:0, distanceSamples:0, addedPlayers:0};
+  let parsedCounts = {boostPickups:0, shotSamples:0, touchEvents:0, demoEvents:0, bumpEvents:0, positionSamples:0, distanceSamples:0, addedPlayers:0};
 
   if(file.name.toLowerCase().endsWith(".json")){
     try{
@@ -7055,6 +7090,8 @@ async function loadFile(file){
         boostPickups: parsedJson.players.reduce((s,p)=>s+(p.boostPickups?.length||0),0),
         shotSamples: parsedJson.players.reduce((s,p)=>s+(p.shotSamples?.length||0),0),
         touchEvents: parsedJson.players.reduce((s,p)=>s+(p.touchEvents?.length||0),0),
+        demoEvents: parsedJson.players.reduce((s,p)=>s+(p.demoEvents?.length||0),0),
+        bumpEvents: parsedJson.players.reduce((s,p)=>s+(p.bumpEvents?.length||0),0),
         positionSamples: parsedJson.players.reduce((s,p)=>s+(p.positionSamples?.length||0),0),
         distanceSamples: parsedJson.players.reduce((s,p)=>s+(p.distanceToBallSamples?.length||0),0),
         addedPlayers:0

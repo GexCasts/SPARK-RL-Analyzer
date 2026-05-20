@@ -287,7 +287,7 @@ function getObject(obj, key){
 }
 
 function decodeActorLocation(value){
-  const rigidBody = getObject(value, "RigidBody");
+  const rigidBody = getObject(value, "RigidBody") || getObject(value, "rigid_body") || getObject(value, "rigidBody");
   const loc = getObject(value, "location") || getObject(value, "Location") || getObject(rigidBody, "location") || getObject(rigidBody, "Location");
   if(!loc || typeof loc !== "object") return null;
   const x = Number(getObject(loc, "x") ?? getObject(loc, "X"));
@@ -477,8 +477,18 @@ function distanceBetweenLocations(a, b){
 }
 
 function decodedVelocity(value){
-  const rigidBody = getObject(value, "RigidBody");
-  const velocity = getObject(value, "velocity") || getObject(value, "Velocity") || getObject(rigidBody, "velocity") || getObject(rigidBody, "Velocity");
+  const rigidBody = getObject(value, "RigidBody") || getObject(value, "rigid_body") || getObject(value, "rigidBody");
+  const velocity =
+    getObject(value, "velocity") ||
+    getObject(value, "Velocity") ||
+    getObject(value, "linearVelocity") ||
+    getObject(value, "linear_velocity") ||
+    getObject(value, "LinearVelocity") ||
+    getObject(rigidBody, "velocity") ||
+    getObject(rigidBody, "Velocity") ||
+    getObject(rigidBody, "linearVelocity") ||
+    getObject(rigidBody, "linear_velocity") ||
+    getObject(rigidBody, "LinearVelocity");
   if(!velocity || typeof velocity !== "object") return null;
   const x = Number(getObject(velocity, "x") ?? getObject(velocity, "X"));
   const y = Number(getObject(velocity, "y") ?? getObject(velocity, "Y"));
@@ -922,6 +932,7 @@ function summarizeShotSamples(parsedReplay){
   const teamActorNumber = new Map();
   const carPri = new Map();
   const carLoc = new Map();
+  const carVel = new Map();
   const ballLoc = new Map();
   const actorObject = new Map();
   const carActors = new Set();
@@ -932,10 +943,16 @@ function summarizeShotSamples(parsedReplay){
   const saveEvents = [];
   const touchEvents = [];
   const goalStateEvents = [];
+  const demoEvents = [];
+  const bumpEvents = [];
   const touchEventKeys = new Set();
+  const lastDemoByCollision = new Map();
+  const lastBumpByCollision = new Map();
   const distanceSamplesByPri = new Map();
   const positionSamplesByPri = new Map();
   const touchEventsByPri = new Map();
+  const demoEventsByPri = new Map();
+  const bumpEventsByPri = new Map();
   const lastPhysicsSampleTimeByPri = new Map();
   const recentTouchCandidatesByPri = new Map();
   let ballSampleCount = 0;
@@ -987,10 +1004,26 @@ function summarizeShotSamples(parsedReplay){
         playerName,
         teamNumber: teamForPri(pri, playerName),
         carActor,
-        location
+        location,
+        velocity: carVel.get(carActor) || null
       });
     }
     return players;
+  }
+
+  function dot2(a, b){
+    return (a?.x || 0) * (b?.x || 0) + (a?.y || 0) * (b?.y || 0);
+  }
+
+  function magnitude2(vector){
+    if(!vector) return 0;
+    return Math.hypot(vector.x || 0, vector.y || 0);
+  }
+
+  function addPerPriEvent(map, pri, event){
+    if(!Number.isInteger(pri)) return;
+    if(!map.has(pri)) map.set(pri, []);
+    map.get(pri).push(event);
   }
 
   function nearestOpponent(referenceLocation, teamNumber, shooterPri){
@@ -1142,8 +1175,115 @@ function summarizeShotSamples(parsedReplay){
       source: "ball-hit-team"
     };
     touchEvents.push(event);
-    if(!touchEventsByPri.has(touchedBy.pri)) touchEventsByPri.set(touchedBy.pri, []);
-    touchEventsByPri.get(touchedBy.pri).push(event);
+    addPerPriEvent(touchEventsByPri, touchedBy.pri, event);
+  }
+
+  function addDemoEvent(time, payload){
+    const demolish = payload?.DemolishExtended || payload;
+    if(!demolish || demolish.self_demolish === true) return;
+    const attackerPri = extractActorReference(demolish.attacker_pri);
+    const attackerCar = extractActorReference(demolish.attacker);
+    const victimCar = extractActorReference(demolish.victim);
+    if(!Number.isInteger(attackerPri) || attackerPri < 0 || !Number.isInteger(victimCar) || victimCar < 0) return;
+    const attackerName = cleanName(priName.get(attackerPri));
+    if(!attackerName) return;
+    const victimPri = carPri.get(victimCar);
+    const victimName = cleanName(priName.get(victimPri));
+    const pairKey = `${attackerPri}:${victimCar}`;
+    const lastTime = lastDemoByCollision.get(pairKey);
+    if(Number.isFinite(lastTime) && time - lastTime < 3.5) return;
+    lastDemoByCollision.set(pairKey, time);
+
+    const elapsedSeconds = currentGameElapsedSeconds(time);
+    noteObservedElapsed(elapsedSeconds);
+    const event = {
+      time: Number.isFinite(time) ? time : 0,
+      elapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+      scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+      attackerPri,
+      attackerName,
+      attackerCar,
+      victimPri,
+      victimName,
+      victimCar,
+      attackerLocation: carLoc.get(attackerCar) || null,
+      victimLocation: carLoc.get(victimCar) || null,
+      source: "demolish-extended"
+    };
+    demoEvents.push(event);
+    addPerPriEvent(demoEventsByPri, attackerPri, event);
+  }
+
+  function recentDemoBetween(attackerCar, victimCar, time){
+    return demoEvents.some(event=>{
+      if(time - event.time < -0.25 || time - event.time > 1.25) return false;
+      return (event.attackerCar === attackerCar && event.victimCar === victimCar) ||
+        (event.attackerCar === victimCar && event.victimCar === attackerCar);
+    });
+  }
+
+  function detectBumps(time){
+    if(!isGameplaySampleTime()) return;
+    const players = activePlayerSnapshots()
+      .filter(player=>Number.isInteger(player.pri) && player.playerName && player.location && player.velocity);
+    for(let i = 0; i < players.length; i++){
+      for(let j = i + 1; j < players.length; j++){
+        const a = players[i];
+        const b = players[j];
+        if(normalizeTeamNumber(a.teamNumber) === null || normalizeTeamNumber(b.teamNumber) === null) continue;
+        if(normalizeTeamNumber(a.teamNumber) === normalizeTeamNumber(b.teamNumber)) continue;
+        const dx = (b.location.x || 0) - (a.location.x || 0);
+        const dy = (b.location.y || 0) - (a.location.y || 0);
+        const dz = Math.abs((b.location.z || 0) - (a.location.z || 0));
+        const planarDistance = Math.hypot(dx, dy);
+        if(planarDistance < 1 || planarDistance > 250 || dz > 180) continue;
+        if(recentDemoBetween(a.carActor, b.carActor, time)) continue;
+
+        const dirAB = {x: dx / planarDistance, y: dy / planarDistance};
+        const aClosing = dot2(a.velocity, dirAB);
+        const bClosing = dot2(b.velocity, {x:-dirAB.x, y:-dirAB.y});
+        const aSpeed = magnitude2(a.velocity);
+        const bSpeed = magnitude2(b.velocity);
+        const aClear = aSpeed >= 1200 && aClosing >= 850 && aClosing - Math.max(0, bClosing) >= 450;
+        const bClear = bSpeed >= 1200 && bClosing >= 850 && bClosing - Math.max(0, aClosing) >= 450;
+        if(aClear === bClear) continue;
+
+        const attacker = aClear ? a : b;
+        const victim = aClear ? b : a;
+        const closing = aClear ? aClosing : bClosing;
+        const victimClosing = aClear ? bClosing : aClosing;
+        const pairKey = `${attacker.pri}:${victim.carActor}`;
+        const lastTime = lastBumpByCollision.get(pairKey);
+        if(Number.isFinite(lastTime) && time - lastTime < 1.1) continue;
+        lastBumpByCollision.set(pairKey, time);
+
+        const elapsedSeconds = currentGameElapsedSeconds(time);
+        noteObservedElapsed(elapsedSeconds);
+        const event = {
+          time: Number.isFinite(time) ? time : 0,
+          elapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+          scoreboardSecondsRemaining,
+          scoreboardElapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+          attackerPri: attacker.pri,
+          attackerName: attacker.playerName,
+          attackerCar: attacker.carActor,
+          victimPri: victim.pri,
+          victimName: victim.playerName,
+          victimCar: victim.carActor,
+          distanceUU: Math.round(planarDistance),
+          attackerSpeedUU: Math.round(magnitude2(attacker.velocity)),
+          victimSpeedUU: Math.round(magnitude2(victim.velocity)),
+          closingSpeedUU: Math.round(closing),
+          directionAdvantageUU: Math.round(closing - Math.max(0, victimClosing)),
+          attackerLocation: attacker.location,
+          victimLocation: victim.location,
+          source: "conservative-car-contact"
+        };
+        bumpEvents.push(event);
+        addPerPriEvent(bumpEventsByPri, attacker.pri, event);
+      }
+    }
   }
 
   function pushPhysicsSamples(time){
@@ -1249,6 +1389,7 @@ function summarizeShotSamples(parsedReplay){
       ballActors.delete(actorId);
       carPri.delete(actorId);
       carLoc.delete(actorId);
+      carVel.delete(actorId);
       ballLoc.delete(actorId);
       teamActorNumber.delete(actorId);
     }
@@ -1326,6 +1467,13 @@ function summarizeShotSamples(parsedReplay){
         }
       }
 
+      const velocity = decodedVelocity(value);
+      if(velocity && carActors.has(actorId)) carVel.set(actorId, velocity);
+
+      if(objectNameMatches(objectName, "TAGame.Car_TA:ReplicatedDemolishExtended")){
+        addDemoEvent(time, attribute);
+      }
+
       if(objectNameMatches(objectName, "TAGame.Ball_TA:HitTeamNum")){
         const hitTeamNumber = replayIntValue(attribute, value);
         if(normalizeTeamNumber(hitTeamNumber) !== null) frameTouchHits.push(hitTeamNumber);
@@ -1351,6 +1499,7 @@ function summarizeShotSamples(parsedReplay){
 
     frameTouchHits.forEach(hitTeamNumber=>addTouchEvent(time, hitTeamNumber));
     if(scoredOnTeamChange !== undefined) activeScoredOnTeam = scoredOnTeamChange;
+    detectBumps(time);
     pushPhysicsSamples(time);
   }
 
@@ -1412,6 +1561,8 @@ function summarizeShotSamples(parsedReplay){
         censoredName: censoredName || censoredAliases.get(cleanPlayerName) || null,
         shotSamples: [],
         touchEvents: [],
+        demoEvents: [],
+        bumpEvents: [],
         distanceToBallSamples: [],
         positionSamples: []
       });
@@ -1615,8 +1766,35 @@ function summarizeShotSamples(parsedReplay){
     }));
     player.stats = {
       ...(player.stats || {}),
-      touches: player.touchEvents.length
+      touches: player.touchEvents.length,
+      demos: (demoEventsByPri.get(pri) || []).length,
+      bumps: (bumpEventsByPri.get(pri) || []).length
     };
+    player.demoEvents = (demoEventsByPri.get(pri) || []).map(event=>({
+      time: event.time,
+      elapsedSeconds: event.elapsedSeconds,
+      scoreboardSecondsRemaining: event.scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: event.scoreboardElapsedSeconds,
+      victimName: event.victimName,
+      attackerLocation: event.attackerLocation,
+      victimLocation: event.victimLocation,
+      source: event.source
+    }));
+    player.bumpEvents = (bumpEventsByPri.get(pri) || []).map(event=>({
+      time: event.time,
+      elapsedSeconds: event.elapsedSeconds,
+      scoreboardSecondsRemaining: event.scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: event.scoreboardElapsedSeconds,
+      victimName: event.victimName,
+      distanceUU: event.distanceUU,
+      attackerSpeedUU: event.attackerSpeedUU,
+      victimSpeedUU: event.victimSpeedUU,
+      closingSpeedUU: event.closingSpeedUU,
+      directionAdvantageUU: event.directionAdvantageUU,
+      attackerLocation: event.attackerLocation,
+      victimLocation: event.victimLocation,
+      source: event.source
+    }));
   }
 
   for(const [pri, events] of touchEventsByPri){
@@ -1643,11 +1821,62 @@ function summarizeShotSamples(parsedReplay){
     };
   }
 
+  for(const [pri, events] of demoEventsByPri){
+    const rawName = cleanName(events[0]?.attackerName || priName.get(pri));
+    const playerName = resolveName(rawName);
+    const censoredName = censoredAliases.get(playerName) || (isMaskedReplayName(rawName) ? rawName : null);
+    const player = ensurePlayer(playerName, censoredName);
+    if(!player || player.demoEvents.length) continue;
+    player.demoEvents = events.map(event=>({
+      time: event.time,
+      elapsedSeconds: event.elapsedSeconds,
+      scoreboardSecondsRemaining: event.scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: event.scoreboardElapsedSeconds,
+      victimName: event.victimName,
+      attackerLocation: event.attackerLocation,
+      victimLocation: event.victimLocation,
+      source: event.source
+    }));
+    player.stats = {
+      ...(player.stats || {}),
+      demos: player.demoEvents.length
+    };
+  }
+
+  for(const [pri, events] of bumpEventsByPri){
+    const rawName = cleanName(events[0]?.attackerName || priName.get(pri));
+    const playerName = resolveName(rawName);
+    const censoredName = censoredAliases.get(playerName) || (isMaskedReplayName(rawName) ? rawName : null);
+    const player = ensurePlayer(playerName, censoredName);
+    if(!player || player.bumpEvents.length) continue;
+    player.bumpEvents = events.map(event=>({
+      time: event.time,
+      elapsedSeconds: event.elapsedSeconds,
+      scoreboardSecondsRemaining: event.scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: event.scoreboardElapsedSeconds,
+      victimName: event.victimName,
+      distanceUU: event.distanceUU,
+      attackerSpeedUU: event.attackerSpeedUU,
+      victimSpeedUU: event.victimSpeedUU,
+      closingSpeedUU: event.closingSpeedUU,
+      directionAdvantageUU: event.directionAdvantageUU,
+      attackerLocation: event.attackerLocation,
+      victimLocation: event.victimLocation,
+      source: event.source
+    }));
+    player.stats = {
+      ...(player.stats || {}),
+      bumps: player.bumpEvents.length
+    };
+  }
+
   const sortedPlayers = [...players.values()]
     .map(player=>({
       ...player,
       shotSamples: player.shotSamples.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0)),
       touchEvents: player.touchEvents.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0)),
+      demoEvents: player.demoEvents.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0)),
+      bumpEvents: player.bumpEvents.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0)),
       distanceToBallSamples: player.distanceToBallSamples.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0)),
       positionSamples: player.positionSamples.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0))
     }))
@@ -1661,6 +1890,8 @@ function summarizeShotSamples(parsedReplay){
     nameAliases: [...nameAliases].map(([censoredName, realName])=>({name:realName, censoredName})),
     totalShotSamples: sortedPlayers.reduce((sum, player)=>sum + player.shotSamples.length, 0),
     totalTouchEvents: sortedPlayers.reduce((sum, player)=>sum + player.touchEvents.length, 0),
+    totalDemoEvents: sortedPlayers.reduce((sum, player)=>sum + player.demoEvents.length, 0),
+    totalBumpEvents: sortedPlayers.reduce((sum, player)=>sum + player.bumpEvents.length, 0),
     totalDistanceSamples: sortedPlayers.reduce((sum, player)=>sum + player.distanceToBallSamples.length, 0),
     totalPositionSamples: sortedPlayers.reduce((sum, player)=>sum + player.positionSamples.length, 0),
     totalBallSamples: ballSampleCount,
