@@ -468,9 +468,30 @@ function projectedGoalEntryLocation(location, vector, teamNumber){
   if(!Number.isFinite(x) || !Number.isFinite(z)) return null;
 
   // Allow a small near-post/crossbar margin so saves that were barely wide/high
-  // can still be classified as projected target data, but reject obviously invalid paths.
+  // can still be projected, then clamp to the actual goal mouth. A save stat
+  // should represent a shot that was going into the net, not the ball's save
+  // contact point out in front of the goal.
   if(x < -1250 || x > 1250 || z < -120 || z > 950) return null;
-  return {x, y: targetY, z};
+  return {
+    x: clampNumber(x, -900, 900),
+    y: targetY,
+    z: clampNumber(z, 0, 650)
+  };
+}
+
+function clampedGoalFaceLocation(location, teamNumber){
+  if(!location) return null;
+  const normalizedTeam = normalizeTeamNumber(teamNumber);
+  if(normalizedTeam === null) return null;
+  const targetY = normalizedTeam === 0 ? 5120 : -5120;
+  const x = Number(location.x);
+  const z = Number(location.z || 0);
+  if(!Number.isFinite(x) || !Number.isFinite(z)) return null;
+  return {
+    x: clampNumber(x, -900, 900),
+    y: targetY,
+    z: clampNumber(z, 0, 650)
+  };
 }
 
 function scoreboardClockLabel(secondsRemaining, isOvertime=false, overtimeSeconds=null){
@@ -1711,7 +1732,7 @@ function summarizeShotSamples(parsedReplay){
         result = "save";
         const projectedSave = projectedSavedShotPlacement(shot, save, teamNumber);
         saveLocation = save.ballLocation || null;
-        placementLocation = projectedSave?.location || save.ballLocation || placementLocation;
+        placementLocation = projectedSave?.location || clampedGoalFaceLocation(save.ballLocation || placementLocation, teamNumber) || placementLocation;
         placementSource = projectedSave?.source || "save";
         shot.nearestOpponentDistanceUU = save.nearestOpponentDistanceUU;
         shot.nearestOpponent = save.nearestOpponent;

@@ -616,6 +616,18 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
   border-radius:50%;
   border:1px solid rgba(255,255,255,.78);
   z-index:7;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:visible;
+  transition:
+    width .18s ease,
+    min-height .18s ease,
+    border-radius .18s ease,
+    padding .18s ease,
+    background-color .18s ease,
+    box-shadow .18s ease;
 }
 .shotPoint.goal{background:#22c55e}
 
@@ -633,36 +645,65 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
   color:#061018;
   font-size:9px;
   font-weight:900;
+  transition:opacity .1s ease;
 }
 
 .shotPoint.save{background:#38bdf8}
 .shotPoint.miss{background:#ef4444}
-
-.shotHoverBox{
-  position:absolute;
-  z-index:30;
-  min-width:190px;
-  max-width:260px;
+.shotPoint.outside{
+  width:0;
+  height:0;
+  border-radius:0;
+  border-left:10px solid transparent;
+  border-right:10px solid transparent;
+  border-bottom:18px solid currentColor;
+  border-top:0;
+  background:transparent;
+  color:#ef4444;
+  transform:translate(-50%,-50%) rotate(var(--arrowAngle, 0deg));
+  filter:drop-shadow(0 0 10px currentColor);
+}
+.shotPoint.outside.goal{color:#22c55e;background:transparent}
+.shotPoint.outside.save{color:#38bdf8;background:transparent}
+.shotPoint.outside.post{color:var(--spark-yellow);background:transparent}
+.shotPoint.outside::after{content:""}
+.shotPoint.expanded{
+  width:250px;
+  min-height:116px;
+  height:auto;
   padding:10px 12px;
-  border:1px solid rgba(255,204,0,.85);
   border-radius:10px;
-  background:rgba(10,10,10,.92);
+  background:rgba(10,10,10,.94);
+  border:1px solid rgba(255,204,0,.85);
+  color:#f3f4f6;
+  box-shadow:0 10px 30px rgba(0,0,0,.48), 0 0 18px rgba(255,204,0,.22);
+  align-items:flex-start;
+  justify-content:flex-start;
+  transform:translate(var(--expandX,-50%), var(--expandY,-50%)) rotate(0deg);
+  z-index:35;
+}
+.shotPoint.expanded::after{opacity:0}
+.shotPoint.expanded .shotInfo{
+  opacity:1;
+  pointer-events:auto;
+  max-height:220px;
+}
+.shotInfo{
+  opacity:0;
+  pointer-events:none;
+  max-height:0;
+  overflow:hidden;
   color:#f3f4f6;
   font-size:12px;
   line-height:1.45;
-  box-shadow:0 10px 30px rgba(0,0,0,.45), 0 0 18px rgba(255,204,0,.18);
-  pointer-events:none;
-  opacity:0;
-  transform:none;
-  transition:opacity .08s ease;
+  text-align:left;
+  white-space:normal;
+  transition:opacity .12s ease .06s;
 }
-.shotHoverBox.visible{
-  opacity:1;
-}
-.shotHoverBox b{
+.shotInfo b{
   color:var(--spark-yellow);
 }
-.shotHoverBox .muted{
+.shotInfo .muted{
   color:#b8bcc4;
 }
 
@@ -671,6 +712,12 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
   width:20px;
   height:20px;
   box-shadow:0 0 18px rgba(255,208,0,.9);
+}
+.shotPoint.post.expanded,
+.shotPoint.outside.expanded{
+  width:250px;
+  min-height:116px;
+  height:auto;
 }
 .heatmapUnavailable{
   position:absolute;
@@ -4378,9 +4425,14 @@ const goalFaceViewport = {xMin:-10, xMax:110, yMin:-8, yMax:112};
 function goalFaceToViewportPercent(x, y){
   const rangeX = goalFaceViewport.xMax - goalFaceViewport.xMin;
   const rangeY = goalFaceViewport.yMax - goalFaceViewport.yMin;
+  const rawX = ((Number(x) - goalFaceViewport.xMin) / rangeX) * 100;
+  const rawY = ((Number(y) - goalFaceViewport.yMin) / rangeY) * 100;
   return {
-    x: Math.max(0, Math.min(100, ((Number(x) - goalFaceViewport.xMin) / rangeX) * 100)),
-    y: Math.max(0, Math.min(100, ((Number(y) - goalFaceViewport.yMin) / rangeY) * 100))
+    x: Math.max(0, Math.min(100, rawX)),
+    y: Math.max(0, Math.min(100, rawY)),
+    rawX,
+    rawY,
+    outside: rawX < 0 || rawX > 100 || rawY < 0 || rawY > 100
   };
 }
 
@@ -4534,7 +4586,6 @@ function renderShootingHeatmap(a){
     <div class="goalZoneLabel" style="left:11%;top:10%">LEFT POST</div>
     <div class="goalZoneLabel" style="right:11%;top:10%">RIGHT POST</div>
     <div class="goalZoneLabel" style="left:46%;top:10%">CROSSBAR</div>
-    <div class="shotHoverBox" id="shotHoverBox"></div>
   `;
 
   const samples = makeShootingSamples(a);
@@ -4606,6 +4657,7 @@ function renderShootingHeatmap(a){
 
   samples.forEach(s=>{
     const pos = goalFaceToViewportPercent(s.x, s.y);
+    if(pos.outside) return;
     addDensity(pos.x, pos.y, s.result === "post" ? 1.55 : s.result === "goal" ? 1.45 : s.result === "save" ? 1.15 : .9);
   });
 
@@ -4640,9 +4692,18 @@ function renderShootingHeatmap(a){
   samples.forEach(s=>{
     const pos = goalFaceToViewportPercent(s.x, s.y);
     const dot = document.createElement("div");
-    dot.className = `shotPoint ${s.result}`;
-    dot.style.left = pos.x + "%";
-    dot.style.top = pos.y + "%";
+    const markerX = Math.max(2.5, Math.min(97.5, pos.x));
+    const markerY = Math.max(3.5, Math.min(96.5, pos.y));
+    const outside = pos.outside;
+    dot.className = `shotPoint ${s.result}${outside ? " outside" : ""}`;
+    dot.style.left = markerX + "%";
+    dot.style.top = markerY + "%";
+    dot.style.setProperty("--expandX", markerX > 72 ? "-92%" : markerX < 28 ? "-8%" : "-50%");
+    dot.style.setProperty("--expandY", markerY > 72 ? "-92%" : markerY < 28 ? "-8%" : "-50%");
+    if(outside){
+      const angle = Math.atan2(pos.rawY - 50, pos.rawX - 50) * 180 / Math.PI + 90;
+      dot.style.setProperty("--arrowAngle", `${angle.toFixed(1)}deg`);
+    }
     dot.dataset.result = s.result;
     dot.dataset.player = s.player;
     dot.dataset.time = s.goalTime;
@@ -4650,20 +4711,18 @@ function renderShootingHeatmap(a){
     dot.dataset.lastTouchDistanceToNet = s.lastTouchDistanceToNet ?? "";
     dot.dataset.target = s.target;
 
-    dot.addEventListener("mouseenter", ()=>{
-      const hover = $("shotHoverBox");
-      if(!hover) return;
-
-      if(s.result === "goal"){
-        hover.innerHTML = `
+    const info = document.createElement("div");
+    info.className = "shotInfo";
+    if(s.result === "goal"){
+      info.innerHTML = `
           <b>Goal scorer:</b> ${s.player}<br>
           <b>Game time:</b> ${s.goalTime}<br>
           <b>Nearest defender:</b> ${optionalDistanceText(s.nearestOpponentDistance)}${s.defender ? ` (${escapeHtml(s.defender)})` : ""}<br>
           <b>Last touch distance from net:</b> ${optionalDistanceText(s.lastTouchDistanceToNet)}<br>
           <span class="muted">Target: ${s.target}</span>
         `;
-      }else{
-        hover.innerHTML = `
+    }else{
+      info.innerHTML = `
           <b>${s.result === "save" ? "Saved shot" : s.result === "post" ? "Post/crossbar hit" : "Missed shot"}</b><br>
           <span class="muted">Shooter: ${s.player}</span><br>
           <span class="muted">Game time: ${s.goalTime}</span><br>
@@ -4674,14 +4733,15 @@ function renderShootingHeatmap(a){
           <span class="muted">Last touch distance from net: ${optionalDistanceText(s.lastTouchDistanceToNet)}</span><br>
           <span class="muted">Target: ${s.target}</span>
         `;
-      }
+    }
+    dot.appendChild(info);
 
-      positionShotHoverBox(hover, el, pos.x, pos.y);
+    dot.addEventListener("mouseenter", ()=>{
+      dot.classList.add("expanded");
     });
 
     dot.addEventListener("mouseleave", ()=>{
-      const hover = $("shotHoverBox");
-      if(hover) hover.classList.remove("visible");
+      dot.classList.remove("expanded");
     });
 
     el.appendChild(dot);
