@@ -30,7 +30,7 @@ const types = new Map([
 ]);
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type"
 };
 const activeClients = new Map();
@@ -41,6 +41,8 @@ let shutdownTimer = null;
 let server = null;
 const liveApiFeedHost = "127.0.0.1";
 const liveApiFeedPort = 49123;
+const liveApiStatsConfigPath = process.env.SPARK_RL_STATS_API_CONFIG_PATH ||
+  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\rocketleague\\TAGame\\Config\\defaultstatsapi.ini";
 const liveApiClients = new Set();
 let liveApiFeedSocket = null;
 let liveApiReconnectTimer = null;
@@ -2175,11 +2177,87 @@ async function handleClientHeartbeat(req, res){
   res.end(JSON.stringify({ok:true, activeClients:activeClients.size}));
 }
 
+function parseLivePacketRate(text){
+  const match = String(text || "").match(/^\s*PacketSendRate\s*=\s*(-?\d+(?:\.\d+)?)\s*$/mi);
+  if(!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function normalizeLivePacketRate(value){
+  const rate = Math.round(Number(value));
+  if(!Number.isFinite(rate) || rate < 0 || rate > 120){
+    throw new Error("PacketSendRate must be a number from 0 to 120.");
+  }
+  return rate;
+}
+
+function updateLivePacketRateText(text, rate){
+  const normalizedRate = normalizeLivePacketRate(rate);
+  const original = String(text || "");
+  if(/^\s*PacketSendRate\s*=/mi.test(original)){
+    return original.replace(/^(\s*PacketSendRate\s*=\s*)-?\d+(?:\.\d+)?(\s*)$/mi, `$1${normalizedRate}$2`);
+  }
+
+  if(/^\s*\[TAGame\.MatchStatsExporter_TA\]\s*$/mi.test(original)){
+    return original.replace(
+      /^(\s*\[TAGame\.MatchStatsExporter_TA\]\s*(?:\r?\n)?)/mi,
+      `$1PacketSendRate=${normalizedRate}\n`
+    );
+  }
+
+  const ending = original.endsWith("\n") || !original.length ? "" : "\n";
+  return `${original}${ending}[TAGame.MatchStatsExporter_TA]\nPacketSendRate=${normalizedRate}\n`;
+}
+
+async function handleLivePacketRate(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+
+  if(req.method === "GET"){
+    const text = await fs.readFile(liveApiStatsConfigPath, "utf8");
+    const rate = parseLivePacketRate(text);
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify({ok:true, path:liveApiStatsConfigPath, packetSendRate:rate}));
+    return;
+  }
+
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use GET or POST.");
+    return;
+  }
+
+  const body = await readRequestBody(req, 16 * 1024);
+  let message = {};
+  try{
+    message = JSON.parse(body.toString("utf8") || "{}");
+  }catch{
+    message = {};
+  }
+  const rate = normalizeLivePacketRate(message.packetSendRate ?? message.rate);
+  const current = await fs.readFile(liveApiStatsConfigPath, "utf8");
+  const next = updateLivePacketRateText(current, rate);
+  if(next !== current){
+    await fs.writeFile(liveApiStatsConfigPath, next, "utf8");
+  }
+
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify({ok:true, path:liveApiStatsConfigPath, packetSendRate:rate, changed:next !== current}));
+}
+
 server = http.createServer(async (req,res)=>{
   try{
     const url = new URL(req.url, "http://127.0.0.1");
     if(url.pathname === "/api/spark-heartbeat"){
       await handleClientHeartbeat(req, res);
+      return;
+    }
+    if(url.pathname === "/api/live-packet-rate"){
+      await handleLivePacketRate(req, res);
       return;
     }
     if(url.pathname === "/api/parse-replay-boosts"){

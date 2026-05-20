@@ -191,6 +191,31 @@ button.unitSwitch{
 .liveApiControls button{border-radius:8px}
 .liveApiControls .danger{border-color:#ef4444;color:#fecaca}
 .liveApiControls .obs{border-color:var(--spark-yellow);color:var(--spark-yellow)}
+.liveRateControl{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  min-height:32px;
+  padding:4px 6px;
+  border:1px solid rgba(255,208,0,.35);
+  border-radius:8px;
+  background:rgba(7,9,12,.72);
+}
+.liveRateControl label{font-size:11px;color:var(--muted);font-weight:800}
+.liveRateControl input{
+  width:58px;
+  padding:4px 6px;
+  border:1px solid rgba(255,255,255,.20);
+  border-radius:6px;
+  background:#090d12;
+  color:#f4f6fb;
+  font-weight:850;
+  font-size:12px;
+}
+.liveRateControl input:focus{outline:1px solid var(--spark-yellow);border-color:var(--spark-yellow)}
+.liveRateStatus{min-width:34px;font-size:10px;color:var(--muted);text-align:left}
+.liveRateStatus.saved{color:#26e68a}
+.liveRateStatus.error{color:#ef4444}
 .liveApiBadge{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
 .liveApiDot{width:8px;height:8px;border-radius:50%;background:#6b7280;box-shadow:0 0 10px rgba(107,114,128,.45)}
 .liveApiBadge.connected .liveApiDot{background:#26e68a;box-shadow:0 0 10px rgba(38,230,138,.9)}
@@ -1984,6 +2009,17 @@ body.obsOverlayMode #obsOverlayRoot{
         <input id="file" type="file" accept=".replay,.json"/>
         <div class="liveApiControls">
           <button id="liveApiBtn" type="button">Start Live API Feed</button>
+          <span class="liveRateControl" title="Rocket League Stats API PacketSendRate. 0 disables UpdateState; Rocket League caps this at 120.">
+            <label for="livePacketRate">Rate</label>
+            <input id="livePacketRate" list="livePacketRateOptions" inputmode="numeric" pattern="[0-9]*" placeholder="100" aria-label="Live API packet rate">
+            <datalist id="livePacketRateOptions">
+              <option value="30"></option>
+              <option value="60"></option>
+              <option value="100"></option>
+              <option value="120"></option>
+            </datalist>
+            <span class="liveRateStatus" id="livePacketRateStatus"></span>
+          </span>
           <button id="obsOverlayBtn" class="obs" type="button">Open OBS Overlay</button>
           <span class="liveApiBadge" id="liveApiBadge"><span class="liveApiDot"></span><span id="liveApiStatus">Disconnected</span></span>
         </div>
@@ -6155,6 +6191,75 @@ function liveApiSetStatus(status, message){
   }
 }
 
+function livePacketRateEndpoint(){
+  return location.protocol === "file:"
+    ? "http://127.0.0.1:8765/api/live-packet-rate"
+    : "/api/live-packet-rate";
+}
+
+function setLivePacketRateStatus(message, kind=""){
+  const el = $("livePacketRateStatus");
+  if(!el) return;
+  el.classList.remove("saved","error");
+  if(kind) el.classList.add(kind);
+  el.textContent = message || "";
+}
+
+function normalizePacketRateInput(value){
+  const rate = Math.round(Number(String(value ?? "").trim()));
+  if(!Number.isFinite(rate) || rate < 0 || rate > 120){
+    throw new Error("Use 0-120");
+  }
+  return rate;
+}
+
+async function loadLivePacketRate(){
+  const input = $("livePacketRate");
+  if(!input) return;
+  try{
+    const response = await fetch(livePacketRateEndpoint(), {cache:"no-store"});
+    if(!response.ok) throw new Error((await response.text()) || response.statusText);
+    const json = await response.json();
+    if(Number.isFinite(Number(json.packetSendRate))){
+      input.value = String(Math.round(Number(json.packetSendRate)));
+      setLivePacketRateStatus("Loaded", "saved");
+      setTimeout(()=>setLivePacketRateStatus(""), 1600);
+    }
+  }catch(err){
+    console.warn("Could not read Rocket League Stats API packet rate:", err);
+    setLivePacketRateStatus("Unavailable", "error");
+  }
+}
+
+async function applyLivePacketRate(){
+  const input = $("livePacketRate");
+  if(!input) return;
+  let rate;
+  try{
+    rate = normalizePacketRateInput(input.value);
+  }catch(err){
+    setLivePacketRateStatus(err.message || "Invalid", "error");
+    return;
+  }
+
+  input.value = String(rate);
+  setLivePacketRateStatus("Saving...");
+  try{
+    const response = await fetch(livePacketRateEndpoint(), {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({packetSendRate:rate}),
+      cache:"no-store"
+    });
+    if(!response.ok) throw new Error((await response.text()) || response.statusText);
+    setLivePacketRateStatus("Saved", "saved");
+    setTimeout(()=>setLivePacketRateStatus(""), 1800);
+  }catch(err){
+    console.warn("Could not save Rocket League Stats API packet rate:", err);
+    setLivePacketRateStatus("Save failed", "error");
+  }
+}
+
 function makeEmptyLiveApiState(){
   return {
     startedAt: Date.now(),
@@ -7557,6 +7662,21 @@ if($("liveApiBtn")){
     e.stopPropagation();
     toggleLiveApiFeed();
   };
+}
+if($("livePacketRate")){
+  const input = $("livePacketRate");
+  input.addEventListener("click", e=>e.stopPropagation());
+  input.addEventListener("change", applyLivePacketRate);
+  input.addEventListener("blur", applyLivePacketRate);
+  input.addEventListener("keydown", e=>{
+    e.stopPropagation();
+    if(e.key === "Enter"){
+      e.preventDefault();
+      applyLivePacketRate();
+      input.blur();
+    }
+  });
+  loadLivePacketRate();
 }
 if($("obsOverlayBtn")){
   $("obsOverlayBtn").onclick=e=>{
