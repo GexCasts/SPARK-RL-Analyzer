@@ -2327,7 +2327,6 @@ const liveApiBridgeEndpoint = location.protocol.startsWith("http")
   ? `${location.origin.replace(/^http/, "ws")}/api/live-api`
   : "ws://127.0.0.1:8765/api/live-api";
 const liveApiEndpoints=[
-  {url:"ws://127.0.0.1:49123",label:"direct Rocket League feed on 49123"},
   {url:liveApiBridgeEndpoint,label:"SPARK local Live API bridge"},
   {url:"ws://127.0.0.1:49124",label:"legacy local Live API bridge"}
 ];
@@ -6287,7 +6286,8 @@ async function loadLivePacketRate(){
     }
   }catch(err){
     console.warn("Could not read Rocket League Stats API packet rate:", err);
-    setLivePacketRateStatus("Unavailable", "error");
+    const message = String(err?.message || err || "");
+    setLivePacketRateStatus(message.includes("500") || message.includes("404") ? "Restart SPARK" : "Unavailable", "error");
   }
 }
 
@@ -7342,17 +7342,15 @@ function connectLiveApiEndpoint(endpointIndex){
   }
   liveApiSocket.onopen = ()=>{
     opened = true;
-    const statusLabel = endpointIndex === 0 ? "Connected to 49123" : "Connected through SPARK bridge";
-    liveApiSetStatus("connected", statusLabel);
+    liveApiSetStatus("connected", "Connected through SPARK bridge");
     if(isObsOverlayMode){
       renderObsOverlay();
       return;
     }
     data = buildData(9001, null, liveApiState.title, 300);
     selected = "overview";
-    $("fileStatus").innerHTML = endpointIndex === 0
-      ? `Connected to Rocket League Stats API on <b>127.0.0.1:49123</b>. Waiting for UpdateState messages from a live match or replay playback.`
-      : `Connected to Rocket League Stats API through the SPARK local bridge.<br>Bridge WebSocket: <b>${escapeHtml(endpoint.url.replace(/^ws:\/\//,""))}</b><br>Rocket League feed: <b>127.0.0.1:49123</b>`;
+    $("fileStatus").innerHTML =
+      `Connected to Rocket League Stats API through the SPARK local bridge.<br>Bridge WebSocket: <b>${escapeHtml(endpoint.url.replace(/^ws:\/\//,""))}</b><br>Rocket League feed: <b>127.0.0.1:49123</b>`;
     render();
   };
   liveApiSocket.onmessage = event=>handleLiveApiMessage(event.data);
@@ -7362,7 +7360,8 @@ function connectLiveApiEndpoint(endpointIndex){
       tryNextLiveEndpoint(endpointIndex, "WebSocket handshake failed");
       return;
     }
-    liveApiSetStatus("error", "Live API error");
+    console.warn("Live API socket warning after connection opened.");
+    if(liveApiState?.updateCount) liveApiSetStatus("connected", "Receiving messages");
   };
   liveApiSocket.onclose = ()=>{
     liveApiSocket = null;
@@ -7371,7 +7370,7 @@ function connectLiveApiEndpoint(endpointIndex){
       tryNextLiveEndpoint(endpointIndex, "Connection closed before opening");
       return;
     }
-    liveApiSetStatus("", "Disconnected");
+    liveApiSetStatus("", liveApiState?.updateCount ? "Live API disconnected" : "Disconnected");
   };
 }
 

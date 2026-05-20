@@ -43,6 +43,7 @@ const liveApiFeedHost = "127.0.0.1";
 const liveApiFeedPort = 49123;
 const liveApiStatsConfigPath = process.env.SPARK_RL_STATS_API_CONFIG_PATH ||
   "C:\\Program Files (x86)\\Steam\\steamapps\\common\\rocketleague\\TAGame\\Config\\defaultstatsapi.ini";
+const serverProtocolVersion = 2;
 const liveApiClients = new Set();
 let liveApiFeedSocket = null;
 let liveApiReconnectTimer = null;
@@ -2198,6 +2199,19 @@ async function handleClientHeartbeat(req, res){
   res.end(JSON.stringify({ok:true, activeClients:activeClients.size}));
 }
 
+function handleServerInfo(req, res){
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify({
+    ok:true,
+    app:"SPARK",
+    protocolVersion:serverProtocolVersion,
+    root,
+    pid:process.pid,
+    activeClients:activeClients.size,
+    livePacketRateEndpoint:true
+  }));
+}
+
 function parseLivePacketRate(text){
   const match = String(text || "").match(/^\s*PacketSendRate\s*=\s*(-?\d+(?:\.\d+)?)\s*$/mi);
   if(!match) return null;
@@ -2275,6 +2289,10 @@ server = http.createServer(async (req,res)=>{
     const url = new URL(req.url, "http://127.0.0.1");
     if(url.pathname === "/api/spark-heartbeat"){
       await handleClientHeartbeat(req, res);
+      return;
+    }
+    if(url.pathname === "/api/server-info"){
+      handleServerInfo(req, res);
       return;
     }
     if(url.pathname === "/api/live-packet-rate"){
