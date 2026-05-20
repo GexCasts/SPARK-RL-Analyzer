@@ -931,6 +931,7 @@ function summarizeShotSamples(parsedReplay){
   const goalEvents = [];
   const saveEvents = [];
   const touchEvents = [];
+  const goalStateEvents = [];
   const touchEventKeys = new Set();
   const distanceSamplesByPri = new Map();
   const positionSamplesByPri = new Map();
@@ -944,6 +945,9 @@ function summarizeShotSamples(parsedReplay){
   let scoreboardClockFinalSeconds = null;
   let isOvertime = false;
   let hasOvertime = false;
+  let activeScoredOnTeam = null;
+  let countdownNumber = null;
+  let excludedDeadBallFrames = 0;
   let observedDurationSeconds = 1;
   let observedElapsedCount = 0;
 
@@ -1014,6 +1018,21 @@ function summarizeShotSamples(parsedReplay){
       }
     }
     return best && best.distance <= 2200 ? best : null;
+  }
+
+  function normalizeScoredOnTeam(value){
+    const team = normalizeTeamNumber(value);
+    return team === null ? null : team;
+  }
+
+  function scoringTeamFromScoredOnTeam(scoredOnTeam){
+    const team = normalizeScoredOnTeam(scoredOnTeam);
+    if(team === null) return null;
+    return team === 0 ? 1 : 0;
+  }
+
+  function isGameplaySampleTime(){
+    return activeScoredOnTeam === null && !(Number.isFinite(countdownNumber) && countdownNumber > 0);
   }
 
   function currentBallLocation(){
@@ -1093,6 +1112,7 @@ function summarizeShotSamples(parsedReplay){
   }
 
   function addTouchEvent(time, hitTeamNumber){
+    if(!isGameplaySampleTime()) return;
     const normalizedTeam = normalizeTeamNumber(hitTeamNumber);
     if(normalizedTeam === null) return;
     const ballLocation = currentBallLocation();
@@ -1127,6 +1147,10 @@ function summarizeShotSamples(parsedReplay){
   }
 
   function pushPhysicsSamples(time){
+    if(!isGameplaySampleTime()){
+      excludedDeadBallFrames++;
+      return;
+    }
     const ballLocation = currentBallLocation();
     if(!ballLocation) return;
     ballSampleCount++;
@@ -1196,6 +1220,7 @@ function summarizeShotSamples(parsedReplay){
   for(const frame of frames){
     const time = Number(frame.time ?? frame.seconds ?? frame.delta ?? 0);
     const frameTouchHits = [];
+    let scoredOnTeamChange = undefined;
 
     for(const actor of frame.new_actors || []){
       if(!Number.isInteger(actor.actor_id)) continue;
@@ -1260,12 +1285,36 @@ function summarizeShotSamples(parsedReplay){
         }
       }
 
+      if(objectNameMatches(objectName, "TAGame.GameEvent_Soccar_TA:ReplicatedScoredOnTeam")){
+        const rawScoredOnTeam = replayIntValue(attribute, value);
+        const scoredOnTeam = normalizeScoredOnTeam(rawScoredOnTeam);
+        scoredOnTeamChange = scoredOnTeam;
+        const elapsedSeconds = currentGameElapsedSeconds(time);
+        const overtimeBaseSeconds = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
+        goalStateEvents.push({
+          time: Number.isFinite(time) ? time : 0,
+          elapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+          scoreboardSecondsRemaining,
+          scoreboardElapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+          rawScoredOnTeam,
+          scoredOnTeam,
+          scoringTeam: scoringTeamFromScoredOnTeam(scoredOnTeam),
+          isOvertime,
+          overtimeSeconds: isOvertime ? Math.max(0, elapsedSeconds - overtimeBaseSeconds) : null
+        });
+      }
+
       if(objectNameMatches(objectName, "TAGame.GameEvent_Soccar_TA:bOverTime")){
         const overtimeValue = getObject(attribute, "Boolean") ?? getObject(value, "Boolean");
         if(typeof overtimeValue === "boolean"){
           isOvertime = overtimeValue;
           if(overtimeValue) hasOvertime = true;
         }
+      }
+
+      if(objectNameMatches(objectName, "TAGame.GameEvent_TA:ReplicatedRoundCountDownNumber")){
+        const rawCountdown = replayIntValue(attribute, value);
+        countdownNumber = Number.isFinite(rawCountdown) ? rawCountdown : null;
       }
 
       const loc = decodeActorLocation(value);
@@ -1301,6 +1350,7 @@ function summarizeShotSamples(parsedReplay){
     }
 
     frameTouchHits.forEach(hitTeamNumber=>addTouchEvent(time, hitTeamNumber));
+    if(scoredOnTeamChange !== undefined) activeScoredOnTeam = scoredOnTeamChange;
     pushPhysicsSamples(time);
   }
 
@@ -1321,6 +1371,33 @@ function summarizeShotSamples(parsedReplay){
     const headerTeam = teamByStatName.get(aliasName);
     return headerTeam !== undefined ? headerTeam : event.teamNumber;
   };
+
+  function findGoalStateForGoal(goal){
+    const teamNumber = normalizeTeamNumber(resolveTeam(goal));
+    let best = null;
+    let bestDelta = Infinity;
+    for(const state of goalStateEvents){
+      if(state.scoringTeam === null) continue;
+      if(teamNumber !== null && state.scoringTeam !== teamNumber) continue;
+      const delta = Math.abs(state.time - goal.time);
+      if(delta > 8) continue;
+      if(delta < bestDelta){
+        best = state;
+        bestDelta = delta;
+      }
+    }
+    return best;
+  }
+
+  for(const goal of goalEvents){
+    const goalState = findGoalStateForGoal(goal);
+    if(!goalState) continue;
+    goal.scoredOnTeam = goalState.scoredOnTeam;
+    goal.scoringTeam = goalState.scoringTeam;
+    goal.goalStateTime = goalState.time;
+    goal.goalStateElapsedSeconds = goalState.elapsedSeconds;
+    goal.validatedByScoredOnTeam = true;
+  }
 
   const usedGoals = new Set();
   const usedSaves = new Set();
@@ -1357,6 +1434,9 @@ function summarizeShotSamples(parsedReplay){
       if(usedGoals.has(i)) continue;
       const goal = goalEvents[i];
       if(resolveName(goal.playerName).toLowerCase() !== resolveName(shot.playerName).toLowerCase()) continue;
+      const shotTeam = normalizeTeamNumber(resolveTeam(shot));
+      const goalScoringTeam = normalizeTeamNumber(goal.scoringTeam);
+      if(shotTeam !== null && goalScoringTeam !== null && shotTeam !== goalScoringTeam) continue;
       const delta = goal.time - shot.time;
       if(delta < -0.35 || delta > 6.25) continue;
       const score = Math.abs(delta);
@@ -1408,6 +1488,8 @@ function summarizeShotSamples(parsedReplay){
       shot.goalTime = goal.goalTime || shot.goalTime;
       shot.isOvertime = !!goal.isOvertime;
       shot.overtimeSeconds = goal.overtimeSeconds;
+      shot.scoredOnTeam = goal.scoredOnTeam;
+      shot.validatedByScoredOnTeam = !!goal.validatedByScoredOnTeam;
     }else{
       const saveIndex = findMatchingSave(shot, teamNumber);
       if(saveIndex !== null){
@@ -1439,6 +1521,8 @@ function summarizeShotSamples(parsedReplay){
       nearestOpponentDistanceUU: shot.nearestOpponentDistanceUU,
       nearestOpponent: shot.nearestOpponent ? resolveName(shot.nearestOpponent) : null,
       defender: shot.defender || (shot.nearestOpponent ? resolveName(shot.nearestOpponent) : null),
+      scoredOnTeam: shot.scoredOnTeam,
+      validatedByScoredOnTeam: !!shot.validatedByScoredOnTeam,
       lastTouchDistanceToNetUU: shot.lastTouchDistanceToNetUU,
       player: playerName,
       team: teamNumber === 0 ? "Blue" : teamNumber === 1 ? "Orange" : null,
@@ -1476,6 +1560,8 @@ function summarizeShotSamples(parsedReplay){
       yPercent: Number(face.yPercent.toFixed(2)),
       nearestOpponentDistanceUU: goal.nearestOpponentDistanceUU,
       nearestOpponent: goal.nearestOpponent ? resolveName(goal.nearestOpponent) : null,
+      scoredOnTeam: goal.scoredOnTeam,
+      validatedByScoredOnTeam: !!goal.validatedByScoredOnTeam,
       lastTouchDistanceToNetUU: goal.lastTouchDistanceToNetUU,
       player: playerName,
       team: teamNumber === 0 ? "Blue" : teamNumber === 1 ? "Orange" : null,
@@ -1578,6 +1664,8 @@ function summarizeShotSamples(parsedReplay){
     totalDistanceSamples: sortedPlayers.reduce((sum, player)=>sum + player.distanceToBallSamples.length, 0),
     totalPositionSamples: sortedPlayers.reduce((sum, player)=>sum + player.positionSamples.length, 0),
     totalBallSamples: ballSampleCount,
+    totalGoalStateEvents: goalStateEvents.length,
+    excludedDeadBallFrames,
     scoreboardClockStartSeconds,
     scoreboardClockFinalSeconds,
     frameCount: frames.length,
