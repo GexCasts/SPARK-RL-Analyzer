@@ -2105,6 +2105,13 @@ body.obsOverlayMode #obsOverlayRoot{
       <div class="chartWrap"><canvas id="compareChart"></canvas></div>
     </div>
 
+    <div class="card" id="physicalComparisonCard">
+      <h2>Demos / Bumps</h2>
+      <div class="help">Compare physical pressure from confirmed demos and bumps. Team tabs show players on that team; player tabs show the selected player only.</div>
+      <div class="chartWrap"><canvas id="physicalChart"></canvas></div>
+      <div class="note" id="physicalNote"></div>
+    </div>
+
     <div class="card" id="distanceCard">
       <h2>Distance to Ball</h2>
       <div class="help">Shows car-to-ball distance for the selected player or team average. Distances follow the app unit switch with sensible small-distance units. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Lower values usually mean closer pressure; consistently too low can indicate overcommitting or ball-chasing.</div>
@@ -4715,7 +4722,6 @@ function renderGameOverview(){
     {label:"Pressure",l:left.pressure,r:right.pressure,note:"Pressure"},
     {label:"Saves",l:left.saves,r:right.saves,note:"Saves"},
     {label:"Demos",l:left.demos,r:right.demos,note:"Demos"},
-    {label:"Bumps",l:left.bumps,r:right.bumps,note:"Confirmed Bumps"},
     {label:"Boost Steals",l:left.boostStolen,r:right.boostStolen,note:"Full Boosts Stolen"}
   ];
 
@@ -4768,7 +4774,6 @@ function renderGameOverview(){
           <td>${p.saves || 0}</td>
           <td>${shootingPct}%</td>
           <td>${p.demos || 0}</td>
-          <td>${p.bumps || 0}</td>
           <td>${p.stolen || 0}</td>
         </tr>
       `;
@@ -4786,7 +4791,6 @@ function renderGameOverview(){
         <th>Saves</th>
         <th>Shooting %</th>
         <th>Demos</th>
-        <th>Bumps</th>
         <th>Boost Stolen</th>
       </tr>
     </thead>
@@ -5271,6 +5275,23 @@ function render(){
     ]},
     options:{maintainAspectRatio:false,plugins:{legend},scales:{x:axis,y:axis}}
   });
+
+  const physicalPlayers = a.ps || [];
+  chart("physicalChart",{
+    type:"bar",
+    data:{labels:physicalPlayers.map(playerDisplayName),datasets:[
+      {label:"Demos",data:physicalPlayers.map(p=>p.demos || 0),backgroundColor:"rgba(255,208,0,.82)"},
+      {label:"Bumps",data:physicalPlayers.map(p=>p.bumps || 0),backgroundColor:"rgba(201,201,201,.68)"}
+    ]},
+    options:{maintainAspectRatio:false,plugins:{legend},scales:{x:axis,y:{...axis,beginAtZero:true,ticks:{...axis.ticks,precision:0}}}}
+  });
+  if($("physicalNote")){
+    const totalDemos = physicalPlayers.reduce((sum,p)=>sum + (p.demos || 0),0);
+    const totalBumps = physicalPlayers.reduce((sum,p)=>sum + (p.bumps || 0),0);
+    $("physicalNote").textContent = isTeamView
+      ? `${a.label}: ${totalDemos} demo${totalDemos===1?"":"s"} and ${totalBumps} confirmed bump${totalBumps===1?"":"s"} across this team.`
+      : `${a.label}: ${totalDemos} demo${totalDemos===1?"":"s"} and ${totalBumps} confirmed bump${totalBumps===1?"":"s"}.`;
+  }
 
   const distanceStepSeconds = 5;
   const clockLabels = gameTimeLabels(durationSeconds, distanceStepSeconds);
