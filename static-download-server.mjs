@@ -451,6 +451,26 @@ function goalFaceFromReplayLocation(location, teamNumber=null){
   };
 }
 
+function projectedGoalEntryLocation(location, vector, teamNumber){
+  if(!location || !vector) return null;
+  const normalizedTeam = normalizeTeamNumber(teamNumber);
+  if(normalizedTeam === null) return null;
+  const targetY = normalizedTeam === 0 ? 5120 : -5120;
+  const y = Number(location.y);
+  const vy = Number(vector.y);
+  if(!Number.isFinite(y) || !Number.isFinite(vy) || Math.abs(vy) < 1e-6) return null;
+  const t = (targetY - y) / vy;
+  if(!Number.isFinite(t) || t <= 0 || t > 6) return null;
+  const x = Number(location.x) + Number(vector.x || 0) * t;
+  const z = Number(location.z || 0) + Number(vector.z || 0) * t;
+  if(!Number.isFinite(x) || !Number.isFinite(z)) return null;
+
+  // Allow a small near-post/crossbar margin so saves that were barely wide/high
+  // can still be classified as projected target data, but reject obviously invalid paths.
+  if(x < -1250 || x > 1250 || z < -120 || z > 950) return null;
+  return {x, y: targetY, z};
+}
+
 function scoreboardClockLabel(secondsRemaining, isOvertime=false, overtimeSeconds=null){
   if(isOvertime && Number.isFinite(overtimeSeconds)){
     const seconds = Math.max(0, Math.round(overtimeSeconds));
@@ -934,6 +954,7 @@ function summarizeShotSamples(parsedReplay){
   const carLoc = new Map();
   const carVel = new Map();
   const ballLoc = new Map();
+  const ballVel = new Map();
   const actorObject = new Map();
   const carActors = new Set();
   const ballActors = new Set();
@@ -1076,6 +1097,13 @@ function summarizeShotSamples(parsedReplay){
     return null;
   }
 
+  function currentBallVelocity(){
+    for(const velocity of ballVel.values()){
+      if(velocity) return velocity;
+    }
+    return null;
+  }
+
   function currentGameElapsedSeconds(time){
     const fallback = replayElapsedSeconds(time, firstFrameTime, lastFrameTime, totalSeconds);
     const start = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
@@ -1099,6 +1127,7 @@ function summarizeShotSamples(parsedReplay){
     const cars = activeCarsForPri(pri);
     const shooterLocation = cars[0]?.location || null;
     const ballLocation = currentBallLocation();
+    const ballVelocity = currentBallVelocity();
     const elapsedSeconds = currentGameElapsedSeconds(time);
     noteObservedElapsed(elapsedSeconds);
     const overtimeBaseSeconds = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
@@ -1135,6 +1164,7 @@ function summarizeShotSamples(parsedReplay){
       carActor: cars[0]?.carActor ?? null,
       shooterLocation,
       ballLocation,
+      ballVelocity,
       lastTouchLocation,
       lastTouchTime: recentTouch?.time ?? null,
       lastTouchScoreboardSecondsRemaining: recentTouch?.scoreboardSecondsRemaining ?? null,
@@ -1391,6 +1421,7 @@ function summarizeShotSamples(parsedReplay){
       carLoc.delete(actorId);
       carVel.delete(actorId);
       ballLoc.delete(actorId);
+      ballVel.delete(actorId);
       teamActorNumber.delete(actorId);
     }
 
@@ -1469,6 +1500,7 @@ function summarizeShotSamples(parsedReplay){
 
       const velocity = decodedVelocity(value);
       if(velocity && carActors.has(actorId)) carVel.set(actorId, velocity);
+      if(velocity && ballActors.has(actorId)) ballVel.set(actorId, velocity);
 
       if(objectNameMatches(objectName, "TAGame.Car_TA:ReplicatedDemolishExtended")){
         addDemoEvent(time, attribute);
@@ -1619,6 +1651,33 @@ function summarizeShotSamples(parsedReplay){
     return bestIndex;
   }
 
+  function projectedSavedShotPlacement(shot, save, teamNumber){
+    const saveLocation = save?.ballLocation || shot?.ballLocation || null;
+    if(!saveLocation) return null;
+
+    const candidates = [];
+    if(save?.ballVelocity) candidates.push({origin:saveLocation, vector:save.ballVelocity, source:"save-velocity-projection"});
+    if(shot?.ballVelocity && shot?.ballLocation) candidates.push({origin:shot.ballLocation, vector:shot.ballVelocity, source:"shot-velocity-projection"});
+    if(shot?.ballLocation && save?.ballLocation){
+      candidates.push({
+        origin:saveLocation,
+        vector:{
+          x:(save.ballLocation.x || 0) - (shot.ballLocation.x || 0),
+          y:(save.ballLocation.y || 0) - (shot.ballLocation.y || 0),
+          z:(save.ballLocation.z || 0) - (shot.ballLocation.z || 0)
+        },
+        source:"shot-save-path-projection"
+      });
+    }
+
+    for(const candidate of candidates){
+      const projected = projectedGoalEntryLocation(candidate.origin, candidate.vector, teamNumber);
+      if(projected) return {location:projected, source:candidate.source};
+    }
+
+    return null;
+  }
+
   for(const shot of shotEvents){
     const playerName = resolveName(shot.playerName);
     const censoredName = censoredAliases.get(playerName) || (isMaskedReplayName(shot.playerName) ? shot.playerName : null);
@@ -1626,6 +1685,7 @@ function summarizeShotSamples(parsedReplay){
     let result = "miss";
     let placementLocation = shot.ballLocation || shot.shooterLocation;
     let placementSource = "shot";
+    let saveLocation = null;
 
     const goalIndex = findMatchingGoal(shot);
     if(goalIndex !== null){
@@ -1647,8 +1707,10 @@ function summarizeShotSamples(parsedReplay){
         const save = saveEvents[saveIndex];
         usedSaves.add(saveIndex);
         result = "save";
-        placementLocation = save.ballLocation || placementLocation;
-        placementSource = "save";
+        const projectedSave = projectedSavedShotPlacement(shot, save, teamNumber);
+        saveLocation = save.ballLocation || null;
+        placementLocation = projectedSave?.location || save.ballLocation || placementLocation;
+        placementSource = projectedSave?.source || "save";
         shot.nearestOpponentDistanceUU = save.nearestOpponentDistanceUU;
         shot.nearestOpponent = save.nearestOpponent;
         shot.defender = resolveName(save.playerName);
@@ -1686,6 +1748,8 @@ function summarizeShotSamples(parsedReplay){
       lastTouchTime: shot.lastTouchTime,
       lastTouchScoreboardSecondsRemaining: shot.lastTouchScoreboardSecondsRemaining,
       placementLocation,
+      placementProjectionSource: placementSource.includes("projection") ? placementSource : null,
+      saveLocation,
       shooterLocation: shot.shooterLocation
     });
   }

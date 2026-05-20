@@ -2121,7 +2121,7 @@ body.obsOverlayMode #obsOverlayRoot{
 
     <div class="card">
       <h2>Shooting Heatmap</h2>
-      <div class="help">Shows shot placement, defender distance, and shooter touch distance from replay ball and car positions. Placement comes from the ball at the goal/save/shot event.</div>
+      <div class="help">Shows shot placement, defender distance, and shooter touch distance from replay ball and car positions. Saved shots use projected goal-entry placement when the incoming ball path is determinable.</div>
       <div class="goalMap" id="shootingHeatmap">
         <div class="goalLabel">GOAL FACE</div>
         <div class="postZone left"></div>
@@ -4381,6 +4381,8 @@ function getFrameAccurateShootingSamples(a){
         nearestOpponent: nearestOpponent || null,
         defender: defender || null,
         lastTouchDistanceToNet: Number.isFinite(lastTouchDistanceToNet) ? lastTouchDistanceToNet : null,
+        placementSource: shot.placementSource || null,
+        placementProjectionSource: shot.placementProjectionSource || null,
         frameAccurate: true,
         index: i
       });
@@ -4625,6 +4627,7 @@ function renderShootingHeatmap(a){
           ${s.result === "save"
             ? `<span class="muted">Defender: ${s.defender ? escapeHtml(s.defender) : "Unknown"}</span><br>`
             : `<span class="muted">Nearest defender: ${optionalDistanceText(s.nearestOpponentDistance)}${s.defender ? ` (${escapeHtml(s.defender)})` : ""}</span><br>`}
+          ${s.result === "save" && s.placementProjectionSource ? `<span class="muted">Placement: projected goal entry</span><br>` : ""}
           <span class="muted">Last touch distance from net: ${optionalDistanceText(s.lastTouchDistanceToNet)}</span><br>
           <span class="muted">Target: ${s.target}</span>
         `;
