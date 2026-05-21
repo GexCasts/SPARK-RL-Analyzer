@@ -197,6 +197,17 @@ function Get-LocalFileSha256($Path) {
   return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Get-ShortHash($Hash) {
+  if([string]::IsNullOrWhiteSpace($Hash)) {
+    return "missing"
+  }
+  $clean = ([string]$Hash).Trim()
+  if($clean.Length -le 12) {
+    return $clean
+  }
+  return $clean.Substring(0, 12)
+}
+
 function Join-SafeManifestPath($RelativePath) {
   if([string]::IsNullOrWhiteSpace($RelativePath)) {
     throw "Manifest contains an empty file path."
@@ -264,9 +275,10 @@ function Update-SPARKFromManifest {
     $url = "$GithubRawBase/" + ($urlPath -join "/")
     Download-File $url $downloadPath
     $downloadHash = Get-LocalFileSha256 $downloadPath
-    if($downloadHash -ne ([string]$file.sha256).ToLowerInvariant()) {
+    $expectedHash = ([string]$file.sha256).ToLowerInvariant()
+    if($downloadHash -ne $expectedHash) {
       Remove-Item -LiteralPath $downloadPath -Force -ErrorAction SilentlyContinue
-      throw "Downloaded file failed hash check: $relative"
+      throw "Downloaded file failed hash check: $relative (expected $(Get-ShortHash $expectedHash), got $(Get-ShortHash $downloadHash))"
     }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
     Move-Item -LiteralPath $downloadPath -Destination $target -Force

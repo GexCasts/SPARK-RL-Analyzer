@@ -14,11 +14,41 @@ $excludedFiles = @(
   "spark-manifest.json"
 )
 
+$binaryExtensions = @(
+  ".exe",
+  ".ico",
+  ".png",
+  ".zip"
+)
+
 function Convert-ToRelativePath($Path) {
   $rootUri = New-Object System.Uri(($Root.TrimEnd("\") + "\"))
   $pathUri = New-Object System.Uri($Path)
   $relative = [System.Uri]::UnescapeDataString($rootUri.MakeRelativeUri($pathUri).ToString()).Replace("/", "\")
   return $relative.Replace("\", "/")
+}
+
+function Get-SparkManifestBytes($Path) {
+  $extension = [System.IO.Path]::GetExtension($Path).ToLowerInvariant()
+  if($binaryExtensions -contains $extension) {
+    return [System.IO.File]::ReadAllBytes($Path)
+  }
+
+  $bytes = [System.IO.File]::ReadAllBytes($Path)
+  $text = [System.Text.Encoding]::UTF8.GetString($bytes)
+  $text = $text.Replace("`r`n", "`n").Replace("`r", "`n")
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  return $utf8NoBom.GetBytes($text)
+}
+
+function Get-SparkSha256($Bytes) {
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    return ([System.BitConverter]::ToString($sha.ComputeHash($Bytes))).Replace("-", "").ToLowerInvariant()
+  }
+  finally {
+    $sha.Dispose()
+  }
 }
 
 function Test-IsExcluded($Path) {
@@ -42,12 +72,13 @@ $files = Get-ChildItem -LiteralPath $Root -Recurse -File |
   Where-Object { !(Test-IsExcluded $_.FullName) } |
   Sort-Object FullName |
   ForEach-Object {
-    $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $manifestBytes = Get-SparkManifestBytes $_.FullName
+    $hash = Get-SparkSha256 $manifestBytes
     [pscustomobject]@{
       path = Convert-ToRelativePath $_.FullName
       version = $hash.Substring(0, 12)
       sha256 = $hash
-      size = $_.Length
+      size = $manifestBytes.Length
       modifiedUtc = $_.LastWriteTimeUtc.ToString("o")
     }
   }

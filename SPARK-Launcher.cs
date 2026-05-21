@@ -399,10 +399,11 @@ namespace SparkLauncher
                 DownloadFile(url, downloadPath);
 
                 string downloadedHash = GetLocalFileSha256(downloadPath);
-                if (downloadedHash != (file.sha256 ?? "").ToLowerInvariant())
+                string expectedHash = (file.sha256 ?? "").ToLowerInvariant();
+                if (downloadedHash != expectedHash)
                 {
                     SafeDeleteFile(downloadPath);
-                    throw new Exception("Downloaded file failed hash check: " + relative);
+                    throw new Exception("Downloaded file failed hash check: " + relative + " (expected " + ShortHash(expectedHash) + ", got " + ShortHash(downloadedHash) + ")");
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(target));
@@ -487,6 +488,13 @@ namespace SparkLauncher
             string fullTarget = Path.GetFullPath(Path.Combine(root, normalized));
             if (!fullTarget.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase)) throw new Exception("Manifest path escapes the SPARK folder: " + relativePath);
             return fullTarget;
+        }
+
+        private static string ShortHash(string hash)
+        {
+            if (String.IsNullOrWhiteSpace(hash)) return "missing";
+            string clean = hash.Trim();
+            return clean.Length <= 12 ? clean : clean.Substring(0, 12);
         }
 
         private static string GetLocalFileSha256(string path)
