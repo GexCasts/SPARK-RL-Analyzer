@@ -226,11 +226,13 @@ button.unitSwitch{
   color:#dce8f7;
   font-weight:950;
 }
-.liveApiControls{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:12px}
+.liveApiControls{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:12px;position:relative;z-index:3}
 .liveApiControls button{border-radius:8px}
 .liveApiControls .danger{border-color:#ef4444;color:#fecaca}
 .liveApiControls .obs{border-color:var(--spark-yellow);color:var(--spark-yellow)}
 .liveRateControl{
+  position:relative;
+  z-index:4;
   display:inline-flex;
   align-items:center;
   gap:5px;
@@ -242,6 +244,9 @@ button.unitSwitch{
 }
 .liveRateControl label{font-size:11px;color:var(--muted);font-weight:800}
 .liveRateControl input{
+  display:inline-block;
+  position:relative;
+  z-index:5;
   width:58px;
   padding:4px 6px;
   border:1px solid rgba(255,255,255,.20);
@@ -7737,7 +7742,13 @@ async function loadFile(file){
 
   selected = "overview"; render();
 }
-$("drop").onclick=()=>$("file").click();
+function shouldOpenReplayPickerFromDropClick(event){
+  return !event.target.closest(".liveApiControls,button,input,label,datalist,a");
+}
+$("drop").onclick=e=>{
+  if(!shouldOpenReplayPickerFromDropClick(e)) return;
+  $("file").click();
+};
 let pageReplayDragDepth = 0;
 function isReplayFileDrag(e){
   return Array.from(e.dataTransfer?.types || []).includes("Files");
@@ -7777,6 +7788,12 @@ document.addEventListener("dragleave", e=>{
 });
 document.addEventListener("drop", handleReplayDrop);
 $("file").onchange=e=>loadFile(e.target.files[0]);
+const liveApiControlsEl = document.querySelector(".liveApiControls");
+if(liveApiControlsEl){
+  ["pointerdown","mousedown","click","dblclick"].forEach(eventName=>{
+    liveApiControlsEl.addEventListener(eventName, event=>event.stopPropagation());
+  });
+}
 if($("liveApiBtn")){
   $("liveApiBtn").onclick=e=>{
     e.preventDefault();
