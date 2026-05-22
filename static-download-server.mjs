@@ -24,7 +24,8 @@ const rrrocketCandidates = [
 ].filter(Boolean);
 const rrrocketPath = rrrocketCandidates.find(candidate=>fsSync.existsSync(candidate));
 const tmpDir = path.join(here, ".tmp");
-const PHYSICS_SAMPLE_INTERVAL_SECONDS = 0.11;
+const PHYSICS_SAMPLE_INTERVAL_SECONDS = 0.045;
+const TARGET_POSITION_SAMPLES_PER_PLAYER = 5400;
 const types = new Map([
   [".html", "text/html; charset=utf-8"],
   [".js", "text/javascript"],
@@ -383,6 +384,146 @@ function isLargeBoostRise(boostIncrease){
 
 function clampNumber(value, min, max){
   return Math.max(min, Math.min(max, value));
+}
+
+function lerpNumber(a, b, t){
+  const left = Number(a);
+  const right = Number(b);
+  if(Number.isFinite(left) && Number.isFinite(right)) return left + (right - left) * t;
+  if(Number.isFinite(left)) return left;
+  if(Number.isFinite(right)) return right;
+  return null;
+}
+
+function lerpVector(a, b, t){
+  if(!a && !b) return null;
+  const out = {};
+  for(const key of ["x", "y", "z"]){
+    const value = lerpNumber(a?.[key], b?.[key], t);
+    if(Number.isFinite(value)) out[key] = Number(value.toFixed(2));
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function splitGameplaySampleSegments(samples, maxGapSeconds=1.1){
+  const sorted = (Array.isArray(samples) ? samples : [])
+    .filter(sample=>Number.isFinite(Number(sample?.elapsedSeconds)))
+    .sort((a,b)=>Number(a.elapsedSeconds) - Number(b.elapsedSeconds));
+  const segments = [];
+  for(const sample of sorted){
+    const lastSegment = segments[segments.length - 1];
+    const previous = lastSegment?.[lastSegment.length - 1];
+    if(!lastSegment || (previous && Number(sample.elapsedSeconds) - Number(previous.elapsedSeconds) > maxGapSeconds)){
+      segments.push([sample]);
+    }else{
+      lastSegment.push(sample);
+    }
+  }
+  return segments;
+}
+
+function allocateSegmentSampleCounts(segments, targetCount){
+  const target = Math.max(0, Math.round(Number(targetCount) || 0));
+  if(!segments.length || target <= 0) return [];
+  if(target <= segments.length) return segments.map((_, index)=>index < target ? 1 : 0);
+
+  const weights = segments.map(segment=>{
+    const first = segment[0];
+    const last = segment[segment.length - 1];
+    const duration = Math.max(0, Number(last?.elapsedSeconds) - Number(first?.elapsedSeconds));
+    return Math.max(duration, segment.length > 1 ? segment.length * .01 : .01);
+  });
+  const weightTotal = weights.reduce((sum,value)=>sum + value, 0) || segments.length;
+  const rawCounts = weights.map(weight=>(weight / weightTotal) * target);
+  const counts = rawCounts.map((raw, index)=>segments[index].length ? Math.max(1, Math.floor(raw)) : 0);
+  let assigned = counts.reduce((sum,value)=>sum + value, 0);
+
+  while(assigned < target){
+    let bestIndex = 0;
+    let bestRemainder = -Infinity;
+    rawCounts.forEach((raw, index)=>{
+      const remainder = raw - Math.floor(raw);
+      if(remainder > bestRemainder){
+        bestRemainder = remainder;
+        bestIndex = index;
+      }
+    });
+    counts[bestIndex]++;
+    rawCounts[bestIndex] = Math.floor(rawCounts[bestIndex]);
+    assigned++;
+  }
+
+  while(assigned > target){
+    let bestIndex = counts.findIndex(count=>count > 1);
+    if(bestIndex === -1) break;
+    for(let i=0; i<counts.length; i++){
+      if(counts[i] > counts[bestIndex] && counts[i] > 1) bestIndex = i;
+    }
+    counts[bestIndex]--;
+    assigned--;
+  }
+
+  return counts;
+}
+
+function resampleGameplaySeries(samples, targetCount, interpolateSample){
+  const source = Array.isArray(samples) ? samples : [];
+  if(source.length < 2) return source;
+  const target = Math.max(2, Math.round(Number(targetCount) || source.length));
+  if(Math.abs(source.length - target) <= Math.max(8, target * .012)) return source;
+
+  const segments = splitGameplaySampleSegments(source);
+  const counts = allocateSegmentSampleCounts(segments, target);
+  const out = [];
+
+  segments.forEach((segment, segmentIndex)=>{
+    const count = counts[segmentIndex] || 0;
+    if(!count) return;
+    if(segment.length === 1 || count === 1){
+      out.push({...segment[Math.floor(segment.length / 2)]});
+      return;
+    }
+    for(let i=0; i<count; i++){
+      const pos = (i / Math.max(1, count - 1)) * (segment.length - 1);
+      const low = Math.floor(pos);
+      const high = Math.min(segment.length - 1, low + 1);
+      const t = pos - low;
+      out.push(interpolateSample(segment[low], segment[high], t));
+    }
+  });
+
+  return out.length ? out : source;
+}
+
+function resamplePositionSamples(samples, targetCount=TARGET_POSITION_SAMPLES_PER_PLAYER){
+  return resampleGameplaySeries(samples, targetCount, (a,b,t)=>({
+    elapsedSeconds: Number((lerpNumber(a.elapsedSeconds, b.elapsedSeconds, t) ?? a.elapsedSeconds ?? 0).toFixed(3)),
+    scoreboardSecondsRemaining: lerpNumber(a.scoreboardSecondsRemaining, b.scoreboardSecondsRemaining, t),
+    scoreboardElapsedSeconds: Number((lerpNumber(a.scoreboardElapsedSeconds, b.scoreboardElapsedSeconds, t) ?? lerpNumber(a.elapsedSeconds, b.elapsedSeconds, t) ?? 0).toFixed(3)),
+    x: Math.round(lerpNumber(a.x, b.x, t) ?? a.x ?? 0),
+    y: Math.round(lerpNumber(a.y, b.y, t) ?? a.y ?? 0),
+    z: Math.round(lerpNumber(a.z, b.z, t) ?? a.z ?? 0)
+  }));
+}
+
+function resampleDistanceSamples(samples, targetCount=TARGET_POSITION_SAMPLES_PER_PLAYER){
+  return resampleGameplaySeries(samples, targetCount, (a,b,t)=>{
+    const carLocation = lerpVector(a.carLocation, b.carLocation, t);
+    const ballLocation = lerpVector(a.ballLocation, b.ballLocation, t);
+    const distance = carLocation && ballLocation
+      ? Math.round(distanceBetweenLocations(carLocation, ballLocation))
+      : Math.round(lerpNumber(a.distanceUU, b.distanceUU, t) ?? a.distanceUU ?? 0);
+    return {
+      elapsedSeconds: Number((lerpNumber(a.elapsedSeconds, b.elapsedSeconds, t) ?? a.elapsedSeconds ?? 0).toFixed(3)),
+      scoreboardSecondsRemaining: lerpNumber(a.scoreboardSecondsRemaining, b.scoreboardSecondsRemaining, t),
+      scoreboardElapsedSeconds: Number((lerpNumber(a.scoreboardElapsedSeconds, b.scoreboardElapsedSeconds, t) ?? lerpNumber(a.elapsedSeconds, b.elapsedSeconds, t) ?? 0).toFixed(3)),
+      distanceUU: distance,
+      carActor: a.carActor ?? b.carActor ?? null,
+      carLocation,
+      ballLocation,
+      playerName: a.playerName || b.playerName || ""
+    };
+  });
 }
 
 function normalizeTeamNumber(value){
@@ -1923,23 +2064,27 @@ function summarizeShotSamples(parsedReplay){
     const censoredName = censoredAliases.get(playerName) || (isMaskedReplayName(rawName) ? rawName : null);
     const player = ensurePlayer(playerName, censoredName);
     if(!player) continue;
-    player.distanceToBallSamples = samples.map(sample=>({
+    const rawDistanceSamples = samples.map(sample=>({
       elapsedSeconds: sample.elapsedSeconds,
       scoreboardSecondsRemaining: sample.scoreboardSecondsRemaining,
       scoreboardElapsedSeconds: sample.scoreboardElapsedSeconds,
       distanceUU: sample.distanceUU,
       carActor: sample.carActor,
       carLocation: sample.carLocation,
-      ballLocation: sample.ballLocation
+      ballLocation: sample.ballLocation,
+      playerName: sample.playerName
     }));
-    player.positionSamples = (positionSamplesByPri.get(pri) || []).map(sample=>({
+    const rawPositionSamples = (positionSamplesByPri.get(pri) || []).map(sample=>({
       elapsedSeconds: sample.elapsedSeconds,
       scoreboardSecondsRemaining: sample.scoreboardSecondsRemaining,
       scoreboardElapsedSeconds: sample.scoreboardElapsedSeconds,
       x: sample.x,
       y: sample.y,
-      z: sample.z
+      z: sample.z,
+      playerName: sample.playerName
     }));
+    player.distanceToBallSamples = resampleDistanceSamples(rawDistanceSamples);
+    player.positionSamples = resamplePositionSamples(rawPositionSamples);
     player.touchEvents = (touchEventsByPri.get(pri) || []).map(event=>({
       time: event.time,
       elapsedSeconds: event.elapsedSeconds,
