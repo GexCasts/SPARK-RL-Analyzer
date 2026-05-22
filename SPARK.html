@@ -6021,10 +6021,8 @@ function render(){
 
 
 
-const POSITIONING_HEAT_BASE_SCALE = 3.18;
-const POSITIONING_HEAT_DENSE_SCALE_MIN = 9.1;
-const POSITIONING_HEAT_DENSE_SCALE_MAX = 21;
-const POSITIONING_HEAT_REFERENCE_SAMPLES_PER_SECOND = 9;
+const POSITIONING_HEAT_BASE_SCALE = 3.05;
+const POSITIONING_HEAT_SCALE_MAX = 12;
 
 function renderPositioningHeatmap(a){
   const map = $("positioningMap");
@@ -6128,12 +6126,9 @@ function renderPositioningHeatmap(a){
     samplesByPlayer.get(key).push(sample);
   });
 
-  const heatDuration = Math.max(1, chartDurationSeconds(replayObservedDurationSeconds()));
-  const samplesPerSecond = samples.length / heatDuration / Math.max(1, samplesByPlayer.size);
-  const sampleDensityFactor = clampValue(samplesPerSecond / POSITIONING_HEAT_REFERENCE_SAMPLES_PER_SECOND, 1, 2.8);
-  const routeSpreadBlend = clampValue((samplesPerSecond - 8) / 7, 0, 1);
-  const sampleWeight = 1 / Math.pow(sampleDensityFactor, .42);
-  const bridgeWeight = (.16 - routeSpreadBlend * .045) / Math.pow(sampleDensityFactor, .42);
+  const routeSpreadBlend = .48;
+  const sampleWeight = 1;
+  const bridgeWeight = .135;
 
   samplesByPlayer.forEach(playerSamples=>{
     playerSamples.sort((a,b)=>(a.elapsed || 0) - (b.elapsed || 0));
@@ -6195,13 +6190,11 @@ function renderPositioningHeatmap(a){
     const index = Math.max(0, Math.min(positiveTrends.length - 1, Math.round((positiveTrends.length - 1) * pct)));
     return positiveTrends[index];
   }
-  const activityBlend = clampValue((samplesPerSecond - 8.5) / 7.5, 0, 1);
-  const denseReplayScale = clampValue(
-    Math.max(POSITIONING_HEAT_DENSE_SCALE_MIN, trendPercentile(.965) * 1.58, trendPercentile(.99) * 1.14),
-    POSITIONING_HEAT_DENSE_SCALE_MIN,
-    POSITIONING_HEAT_DENSE_SCALE_MAX
-  );
-  const heatScale = (POSITIONING_HEAT_BASE_SCALE * (1 - activityBlend)) + (denseReplayScale * activityBlend);
+  const coverageRatio = positiveTrends.length / Math.max(1, gridW * gridH);
+  const coverageBlend = clampValue((coverageRatio - .50) / .18, 0, 1);
+  const repeatScale = Math.max(POSITIONING_HEAT_BASE_SCALE, trendPercentile(.965) * .95, trendPercentile(.99) * .68);
+  const heatScale = clampValue(repeatScale * (1 + coverageBlend * .48), POSITIONING_HEAT_BASE_SCALE, POSITIONING_HEAT_SCALE_MAX);
+  const heatCurvePower = 1.05 + coverageBlend * .20;
 
   function colourFor(v){
     if(v <= 0) return null;
@@ -6247,7 +6240,7 @@ function renderPositioningHeatmap(a){
       const py = (gy / Math.max(1, gridH - 1)) * 100;
       if(!pointInField({x:px,y:py})) continue;
       const trend = trendDensity[gy * gridW + gx] || raw;
-      const v = Math.min(1, Math.pow(trend / heatScale, 1.08 + activityBlend * .14));
+      const v = Math.min(1, Math.pow(trend / heatScale, heatCurvePower));
       const color = colourFor(v);
       if(!color) continue;
       ctx.fillStyle = color;
