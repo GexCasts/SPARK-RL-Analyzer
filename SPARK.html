@@ -3855,6 +3855,7 @@ function liveScopeMatches(scope, event){
 
 function buildLiveImpactChartValues(scope, durationSeconds=300, stepSeconds=5){
   const labels = gameTimeLabels(durationSeconds, stepSeconds);
+  const ticks = gameTimeElapsedTicks(durationSeconds, stepSeconds);
   const chartDuration = chartDurationSeconds(durationSeconds);
   const touchClock = labels.map(()=>0);
   const allTouchClock = labels.map(()=>0);
@@ -3895,6 +3896,15 @@ function buildLiveImpactChartValues(scope, durationSeconds=300, stepSeconds=5){
     pressureRaw.map(value=>Math.min(20, Math.round(value * 1.75 * 10) / 10)),
     1
   );
+  const possessionSmoothed = smoothedNullableSeries(possessionClock, 1);
+  const visibleElapsed = Math.min(chartDuration, liveApiVisibleElapsedSeconds());
+  ticks.forEach((elapsedTick, index)=>{
+    if(elapsedTick <= visibleElapsed + 0.001) return;
+    touchClock[index] = null;
+    possessionClock[index] = null;
+    possessionSmoothed[index] = null;
+    pressureClock[index] = null;
+  });
 
   return {
     impact:{
@@ -3906,9 +3916,9 @@ function buildLiveImpactChartValues(scope, durationSeconds=300, stepSeconds=5){
       live:true
     },
     touchClock,
-    possessionClock:smoothedNullableSeries(possessionClock, 1),
+    possessionClock:possessionSmoothed,
     pressureClock,
-    parsedTouches:{values:touchClock, parsed:true, sampleCount:selectedEventCount, touchCount:touchClock.reduce((sum,value)=>sum + value, 0), live:true}
+    parsedTouches:{values:touchClock, parsed:true, sampleCount:selectedEventCount, touchCount:touchClock.reduce((sum,value)=>sum + (Number(value) || 0), 0), live:true}
   };
 }
 
@@ -6673,8 +6683,10 @@ function makeEmptyLiveApiState(){
     durationSeconds: 0,
     lastBallSpeed: 0,
     lastKnownClock: null,
+    overtimeStartedAt: null,
     matchEnded: false,
-    endedAt: null
+    endedAt: null,
+    endedElapsedSeconds: null
   };
 }
 
@@ -6683,12 +6695,16 @@ function liveApiDashboardActive(){
 }
 
 function liveApiChartDurationSeconds(){
-  const elapsed = Number.isFinite(liveApiState?.lastKnownClock)
-    ? Math.max(0, 300 - Number(liveApiState.lastKnownClock))
-    : liveApiState
-      ? Math.max(0, (Date.now() - liveApiState.startedAt) / 1000)
-      : 0;
-  return Math.max(1, Math.ceil(elapsed));
+  if(!liveApiState) return 300;
+  const elapsed = liveElapsedSeconds();
+  const endedElapsed = Number(liveApiState.endedElapsedSeconds);
+  if(liveApiState.matchEnded && Number.isFinite(endedElapsed) && endedElapsed > 0){
+    return Math.max(30, Math.ceil(endedElapsed));
+  }
+  if(elapsed > 300 || Number(liveApiState.lastKnownClock) < 0){
+    return Math.max(301, Math.ceil(elapsed));
+  }
+  return 300;
 }
 
 function firstDefined(...values){
@@ -7071,8 +7087,10 @@ function liveApiGameEnded(payload, event=""){
 
 function markLiveMatchEnded(){
   if(!liveApiState) return;
+  const elapsedAtEnd = liveElapsedSeconds();
   liveApiState.matchEnded = true;
   liveApiState.endedAt = liveApiState.endedAt || Date.now();
+  liveApiState.endedElapsedSeconds = Number.isFinite(elapsedAtEnd) ? Math.max(1, Math.ceil(elapsedAtEnd)) : liveApiState.endedElapsedSeconds;
   liveApiState.lastKnownClock = 0;
   setLiveReplayActive(false);
 }
@@ -7375,6 +7393,10 @@ function handleLiveUpdateState(payload){
   const clock = liveGameClockSeconds(payload);
   if(clock !== null){
     liveApiState.lastKnownClock = clock;
+    if(!liveApiState.matchEnded){
+      if(clock === 0) liveApiState.overtimeStartedAt = liveApiState.overtimeStartedAt || Date.now();
+      else liveApiState.overtimeStartedAt = null;
+    }
     liveApiState.durationSeconds = Math.max(liveApiState.durationSeconds, Math.round(liveElapsedSeconds()));
   }
   const ball = firstDefined(valueByKey(payload,["ball","Ball"]), valueByKey(payload?.Game,["Ball","ball"]));
@@ -7415,8 +7437,17 @@ function lastLiveHitForPlayer(name){
 }
 
 function liveElapsedSeconds(){
+  if(liveApiState?.overtimeStartedAt && !liveApiState.matchEnded){
+    return 300 + Math.max(0, (Date.now() - liveApiState.overtimeStartedAt) / 1000);
+  }
   if(Number.isFinite(liveApiState.lastKnownClock)) return Math.max(0, 300 - liveApiState.lastKnownClock);
   return Math.max(0, (Date.now() - liveApiState.startedAt) / 1000);
+}
+
+function liveApiVisibleElapsedSeconds(){
+  const endedElapsed = Number(liveApiState?.endedElapsedSeconds);
+  if(liveApiState?.matchEnded && Number.isFinite(endedElapsed) && endedElapsed > 0) return endedElapsed;
+  return liveElapsedSeconds();
 }
 
 function addLiveTimelineEvent(type, player, team=null, extra={}){
@@ -7629,6 +7660,10 @@ function handleLiveApiMessage(raw){
     const clock = liveGameClockSeconds(msg.payload);
     if(clock !== null){
       liveApiState.lastKnownClock = clock;
+      if(!liveApiState.matchEnded){
+        if(clock === 0) liveApiState.overtimeStartedAt = liveApiState.overtimeStartedAt || Date.now();
+        else liveApiState.overtimeStartedAt = null;
+      }
       liveApiState.durationSeconds = Math.max(liveApiState.durationSeconds, Math.round(liveElapsedSeconds()));
     }
   }
