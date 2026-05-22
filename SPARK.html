@@ -5703,7 +5703,9 @@ function render(){
 
 
 
-const POSITIONING_HEAT_FIXED_SCALE = 9;
+const POSITIONING_HEAT_BASE_SCALE = 4.8;
+const POSITIONING_HEAT_DENSE_SCALE_MIN = 6.4;
+const POSITIONING_HEAT_DENSE_SCALE_MAX = 13.5;
 const POSITIONING_HEAT_REFERENCE_SAMPLES_PER_SECOND = 9;
 
 function renderPositioningHeatmap(a){
@@ -5811,8 +5813,8 @@ function renderPositioningHeatmap(a){
   const heatDuration = Math.max(1, chartDurationSeconds(replayObservedDurationSeconds()));
   const samplesPerSecond = samples.length / heatDuration / Math.max(1, samplesByPlayer.size);
   const sampleDensityFactor = clampValue(samplesPerSecond / POSITIONING_HEAT_REFERENCE_SAMPLES_PER_SECOND, 1, 2.8);
-  const sampleWeight = 1 / sampleDensityFactor;
-  const bridgeWeight = .16 / sampleDensityFactor;
+  const sampleWeight = 1 / Math.pow(sampleDensityFactor, .42);
+  const bridgeWeight = .16 / Math.pow(sampleDensityFactor, .42);
 
   samplesByPlayer.forEach(playerSamples=>{
     playerSamples.sort((a,b)=>(a.elapsed || 0) - (b.elapsed || 0));
@@ -5866,7 +5868,19 @@ function renderPositioningHeatmap(a){
       trendDensity[index] = trend;
     }
   }
-  const heatScale = POSITIONING_HEAT_FIXED_SCALE;
+  const positiveTrends = Array.from(trendDensity).filter(value=>value > 0).sort((a,b)=>a-b);
+  function trendPercentile(pct){
+    if(!positiveTrends.length) return POSITIONING_HEAT_BASE_SCALE;
+    const index = Math.max(0, Math.min(positiveTrends.length - 1, Math.round((positiveTrends.length - 1) * pct)));
+    return positiveTrends[index];
+  }
+  const activityBlend = clampValue((samplesPerSecond - 8) / 8, 0, 1);
+  const denseReplayScale = clampValue(
+    Math.max(POSITIONING_HEAT_DENSE_SCALE_MIN, trendPercentile(.965) * 1.18, trendPercentile(.99) * .86),
+    POSITIONING_HEAT_DENSE_SCALE_MIN,
+    POSITIONING_HEAT_DENSE_SCALE_MAX
+  );
+  const heatScale = (POSITIONING_HEAT_BASE_SCALE * (1 - activityBlend)) + (denseReplayScale * activityBlend);
 
   function colourFor(v){
     if(v <= 0) return null;
