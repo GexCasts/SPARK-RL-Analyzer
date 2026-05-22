@@ -21,6 +21,7 @@ const rrrocketCandidates = [
 ].filter(Boolean);
 const rrrocketPath = rrrocketCandidates.find(candidate=>fsSync.existsSync(candidate));
 const tmpDir = path.join(here, ".tmp");
+const PHYSICS_SAMPLE_INTERVAL_SECONDS = 0.11;
 const types = new Map([
   [".html", "text/html; charset=utf-8"],
   [".js", "text/javascript"],
@@ -1459,7 +1460,7 @@ function summarizeShotSamples(parsedReplay){
         }
       }
       const lastSampleTime = lastPhysicsSampleTimeByPri.get(pri);
-      if(Number.isFinite(lastSampleTime) && time - lastSampleTime < 0.22) continue;
+      if(Number.isFinite(lastSampleTime) && time - lastSampleTime < PHYSICS_SAMPLE_INTERVAL_SECONDS) continue;
 
       lastPhysicsSampleTimeByPri.set(pri, time);
       if(!distanceSamplesByPri.has(pri)) distanceSamplesByPri.set(pri, []);
