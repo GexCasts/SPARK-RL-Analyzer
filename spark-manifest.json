@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.05.22.0929",
-    "generatedUtc":  "2026-05-22T09:29:07.4609784Z",
+    "appVersion":  "2026.05.22.0949",
+    "generatedUtc":  "2026-05-22T09:49:30.2202082Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -23,6 +23,13 @@
                       "sha256":  "c378ce468fbda332731c7ebc05058af43b0acc7379be6a0cc0fce7bb3944632f",
                       "size":  81,
                       "modifiedUtc":  "2026-05-13T06:05:30.2880038Z"
+                  },
+                  {
+                      "path":  "app/README.md",
+                      "version":  "58a8269ab007",
+                      "sha256":  "58a8269ab007f396a8c24a137198c0b2ce9db667c81ef5cb0658ce947c7f9beb",
+                      "size":  284,
+                      "modifiedUtc":  "2026-05-22T09:45:37.3400898Z"
                   },
                   {
                       "path":  "assets/1NE_Vector_edited.png",
@@ -67,6 +74,27 @@
                       "modifiedUtc":  "2026-05-11T15:02:57.9645842Z"
                   },
                   {
+                      "path":  "overlay/README.md",
+                      "version":  "20105026594b",
+                      "sha256":  "20105026594bdef0db160003c41098f8abe3aa31b5ca1cbc823bfc36e8b95b34",
+                      "size":  251,
+                      "modifiedUtc":  "2026-05-22T09:45:37.3400898Z"
+                  },
+                  {
+                      "path":  "overlay/SPARK_Overlay.html",
+                      "version":  "a441a88f264a",
+                      "sha256":  "a441a88f264a3416084e40b99d883d43e54e66f93368a8614862f87f7fbde215",
+                      "size":  14354,
+                      "modifiedUtc":  "2026-05-22T09:46:07.3524578Z"
+                  },
+                  {
+                      "path":  "parser/README.md",
+                      "version":  "8493a5df24b8",
+                      "sha256":  "8493a5df24b867fcfcd517e98a6d65b17d3d17a23dd4e2cc76839a58b1c929d3",
+                      "size":  247,
+                      "modifiedUtc":  "2026-05-22T09:45:37.3410908Z"
+                  },
+                  {
                       "path":  "README.md",
                       "version":  "e220b207d610",
                       "sha256":  "e220b207d610557be00218185b001f5c009afbd8dc39ba4bf42cba99031d5e3b",
@@ -79,6 +107,13 @@
                       "sha256":  "8a9edc24bf43832eafead1d9a797e2becfc967c7a6402c0ef37a49deb32323d6",
                       "size":  3833,
                       "modifiedUtc":  "2026-05-19T13:19:30.9074046Z"
+                  },
+                  {
+                      "path":  "shared/README.md",
+                      "version":  "0c466fc8fc5a",
+                      "sha256":  "0c466fc8fc5a53a6dd2823f19b77cb21882dfa58e91179f3dd1ee5f7797bcd59",
+                      "size":  150,
+                      "modifiedUtc":  "2026-05-22T09:45:37.3420919Z"
                   },
                   {
                       "path":  "shot-samples-schema.example.json",
@@ -131,10 +166,10 @@
                   },
                   {
                       "path":  "static-download-server.mjs",
-                      "version":  "643e34fae42e",
-                      "sha256":  "643e34fae42ece80bc3c0d42f238d3872ec0de543028d15a83ea645e62d8f934",
-                      "size":  98013,
-                      "modifiedUtc":  "2026-05-22T03:11:24.4170118Z"
+                      "version":  "060adbb31938",
+                      "sha256":  "060adbb31938503f033b3e64c0b24ef7a8bb8b9ab00a1c1efe7632dfcdeae526",
+                      "size":  98212,
+                      "modifiedUtc":  "2026-05-22T09:45:37.3390890Z"
                   },
                   {
                       "path":  "tools/New-SparkManifest.ps1",

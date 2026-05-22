@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPARK Overlay</title>
+<style>
+:root{
+  --spark-amber:#ffb617;
+  --spark-gold:#ffd000;
+  --blue:#1da7ff;
+  --orange:#ff7a20;
+  --panel:#050609;
+  --text:#f7f7f4;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:transparent;
+  color:var(--text);
+  font-family:Inter,Segoe UI,Arial,sans-serif;
+}
+.stage{
+  position:relative;
+  width:100vw;
+  height:100vh;
+}
+.scorebug{
+  position:absolute;
+  left:50%;
+  top:0;
+  width:min(1180px,86vw);
+  height:156px;
+  transform:translateX(-50%);
+  filter:drop-shadow(0 8px 18px rgba(0,0,0,.45));
+}
+.wing{
+  position:absolute;
+  top:20px;
+  width:43%;
+  height:58px;
+  background:linear-gradient(180deg,#ffc938,#f1a70e);
+  color:#fff;
+  display:flex;
+  align-items:center;
+  font-size:24px;
+  font-weight:900;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  text-shadow:0 2px 0 rgba(0,0,0,.18);
+}
+.wing.left{
+  left:0;
+  justify-content:flex-end;
+  padding-right:118px;
+  clip-path:polygon(0 0,100% 0,84% 100%,0 100%);
+}
+.wing.right{
+  right:0;
+  justify-content:flex-start;
+  padding-left:118px;
+  clip-path:polygon(0 0,100% 0,100% 100%,16% 100%);
+}
+.center{
+  position:absolute;
+  left:50%;
+  top:0;
+  width:344px;
+  height:132px;
+  transform:translateX(-50%);
+  background:#07080b;
+  clip-path:polygon(8% 0,92% 0,100% 64%,70% 100%,30% 100%,0 64%);
+  display:grid;
+  grid-template-columns:72px 1fr 72px;
+  grid-template-rows:70px 28px 34px;
+  align-items:center;
+  justify-items:center;
+  border-bottom:2px solid rgba(255,255,255,.55);
+}
+.score{
+  width:72px;
+  height:70px;
+  display:grid;
+  place-items:center;
+  font-size:42px;
+  font-weight:900;
+}
+.score.blue{background:var(--blue)}
+.score.orange{background:var(--orange)}
+.clock{
+  grid-column:2;
+  font-size:36px;
+  font-weight:950;
+  line-height:1;
+}
+.match{
+  grid-column:1/4;
+  grid-row:2;
+  font-size:13px;
+  font-weight:800;
+  color:#ddd;
+}
+.bolt{
+  grid-column:2;
+  grid-row:3;
+  height:42px;
+  transform:translateY(3px);
+}
+.series{
+  position:absolute;
+  top:78px;
+  width:220px;
+  height:36px;
+  background:#fff;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.series.left{
+  right:50%;
+  margin-right:156px;
+  justify-content:flex-end;
+  padding-right:34px;
+  clip-path:polygon(20% 0,100% 0,86% 100%,0 100%);
+}
+.series.right{
+  left:50%;
+  margin-left:156px;
+  justify-content:flex-start;
+  padding-left:34px;
+  clip-path:polygon(0 0,80% 0,100% 100%,14% 100%);
+}
+.dot{
+  width:18px;
+  height:18px;
+  border-radius:4px;
+  background:#08090d;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);
+}
+.dot.blue.filled{background:var(--blue)}
+.dot.orange.filled{background:var(--orange)}
+.boosts{
+  position:absolute;
+  top:118px;
+  width:292px;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+.boosts.left{left:42px}
+.boosts.right{right:42px}
+.boostRow{
+  position:relative;
+  height:20px;
+  background:rgba(3,4,7,.88);
+  border:1px solid rgba(255,255,255,.18);
+  display:grid;
+  grid-template-columns:1fr 42px;
+  align-items:center;
+  font-size:12px;
+  font-weight:850;
+  text-transform:uppercase;
+  overflow:hidden;
+}
+.boosts.right .boostRow{grid-template-columns:42px 1fr;text-align:right}
+.bar{
+  position:absolute;
+  inset:auto 42px 1px 0;
+  height:3px;
+  background:linear-gradient(90deg,var(--spark-gold),#fff3a3);
+  transform-origin:left;
+}
+.boosts.right .bar{
+  inset:auto 0 1px 42px;
+  transform-origin:right;
+}
+.name,.boostValue{position:relative;padding:0 6px;z-index:1}
+.replay{
+  position:absolute;
+  left:50%;
+  top:146px;
+  transform:translateX(-50%);
+  padding:6px 22px;
+  background:rgba(255,208,0,.92);
+  color:#060606;
+  font-size:14px;
+  font-weight:950;
+  text-transform:uppercase;
+  letter-spacing:.18em;
+  display:none;
+}
+.stage.replayActive .replay{display:block}
+.status{
+  position:absolute;
+  left:50%;
+  top:150px;
+  transform:translateX(-50%);
+  color:rgba(255,255,255,.55);
+  font-size:13px;
+  font-weight:700;
+}
+.stage.live .status{display:none}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="scorebug">
+    <div class="wing left" id="blueName">Blue</div>
+    <div class="wing right" id="orangeName">Orange</div>
+    <div class="series left" id="blueSeries"></div>
+    <div class="series right" id="orangeSeries"></div>
+    <div class="center">
+      <div class="score blue" id="blueScore">0</div>
+      <div class="clock" id="clock">5:00</div>
+      <div class="score orange" id="orangeScore">0</div>
+      <div class="match" id="matchTag">Waiting for feed</div>
+      <img class="bolt" src="/__1ne_logo.png" alt="">
+    </div>
+  </div>
+  <div class="boosts left" id="blueBoosts"></div>
+  <div class="boosts right" id="orangeBoosts"></div>
+  <div class="replay">Replay</div>
+  <div class="status" id="status">Waiting for SPARK live feed</div>
+</div>
+<script>
+const overlayConfigKey = "oneReplayAnalyzer.overlayConfig.v1";
+const defaultConfig = {
+  blueTeamName:"",
+  orangeTeamName:"",
+  seriesBestOf:5,
+  blueSeriesScore:0,
+  orangeSeriesScore:0
+};
+const state = {
+  connected:false,
+  updates:0,
+  replay:false,
+  clock:300,
+  teams:{Blue:{name:"Blue",score:0},Orange:{name:"Orange",score:0}},
+  players:new Map()
+};
+const $ = id=>document.getElementById(id);
+function firstDefined(...values){
+  for(const value of values) if(value !== undefined && value !== null && value !== "") return value;
+  return undefined;
+}
+function valueByKey(obj, names){
+  if(!obj || typeof obj !== "object") return undefined;
+  for(const name of names) if(obj[name] !== undefined) return obj[name];
+  const wanted = names.map(name=>String(name).toLowerCase());
+  const found = Object.entries(obj).find(([key])=>wanted.includes(key.toLowerCase()));
+  return found ? found[1] : undefined;
+}
+function toNumber(value, fallback=0){
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+function normalizeTeam(value){
+  if(value && typeof value === "object") value = valueByKey(value,["TeamNum","teamNum","team","Team"]);
+  if(value === 0 || value === "0") return "Blue";
+  if(value === 1 || value === "1") return "Orange";
+  const text = String(value || "").toLowerCase();
+  if(text.includes("blue")) return "Blue";
+  if(text.includes("orange")) return "Orange";
+  return null;
+}
+function cleanName(value){
+  return String(value || "").replace(/\|/g,"").trim();
+}
+function escapeHtml(value){
+  return String(value ?? "").replace(/[&<>"']/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
+}
+function readConfig(){
+  try{return {...defaultConfig, ...JSON.parse(localStorage.getItem(overlayConfigKey) || "{}")};}
+  catch{return {...defaultConfig};}
+}
+function formatClock(seconds){
+  const raw = Number(seconds);
+  if(Number.isFinite(raw) && raw < 0) return `+${formatClock(Math.abs(raw))}`;
+  const rounded = Math.max(0, Math.round(Number(seconds) || 0));
+  const m = Math.floor(rounded / 60);
+  const s = rounded % 60;
+  return `${m}:${String(s).padStart(2,"0")}`;
+}
+function overlayGameLabel(config){
+  const bestOf = Number(config.seriesBestOf) || 5;
+  const played = Math.max(0, Number(config.blueSeriesScore) || 0) + Math.max(0, Number(config.orangeSeriesScore) || 0);
+  return `Game ${Math.min(bestOf, played + 1)}`;
+}
+function renderDots(side, config){
+  const maxWins = Math.ceil((Number(config.seriesBestOf) || 5) / 2);
+  const score = Math.max(0, Math.min(maxWins, Number(side === "Blue" ? config.blueSeriesScore : config.orangeSeriesScore) || 0));
+  return Array.from({length:maxWins}, (_, index)=>`<span class="dot ${side.toLowerCase()} ${index < score ? "filled" : ""}"></span>`).join("");
+}
+function extractPlayers(payload){
+  const players = valueByKey(payload,["players","Players"]);
+  if(Array.isArray(players)) return players;
+  if(players && typeof players === "object") return Object.values(players);
+  return [];
+}
+function updateTeams(payload){
+  const teams = firstDefined(valueByKey(payload,["teams","Teams"]), valueByKey(payload?.Game,["teams","Teams"]));
+  if(Array.isArray(teams)){
+    teams.forEach(team=>{
+      const key = normalizeTeam(team);
+      if(!key) return;
+      state.teams[key].name = cleanName(firstDefined(valueByKey(team,["Name","name","TeamName","teamName"]), state.teams[key].name));
+      state.teams[key].score = toNumber(valueByKey(team,["Score","score","Goals","goals"]), state.teams[key].score);
+    });
+  }else if(teams && typeof teams === "object"){
+    Object.entries(teams).forEach(([name, team])=>{
+      const key = normalizeTeam(firstDefined(valueByKey(team,["TeamNum","teamNum","team","Team"]), name));
+      if(!key) return;
+      state.teams[key].name = cleanName(firstDefined(valueByKey(team,["Name","name","TeamName","teamName"]), state.teams[key].name));
+      state.teams[key].score = toNumber(valueByKey(team,["Score","score","Goals","goals"]), state.teams[key].score);
+    });
+  }
+}
+function updatePlayers(payload){
+  extractPlayers(payload).forEach(player=>{
+    const name = cleanName(firstDefined(valueByKey(player,["Name","name","PlayerName","playerName","Id","id"]), ""));
+    if(!name) return;
+    const team = normalizeTeam(firstDefined(valueByKey(player,["TeamNum","teamNum","Team","team"]), valueByKey(player,["Team"])));
+    if(!team) return;
+    const existing = state.players.get(name) || {name, team, boost:0};
+    existing.team = team;
+    existing.boost = toNumber(firstDefined(valueByKey(player,["Boost","boost","BoostAmount","boostAmount"]), existing.boost), existing.boost);
+    state.players.set(name, existing);
+  });
+}
+function gameClock(payload){
+  const direct = firstDefined(
+    valueByKey(payload,["gameSecondsRemaining","GameSecondsRemaining","secondsRemaining","SecondsRemaining","timeRemaining","TimeRemaining"]),
+    valueByKey(payload,["TimeSeconds","timeSeconds"]),
+    valueByKey(payload?.Game,["TimeSeconds","timeSeconds","secondsRemaining","timeRemaining"])
+  );
+  return direct !== undefined ? toNumber(direct, null) : null;
+}
+function replayFlag(payload){
+  const direct = firstDefined(
+    valueByKey(payload,["bReplay","replay","Replay","goalReplay","GoalReplay","bGoalReplay"]),
+    valueByKey(payload?.Game,["bReplay","replay","Replay","goalReplay","GoalReplay","bGoalReplay"])
+  );
+  if(direct === undefined) return null;
+  return direct === true || direct === 1 || direct === "1" || String(direct).toLowerCase() === "true";
+}
+function normalizeMessage(raw){
+  const msg = typeof raw === "string" ? JSON.parse(raw) : raw;
+  const event = firstDefined(msg.event,msg.Event,msg.type,msg.Type,msg.name,msg.Name);
+  let payload = firstDefined(msg.data,msg.Data,msg.payload,msg.Payload,msg);
+  if(typeof payload === "string"){
+    const trimmed = payload.trim();
+    if(trimmed.startsWith("{") || trimmed.startsWith("[")){
+      try{payload = JSON.parse(trimmed);}catch{}
+    }
+  }
+  return {event:String(event || "").toLowerCase(), payload};
+}
+function renderBoostRows(team){
+  return Array.from(state.players.values())
+    .filter(player=>player.team === team)
+    .sort((a,b)=>a.name.localeCompare(b.name))
+    .slice(0, 4)
+    .map(player=>{
+      const boost = Math.max(0, Math.min(100, Math.round(player.boost || 0)));
+      const name = escapeHtml(player.name);
+      return `<div class="boostRow">
+        ${team === "Orange" ? `<span class="boostValue">${boost}</span><span class="name">${name}</span>` : `<span class="name">${name}</span><span class="boostValue">${boost}</span>`}
+        <span class="bar" style="transform:scaleX(${boost / 100})"></span>
+      </div>`;
+    }).join("");
+}
+function render(){
+  const config = readConfig();
+  const stage = $("stage");
+  stage.classList.toggle("live", state.connected && state.updates > 0);
+  stage.classList.toggle("replayActive", !!state.replay);
+  $("blueName").textContent = config.blueTeamName || state.teams.Blue.name || "Blue";
+  $("orangeName").textContent = config.orangeTeamName || state.teams.Orange.name || "Orange";
+  $("blueScore").textContent = state.teams.Blue.score || 0;
+  $("orangeScore").textContent = state.teams.Orange.score || 0;
+  $("clock").textContent = formatClock(state.clock);
+  $("matchTag").textContent = state.updates ? `${overlayGameLabel(config)}     Best of ${Number(config.seriesBestOf) || 5}` : "Waiting for feed";
+  $("blueSeries").innerHTML = renderDots("Blue", config);
+  $("orangeSeries").innerHTML = renderDots("Orange", config);
+  $("blueBoosts").innerHTML = renderBoostRows("Blue");
+  $("orangeBoosts").innerHTML = renderBoostRows("Orange");
+}
+function handleMessage(raw){
+  let msg;
+  try{msg = normalizeMessage(raw);}catch{return;}
+  state.connected = true;
+  state.updates++;
+  updateTeams(msg.payload);
+  updatePlayers(msg.payload);
+  const clock = gameClock(msg.payload);
+  if(clock !== null) state.clock = clock;
+  const replay = replayFlag(msg.payload);
+  if(replay !== null) state.replay = replay;
+  if(msg.event.includes("goalreplay")) state.replay = !msg.event.includes("ended") && !msg.event.includes("end");
+  render();
+}
+function connect(){
+  const wsUrl = `${location.origin.replace(/^http/, "ws")}/api/live-api`;
+  const ws = new WebSocket(wsUrl);
+  ws.addEventListener("open", ()=>{state.connected = true; render();});
+  ws.addEventListener("message", event=>handleMessage(event.data));
+  ws.addEventListener("close", ()=>{
+    state.connected = false;
+    render();
+    setTimeout(connect, 1500);
+  });
+  ws.addEventListener("error", ()=>{state.connected = false; render();});
+}
+function startHeartbeat(){
+  const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const endpoint = `${location.origin}/api/spark-heartbeat`;
+  function post(closing=false){
+    const payload = JSON.stringify({id, closing, path:location.pathname, overlay:true});
+    if(closing && navigator.sendBeacon){
+      navigator.sendBeacon(endpoint, new Blob([payload], {type:"application/json"}));
+      return;
+    }
+    fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:payload,cache:"no-store"}).catch(()=>{});
+  }
+  post(false);
+  const timer = setInterval(()=>post(false), 15000);
+  window.addEventListener("pagehide", ()=>{clearInterval(timer); post(true);});
+}
+window.addEventListener("storage", event=>{
+  if(event.key === overlayConfigKey) render();
+});
+startHeartbeat();
+connect();
+render();
+</script>
+</body>
+</html>

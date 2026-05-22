@@ -10,7 +10,9 @@ import {fileURLToPath} from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = here;
 const appFileName = "SPARK.html";
+const overlayFileName = path.join("overlay", "SPARK_Overlay.html");
 const logoPath = path.join(here, "assets", "Spark Logo.png");
+const oneNeLogoPath = path.join(here, "assets", "1NE_Vector_edited.png");
 const rrrocketVersion = "0.11.1";
 const rrrocketCandidates = [
   process.env.SPARK_RRROCKET_PATH,
@@ -2409,13 +2411,13 @@ server = http.createServer(async (req,res)=>{
       return;
     }
     if(url.pathname === "/__spark_logo.png" || url.pathname === "/__1ne_logo.png"){
-      const data = await fs.readFile(logoPath);
+      const data = await fs.readFile(url.pathname === "/__1ne_logo.png" ? oneNeLogoPath : logoPath);
       res.writeHead(200, {"Content-Type":"image/png"});
       res.end(data);
       return;
     }
     if(url.pathname === "/1NE_Overlay" || url.pathname === "/SPARK_Overlay"){
-      const data = await fs.readFile(path.join(root, appFileName));
+      const data = await fs.readFile(path.join(root, overlayFileName));
       res.writeHead(200, {"Content-Type":"text/html; charset=utf-8"});
       res.end(data);
       return;
