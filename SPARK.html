@@ -5703,9 +5703,9 @@ function render(){
 
 
 
-const POSITIONING_HEAT_BASE_SCALE = 4.8;
-const POSITIONING_HEAT_DENSE_SCALE_MIN = 6.4;
-const POSITIONING_HEAT_DENSE_SCALE_MAX = 13.5;
+const POSITIONING_HEAT_BASE_SCALE = 3.45;
+const POSITIONING_HEAT_DENSE_SCALE_MIN = 7.6;
+const POSITIONING_HEAT_DENSE_SCALE_MAX = 16;
 const POSITIONING_HEAT_REFERENCE_SAMPLES_PER_SECOND = 9;
 
 function renderPositioningHeatmap(a){
@@ -5874,9 +5874,9 @@ function renderPositioningHeatmap(a){
     const index = Math.max(0, Math.min(positiveTrends.length - 1, Math.round((positiveTrends.length - 1) * pct)));
     return positiveTrends[index];
   }
-  const activityBlend = clampValue((samplesPerSecond - 8) / 8, 0, 1);
+  const activityBlend = clampValue((samplesPerSecond - 7.5) / 7.5, 0, 1);
   const denseReplayScale = clampValue(
-    Math.max(POSITIONING_HEAT_DENSE_SCALE_MIN, trendPercentile(.965) * 1.18, trendPercentile(.99) * .86),
+    Math.max(POSITIONING_HEAT_DENSE_SCALE_MIN, trendPercentile(.965) * 1.34, trendPercentile(.99) * .96),
     POSITIONING_HEAT_DENSE_SCALE_MIN,
     POSITIONING_HEAT_DENSE_SCALE_MAX
   );
