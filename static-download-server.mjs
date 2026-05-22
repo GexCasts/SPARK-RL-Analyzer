@@ -609,6 +609,20 @@ function summarizeBoostPickups(parsedReplay){
     return bestDelta <= 0.75 ? best : null;
   }
 
+  function maxNearbyCarSpeed(carActor, time, windowSeconds=0.2){
+    const samples = carSpeedSamples.get(carActor) || [];
+    let best = null;
+    for(let i = samples.length - 1; i >= 0; i--){
+      const sample = samples[i];
+      const delta = Math.abs(time - sample.time);
+      if(delta > windowSeconds && sample.time < time) break;
+      if(delta <= windowSeconds && sample.speed <= 2450){
+        best = Math.max(best ?? 0, sample.speed);
+      }
+    }
+    return best;
+  }
+
   function replayBoolValue(attribute, value){
     const direct = getObject(attribute, "Boolean") ?? getObject(value, "Boolean");
     if(typeof direct === "boolean") return direct;
@@ -635,10 +649,13 @@ function summarizeBoostPickups(parsedReplay){
     return rawBoostUsed <= maxRawDrain;
   }
 
-  function addSupersonicBoostSpend(playerName, rawBoostUsed, speedSample){
+  function addSupersonicBoostSpend(playerName, rawBoostUsed, bucket, speedSample){
     if(!playerName || !Number.isFinite(rawBoostUsed) || rawBoostUsed <= 0) return;
-    const previous = supersonicBoostSpend.get(playerName) || {raw:0, events:0, speedSamples:0};
-    previous.raw += rawBoostUsed;
+    const previous = supersonicBoostSpend.get(playerName) || {strictRaw:0, looseRaw:0, nearbyRaw:0, strictNonPlausibleRaw:0, events:0, speedSamples:0};
+    if(bucket === "loose") previous.looseRaw += rawBoostUsed;
+    else if(bucket === "nearby") previous.nearbyRaw += rawBoostUsed;
+    else if(bucket === "strictNonPlausible") previous.strictNonPlausibleRaw += rawBoostUsed;
+    else previous.strictRaw += rawBoostUsed;
     previous.events += 1;
     if(speedSample) previous.speedSamples += 1;
     supersonicBoostSpend.set(playerName, previous);
@@ -774,14 +791,23 @@ function summarizeBoostPickups(parsedReplay){
             const rawBoostUsed = previousBoost - boostAmount;
             const previousBoostTime = boostComponentLastTime.get(actorId);
             const speedSample = nearestCarSpeed(carActor, time);
+            const nearbyMaxSpeed = maxNearbyCarSpeed(carActor, time, 0.2);
+            const atSupersonicSpeed = speedSample && speedSample.speed >= 2180 && speedSample.speed <= 2450;
             const atMaxSpeed = speedSample && speedSample.speed >= 2280 && speedSample.speed <= 2450;
+            const nearMaxSpeed = Number.isFinite(nearbyMaxSpeed) && nearbyMaxSpeed >= 2280 && nearbyMaxSpeed <= 2450;
             const activeKnown = boostComponentHadActive.has(actorId);
             const boostActive = boostComponentActive.get(actorId) === true;
             const activeEnough = activeKnown ? boostActive : rawBoostUsed <= 10;
-            if(atMaxSpeed && activeEnough && isPlausibleBoostDrain(rawBoostUsed, previousBoostTime, time)){
+            if(activeEnough && isPlausibleBoostDrain(rawBoostUsed, previousBoostTime, time)){
               const pri = carPri.get(carActor);
               const playerName = cleanName(priName.get(pri));
-              addSupersonicBoostSpend(playerName, rawBoostUsed, speedSample);
+              if(atSupersonicSpeed) addSupersonicBoostSpend(playerName, rawBoostUsed, "loose", speedSample);
+              if(atMaxSpeed) addSupersonicBoostSpend(playerName, rawBoostUsed, "strict", speedSample);
+              if(nearMaxSpeed) addSupersonicBoostSpend(playerName, rawBoostUsed, "nearby", speedSample);
+            }else if(activeEnough && atMaxSpeed){
+              const pri = carPri.get(carActor);
+              const playerName = cleanName(priName.get(pri));
+              addSupersonicBoostSpend(playerName, rawBoostUsed, "strictNonPlausible", speedSample);
             }
           }
           if(Number.isInteger(carActor)) carBoostAmount.set(carActor, boostAmount);
@@ -952,7 +978,17 @@ function summarizeBoostPickups(parsedReplay){
       });
     }
     const player = players.get(playerName);
-    player.supersonicBoostUsed = Math.round((spend.raw / 2.55) * 10) / 10;
+    const strictRaw = spend.strictRaw || 0;
+    const looseRaw = Math.max(strictRaw, spend.looseRaw || 0);
+    const nearbyRaw = Math.max(strictRaw, spend.nearbyRaw || 0);
+    const strictRatio = looseRaw > 0 ? strictRaw / looseRaw : 1;
+    let selectedRaw = strictRaw;
+    if(looseRaw > 0 && strictRatio < 0.65){
+      selectedRaw = strictRaw + Math.max(0, nearbyRaw - strictRaw) * 0.37;
+    }else if(looseRaw > 0 && strictRatio > 0.72){
+      selectedRaw = looseRaw + (spend.strictNonPlausibleRaw || 0) * 0.055;
+    }
+    player.supersonicBoostUsed = Math.round((selectedRaw / 2.55) * 10) / 10;
     player.supersonicBoostEvents = spend.events;
   }
   for(const event of events){
