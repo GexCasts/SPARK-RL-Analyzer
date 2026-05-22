@@ -2276,8 +2276,9 @@ body.obsOverlayMode #obsOverlayRoot{
 
     <div class="card" id="teamRadarCard">
       <h2>Teamplay Radar</h2>
-      <div class="help">Higher values mean stronger cooperative pressure. Follow-up Speed is based on teammate-to-teammate uninterrupted touch gaps under 2 seconds; slower or interrupted sequences are ignored.</div>
+      <div class="help">Shows team playstyle from replay-derived pressure, possession, positioning, boost control, physical play, and defensive coverage. Values are fixed 0-100 style intensities so different teams and replays are easier to compare.</div>
       <div class="chartWrap"><canvas id="radarChart"></canvas></div>
+      <div class="note" id="radarNote"></div>
     </div>
 
     <div class="card span2" id="playerTableCard">
@@ -3072,6 +3073,7 @@ function aggregate(scope){
 
   const sum=k=>safePs.reduce((a,p)=>a+(Number(p[k])||0),0);
   const avg=k=>Math.round(sum(k)/Math.max(1,safePs.length));
+  const sumStat=k=>safePs.reduce((a,p)=>a+(Number(p.stats?.[k] ?? p[k])||0),0);
 
   return {
     label,
@@ -3090,6 +3092,7 @@ function aggregate(scope){
     goals:sum("goals"),
     nearMiss:sum("nearMiss"),
     forcedSaves:sum("forcedSaves"),
+    saves:sumStat("saves"),
     demos:sum("demos"),
     bumps:sum("bumps"),
     rotation:avg("rotation"),
@@ -4199,6 +4202,119 @@ function largeBoostSteals(a){
     });
   });
   return stolen;
+}
+
+function styleScale(value, high, low=0, power=1){
+  if(!Number.isFinite(value)) return 0;
+  const t = clampValue((value - low) / Math.max(1e-9, high - low), 0, 1);
+  return Math.round(Math.pow(t, power) * 100);
+}
+
+function samplePositionXY(sample){
+  const source = sample?.location || sample?.position || sample?.carLocation || sample;
+  const x = Number(source?.x ?? source?.X ?? source?.fieldX);
+  const y = Number(source?.y ?? source?.Y ?? source?.fieldY);
+  if(!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return {x,y};
+}
+
+function stylePerFive(value, durationSeconds){
+  return Number(value || 0) * (300 / Math.max(1, Number(durationSeconds) || 300));
+}
+
+function teamPositionStyle(a, durationSeconds=300){
+  const players = Array.isArray(a?.ps) ? a.ps : [];
+  const isTeamView = players.length > 1;
+  if(!players.length) return {spread:null, defensivePresence:null, sampleCount:0};
+
+  let sampleCount = 0;
+  let defensiveCount = 0;
+
+  const bySecond = new Map();
+  players.forEach(player=>{
+    const team = String(player.team || a?.label || "").toLowerCase();
+    const samples = Array.isArray(player.positionSamples) ? player.positionSamples : [];
+    samples.forEach(sample=>{
+      const elapsed = sampleElapsedSeconds(sample);
+      const pos = samplePositionXY(sample);
+      if(!Number.isFinite(elapsed) || !pos) return;
+      const second = Math.max(0, Math.floor(elapsed));
+      sampleCount++;
+      const ownHalf = team.includes("blue") ? pos.y < 0 : team.includes("orange") ? pos.y > 0 : false;
+      const ownThird = team.includes("blue") ? pos.y < -1700 : team.includes("orange") ? pos.y > 1700 : false;
+      if(ownHalf) defensiveCount += ownThird ? 1.25 : 1;
+      if(!bySecond.has(second)) bySecond.set(second, []);
+      bySecond.get(second).push({playerId:player.id, x:pos.x, y:pos.y});
+    });
+  });
+
+  let spreadSum = 0;
+  let spreadPairs = 0;
+  if(isTeamView){
+    bySecond.forEach(samples=>{
+      const unique = new Map();
+      samples.forEach(sample=>unique.set(sample.playerId, sample));
+      const values = [...unique.values()];
+      for(let i=0; i<values.length; i++){
+        for(let j=i+1; j<values.length; j++){
+          spreadSum += Math.hypot(values[i].x - values[j].x, values[i].y - values[j].y);
+          spreadPairs++;
+        }
+      }
+    });
+  }
+
+  return {
+    spread: spreadPairs ? spreadSum / spreadPairs : null,
+    defensivePresence: sampleCount ? clampValue((defensiveCount / sampleCount) * 100) : null,
+    sampleCount
+  };
+}
+
+function teamplayRadarMetrics(a, impactChartValues, followupSpeed, durationSeconds=300){
+  const players = Array.isArray(a?.ps) ? a.ps : [];
+  const playerCount = Math.max(1, players.length || 1);
+  const impactValues = impactChartValues || buildImpactChartValues(a, durationSeconds, 2);
+  const possessionAvg = averageFinite(impactValues?.possessionClock || []);
+  const pressureAvg = averageFinite(impactValues?.pressureClock || []);
+  const positionStyle = teamPositionStyle(a, durationSeconds);
+  const totals = boostPickupTotals(a);
+  const largeSteals = largeBoostSteals(a);
+  const physicalTotal = Number(a?.demos || 0) + Number(a?.bumps || 0);
+  const savesPerFive = stylePerFive(Number(a?.stats?.saves ?? a?.saves ?? 0), durationSeconds);
+  const largePerFive = stylePerFive(totals.large, durationSeconds);
+  const stealsPerFive = stylePerFive(largeSteals, durationSeconds);
+  const physicalPerFive = stylePerFive(physicalTotal, durationSeconds);
+
+  const fieldSpread = positionStyle.spread === null
+    ? clampValue(Math.round(a?.spacing || 0))
+    : styleScale(positionStyle.spread, 5200, 1600, .85);
+  const defensiveCover = positionStyle.defensivePresence === null
+    ? clampValue(Math.round(a?.defense || 0))
+    : clampValue(Math.round((styleScale(positionStyle.defensivePresence, 58, 22, .9) * .68) + (styleScale(savesPerFive, 7, 0, .75) * .32)));
+
+  const boostControl = clampValue(Math.round(
+    styleScale(stealsPerFive / playerCount, 6.5, 0, .78) * .62 +
+    styleScale(largePerFive / playerCount, 13.5, 3, .85) * .38
+  ));
+  const physicalPressure = styleScale(physicalPerFive / playerCount, 24, 0, .82);
+
+  const metrics = [
+    {label:"Ball Control",value:Number.isFinite(possessionAvg) ? clampValue(Math.round(possessionAvg * 5)) : clampValue(Math.round(a?.possession || 0)), detail:`possession ${Number.isFinite(possessionAvg) ? possessionAvg.toFixed(1) : a?.possession || 0}/20`},
+    {label:"Pressure Height",value:Number.isFinite(pressureAvg) ? clampValue(Math.round(pressureAvg * 5)) : clampValue(Math.round(a?.pressure || 0)), detail:`pressure ${Number.isFinite(pressureAvg) ? pressureAvg.toFixed(1) : a?.pressure || 0}/20`},
+    {label:"Support Speed",value:clampValue(Math.round(followupSpeed?.score || 0)), detail:followupSpeed?.avgGap === null ? "no fast teammate follow-ups" : `${followupSpeed.count} fast follow-ups, ${followupSpeed.avgGap.toFixed(2)}s avg`},
+    {label:"Field Spread",value:fieldSpread, detail:positionStyle.spread === null ? "position samples unavailable" : `${Math.round(positionStyle.spread).toLocaleString()} uu average teammate spread`},
+    {label:"Boost Control",value:boostControl, detail:`${largeSteals} stolen full boosts, ${totals.large} full boosts total`},
+    {label:"Physical Pressure",value:physicalPressure, detail:`${a.demos || 0} demos, ${a.bumps || 0} bumps`},
+    {label:"Defensive Cover",value:defensiveCover, detail:positionStyle.defensivePresence === null ? "defensive positioning unavailable" : `${Math.round(positionStyle.defensivePresence)}% own-half presence`}
+  ];
+
+  return {
+    labels: metrics.map(metric=>metric.label),
+    values: metrics.map(metric=>metric.value),
+    metrics,
+    sampleCount: positionStyle.sampleCount
+  };
 }
 
 function supersonicBoostUsed(a){
@@ -5518,17 +5634,19 @@ function render(){
     : `${a.label}: using scoreboard shooting totals for this view. ${shootingAdvice(a)}`;
   renderShootingHeatmap(a);
 
+  const radarMetrics = teamplayRadarMetrics(a, impactChartValues, followupSpeed, durationSeconds);
   chart("radarChart",{
     type:"radar",
-    data:{labels:["Support Spacing","Follow-up Speed","Boost Steals","Demos/Bumps","Defense","Rotation"],datasets:[{label:a.label,data:[a.spacing,followupSpeed.score,Math.min(100,a.stolen/5),Math.min(100,(a.demos+a.bumps)*8),a.defense,a.rotation],borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.20)",pointBackgroundColor:"#ffd000"}]},
+    data:{labels:radarMetrics.labels,datasets:[{label:a.label,data:radarMetrics.values,borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.20)",pointBackgroundColor:"#ffd000"}]},
     options:{maintainAspectRatio:false,plugins:{legend},scales:{r:{min:0,max:100,beginAtZero:true,angleLines:{color:"rgba(255,208,0,.15)"},grid:{color:"rgba(255,208,0,.15)"},pointLabels:{color:"#e5e5e5",font:{size:11}},ticks:{stepSize:20,color:"#cfcfcf",backdropColor:"transparent",font:{size:10}}}}}
   });
 
 
   if($("radarNote")){
-    $("radarNote").textContent = followupSpeed.avgGap === null
-      ? `${a.label}: no valid uninterrupted teammate follow-up touches under 2 seconds were found.`
-      : `${a.label}: Follow-up Speed is ${followupSpeed.score}/100, based on ${followupSpeed.count} uninterrupted teammate touch gap${followupSpeed.count===1?"":"s"} under 2 seconds. Average valid gap: ${followupSpeed.avgGap.toFixed(2)}s.`;
+    const strongest = [...radarMetrics.metrics].sort((left,right)=>right.value - left.value)[0];
+    const weakest = [...radarMetrics.metrics].sort((left,right)=>left.value - right.value)[0];
+    $("radarNote").textContent =
+      `${a.label}: teamplay radar now uses fixed 0-100 playstyle scales. Strongest identity: ${strongest.label} (${strongest.value}/100, ${strongest.detail}). Lowest identity: ${weakest.label} (${weakest.value}/100, ${weakest.detail}).`;
   }
 
   renderTable();
