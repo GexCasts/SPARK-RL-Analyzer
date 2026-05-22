@@ -7790,8 +7790,8 @@ function parserFetchErrorMessage(err){
 
 async function requestReplayParse(file){
   const endpoint = location.protocol === "file:"
-    ? "http://127.0.0.1:8765/api/parse-replay"
-    : "/api/parse-replay";
+    ? "http://127.0.0.1:8765/api/analyze-replay"
+    : "/api/analyze-replay";
   try{
     const response = await fetch(endpoint, {
       method: "POST",
@@ -7944,7 +7944,7 @@ async function loadFile(file){
       replayMeta = extractReplayPlayers(buffer);
       replayTitle = extractReplayTitle(buffer, replayTitle);
       matchDurationSeconds = extractReplayDurationSeconds(buffer, file.name);
-      $("fileStatus").innerHTML = `Loaded metadata from <b>${file.name}</b>. Running the bundled replay parser for boost pickups, car positions, ball distance, and shooting...`;
+      $("fileStatus").innerHTML = `Loaded metadata from <b>${file.name}</b>. Running SPARK's backend replay analysis for boost pickups, car positions, ball distance, and shooting...`;
       parsedReplay = await requestReplayParse(file);
       if(!parsedReplay?.error){
         const parsedDuration = normalizeReplayDurationSeconds(parsedReplay.durationSeconds);
@@ -7959,6 +7959,7 @@ async function loadFile(file){
   }
 
   data=buildData(seed, replayMeta.players, replayTitle, matchDurationSeconds);
+  if(parsedReplay?.analysis) data.backendAnalysis = parsedReplay.analysis;
   maybeShowLloydScreen(data.players);
   if(parsedReplay && !parsedReplay.error){
     const clockStart = Number(parsedReplay.scoreboardClockStartSeconds);
@@ -7973,7 +7974,9 @@ async function loadFile(file){
     physicsAnalysisState={
       status:"done",
       progress:100,
-      message:"Replay parser decoded this uploaded file in SPARK. No replay-specific cached data was used.",
+      message:parsedReplay.processingMode === "backend-analysis"
+        ? "Backend replay analysis decoded this uploaded file in SPARK. No replay-specific cached data was used."
+        : "Replay parser decoded this uploaded file in SPARK. No replay-specific cached data was used.",
       frames:parsedReplay.frameCount || 0,
       carSamples:parsedReplay.totalPositionSamples || parsedCounts.positionSamples || 0,
       ballSamples:parsedReplay.totalBallSamples || parsedReplay.frameCount || 0,

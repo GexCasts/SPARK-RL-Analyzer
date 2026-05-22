@@ -6,6 +6,7 @@ import net from "node:net";
 import path from "node:path";
 import {execFile} from "node:child_process";
 import {fileURLToPath} from "node:url";
+import {createReplayAnalysisPackage} from "./parser/replay-analysis-service.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = here;
@@ -2259,9 +2260,16 @@ async function handleReplayParse(req, res){
   const parsed = await parseReplayOnce(req, "replay");
   const boostSummary = summarizeBoostPickups(parsed);
   const shotSummary = summarizeShotSamples(parsed);
-  const summary = mergeReplayParserSummaries(parsed, boostSummary, shotSummary);
+  const summary = createReplayAnalysisPackage(
+    mergeReplayParserSummaries(parsed, boostSummary, shotSummary),
+    {source:"rrrocket"}
+  );
   res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
   res.end(JSON.stringify(summary));
+}
+
+async function handleReplayAnalyze(req, res){
+  await handleReplayParse(req, res);
 }
 
 async function handleClientHeartbeat(req, res){
@@ -2408,6 +2416,10 @@ server = http.createServer(async (req,res)=>{
     }
     if(url.pathname === "/api/parse-replay"){
       await handleReplayParse(req, res);
+      return;
+    }
+    if(url.pathname === "/api/analyze-replay"){
+      await handleReplayAnalyze(req, res);
       return;
     }
     if(url.pathname === "/__spark_logo.png" || url.pathname === "/__1ne_logo.png"){

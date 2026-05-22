@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.05.22.0949",
-    "generatedUtc":  "2026-05-22T09:49:30.2202082Z",
+    "appVersion":  "2026.05.22.1007",
+    "generatedUtc":  "2026-05-22T10:07:29.5655480Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -89,10 +89,17 @@
                   },
                   {
                       "path":  "parser/README.md",
-                      "version":  "8493a5df24b8",
-                      "sha256":  "8493a5df24b867fcfcd517e98a6d65b17d3d17a23dd4e2cc76839a58b1c929d3",
-                      "size":  247,
-                      "modifiedUtc":  "2026-05-22T09:45:37.3410908Z"
+                      "version":  "966acfc690bf",
+                      "sha256":  "966acfc690bfffa4beb06e74194b6885fdd9d17430eae6d06490962702a43ec3",
+                      "size":  532,
+                      "modifiedUtc":  "2026-05-22T10:03:04.2168958Z"
+                  },
+                  {
+                      "path":  "parser/replay-analysis-service.mjs",
+                      "version":  "ddb7aa573e3f",
+                      "sha256":  "ddb7aa573e3f0a5ef069a11a5de9d1d02968447f3a64021488e25e16e49e6b32",
+                      "size":  8822,
+                      "modifiedUtc":  "2026-05-22T10:00:38.9323030Z"
                   },
                   {
                       "path":  "README.md",
@@ -110,10 +117,17 @@
                   },
                   {
                       "path":  "shared/README.md",
-                      "version":  "0c466fc8fc5a",
-                      "sha256":  "0c466fc8fc5a53a6dd2823f19b77cb21882dfa58e91179f3dd1ee5f7797bcd59",
-                      "size":  150,
-                      "modifiedUtc":  "2026-05-22T09:45:37.3420919Z"
+                      "version":  "a8ea1145c5dc",
+                      "sha256":  "a8ea1145c5dc819e49e4d9d2cbb3e2831746ac7e989e1691ef303c97b2a4e1f8",
+                      "size":  254,
+                      "modifiedUtc":  "2026-05-22T10:03:04.2168958Z"
+                  },
+                  {
+                      "path":  "shared/spark-data-contract.mjs",
+                      "version":  "e40e6e44fabd",
+                      "sha256":  "e40e6e44fabd1b11e3e29842c21fb8034aef00909359e77f9e45fabaa21f2f1e",
+                      "size":  466,
+                      "modifiedUtc":  "2026-05-22T10:00:38.9313020Z"
                   },
                   {
                       "path":  "shot-samples-schema.example.json",
@@ -138,10 +152,10 @@
                   },
                   {
                       "path":  "SPARK.html",
-                      "version":  "ebc248268701",
-                      "sha256":  "ebc24826870128b6fa6da7db83f280f1561ea2c01f23440051240edda526e4f2",
-                      "size":  3426127,
-                      "modifiedUtc":  "2026-05-22T09:27:57.5287962Z"
+                      "version":  "89e5bcee61c7",
+                      "sha256":  "89e5bcee61c753d09015e2bedf1548ac44a9a7a097601a0bc662781d4f7e49e6",
+                      "size":  3426387,
+                      "modifiedUtc":  "2026-05-22T10:03:04.2158949Z"
                   },
                   {
                       "path":  "SPARK-Launcher.cs",
@@ -166,10 +180,10 @@
                   },
                   {
                       "path":  "static-download-server.mjs",
-                      "version":  "060adbb31938",
-                      "sha256":  "060adbb31938503f033b3e64c0b24ef7a8bb8b9ab00a1c1efe7632dfcdeae526",
-                      "size":  98212,
-                      "modifiedUtc":  "2026-05-22T09:45:37.3390890Z"
+                      "version":  "381bf58f54d5",
+                      "sha256":  "381bf58f54d571a4ea69deb33de72978b57698f8b12c4c011b844618580aab4b",
+                      "size":  98553,
+                      "modifiedUtc":  "2026-05-22T10:01:26.6881586Z"
                   },
                   {
                       "path":  "tools/New-SparkManifest.ps1",

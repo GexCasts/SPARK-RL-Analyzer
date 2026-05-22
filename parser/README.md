@@ -1,5 +1,7 @@
 # SPARK Parser
 
-This folder is reserved for replay and live-data parsing modules as the analyzer is split out of the current single-file app.
+This folder contains backend replay-analysis modules as SPARK moves processing out of the browser UI.
 
-The active parser code still lives in `../static-download-server.mjs` while this migration is underway.
+`replay-analysis-service.mjs` wraps the decoded rrrocket replay output into a richer backend analysis package: team totals, per-player derived summaries, data quality flags, and a compact event timeline.
+
+The lower-level frame decoder still lives in `../static-download-server.mjs` during migration, but browser uploads now call `/api/analyze-replay` so more chart and coaching logic can move here incrementally.
