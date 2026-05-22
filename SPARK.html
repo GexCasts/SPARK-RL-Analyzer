@@ -6045,6 +6045,106 @@ function renderTimeline(a){
     };
   }
 
+  function nearestTimedSample(samples, elapsed, maxDelta=1.5){
+    let best = null;
+    let bestDelta = Infinity;
+    (samples || []).forEach(sample=>{
+      const sampleElapsed = sampleElapsedSeconds(sample);
+      if(!Number.isFinite(sampleElapsed)) return;
+      const delta = Math.abs(sampleElapsed - elapsed);
+      if(delta <= maxDelta && delta < bestDelta){
+        best = sample;
+        bestDelta = delta;
+      }
+    });
+    return best;
+  }
+
+  function speedAroundElapsed(samples, elapsed, windowSeconds=1.35){
+    const timed = (samples || [])
+      .map(sample=>({sample, elapsed:sampleElapsedSeconds(sample), pos:samplePositionXY(sample)}))
+      .filter(item=>Number.isFinite(item.elapsed) && item.pos && Math.abs(item.elapsed - elapsed) <= windowSeconds)
+      .sort((left,right)=>left.elapsed - right.elapsed);
+    let best = null;
+    for(let i=1; i<timed.length; i++){
+      const dt = timed[i].elapsed - timed[i - 1].elapsed;
+      if(dt <= 0) continue;
+      const speed = Math.hypot(timed[i].pos.x - timed[i - 1].pos.x, timed[i].pos.y - timed[i - 1].pos.y) / dt;
+      if(Number.isFinite(speed)) best = Math.max(best ?? 0, speed);
+    }
+    return best;
+  }
+
+  function ballDistanceNearElapsed(player, elapsed){
+    const sample = nearestTimedSample(player.distanceToBallSamples || [], elapsed, 1.6);
+    return sample ? sampleDistanceUU(sample) : null;
+  }
+
+  function boostContextEvent(player, pickup, pad, elapsed, displayName, stolenLarge, boostBefore){
+    const type = String(pickup.type || pad?.type || "").toLowerCase();
+    if(type !== "large" || !Number.isFinite(elapsed)) return null;
+
+    const team = String(player.team || "").toLowerCase();
+    const fieldX = Number(pickup.fieldX ?? pickup.location?.fieldX ?? pickup.location?.x ?? pad?.fieldX);
+    const fieldY = Number(pickup.fieldY ?? pickup.location?.fieldY ?? pickup.location?.y ?? pad?.fieldY);
+    const ownSide = team.includes("blue") ? fieldY < 0 : team.includes("orange") ? fieldY > 0 : false;
+    const opponentSide = team.includes("blue") ? fieldY > 0 : team.includes("orange") ? fieldY < 0 : false;
+    const cornerPad = Math.abs(fieldX) > 2800 && Math.abs(fieldY) > 3200;
+    const speed = speedAroundElapsed(player.positionSamples || [], elapsed);
+    const ballDistance = ballDistanceNearElapsed(player, elapsed);
+    const lowBoost = Number.isFinite(boostBefore) ? boostBefore : Number(pickup.boostBefore);
+    const reasons = [];
+    let priority = stolenLarge ? 50 : 36;
+
+    if(Number.isFinite(lowBoost) && lowBoost <= 18){
+      priority += stolenLarge ? 12 : 18;
+      reasons.push(`low boost before pickup (${Math.round(lowBoost)})`);
+    }else if(Number.isFinite(lowBoost) && lowBoost <= 35){
+      priority += 7;
+      reasons.push(`moderate boost before pickup (${Math.round(lowBoost)})`);
+    }
+
+    if(Number.isFinite(speed) && speed < 900){
+      priority += stolenLarge ? 18 : 14;
+      reasons.push(`slow route speed (${Math.round(speed).toLocaleString()} uu/s)`);
+    }else if(Number.isFinite(speed) && speed > 2050 && !stolenLarge){
+      priority -= 8;
+    }
+
+    if(Number.isFinite(ballDistance) && ballDistance > 5600){
+      priority += stolenLarge ? 18 : 14;
+      reasons.push(`detached from ball (${formatDistanceFromUU(ballDistance)})`);
+    }else if(Number.isFinite(ballDistance) && ballDistance < 2600 && stolenLarge){
+      priority += 10;
+      reasons.push(`steal happened near active play (${formatDistanceFromUU(ballDistance)} from ball)`);
+    }
+
+    if(stolenLarge && opponentSide && cornerPad){
+      priority += 12;
+      reasons.push("deep opponent corner steal");
+    }
+    if(!stolenLarge && ownSide && cornerPad && Number.isFinite(lowBoost) && lowBoost <= 25){
+      priority += 8;
+      reasons.push("low-boost corner recovery");
+    }
+
+    const eventIsWorthReview = stolenLarge
+      ? priority >= 78
+      : Number.isFinite(lowBoost) && lowBoost < 30 && priority >= 66;
+    if(!eventIsWorthReview) return null;
+
+    return {
+      elapsed,
+      player:displayName,
+      type:stolenLarge ? "Boost steal" : "Recovery pickup",
+      cls:stolenLarge ? "saveEvent" : "goalEvent",
+      priority,
+      text:stolenLarge
+        ? `${displayName} stole an opponent large boost in a review-worthy context: ${reasons.join(", ") || "unusual field context"}. Check whether this created pressure or pulled them too far from structure.`
+        : `${displayName} made a concerning recovery pickup: ${reasons.join(", ") || "low-boost large-pad route"}. Review whether the route was efficient and covered the next defensive job.`
+    };
+  }
+
   const candidates = [];
 
   scopedPlayers.forEach((p, i)=>{
@@ -6077,10 +6177,17 @@ function renderTimeline(a){
         && Number.isFinite(fieldY)
         && ((team.includes("blue") && fieldY > 0) || (team.includes("orange") && fieldY < 0));
       const boostBefore = Number(pickup.boostBefore);
-      if(stolenLarge){
-        addEvent(candidates, elapsed, displayName, "Boost steal", "saveEvent", `${displayName} stole an opponent large boost. Check whether the team converted that denial into pressure, a demo threat, or a forced clear.`, 74);
-      }else if(Number.isFinite(boostBefore) && boostBefore < 30 && String(pickup.type || pad?.type).toLowerCase() === "large"){
-        addEvent(candidates, elapsed, displayName, "Recovery pickup", "saveEvent", `${displayName} collected a large pad from low boost. Review the route in and out of that pickup for recovery quality.`, 55);
+      const contextualBoostEvent = boostContextEvent(p, pickup, pad, elapsed, displayName, stolenLarge, boostBefore);
+      if(contextualBoostEvent){
+        addEvent(
+          candidates,
+          contextualBoostEvent.elapsed,
+          contextualBoostEvent.player,
+          contextualBoostEvent.type,
+          contextualBoostEvent.cls,
+          contextualBoostEvent.text,
+          contextualBoostEvent.priority
+        );
       }
     });
 
@@ -6200,7 +6307,7 @@ function renderTimeline(a){
 
   let events = candidates
     .sort((x,y)=>(y.priority ?? 0) - (x.priority ?? 0) || (x.elapsed ?? 0) - (y.elapsed ?? 0))
-    .slice(0, 16);
+    .slice(0, 12);
 
   // If two generated events land in the same 5-second bucket, keep the same true time.
   // Do not shift display time just to avoid duplicates; duplicate timestamps are valid.
