@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.05.22.1140",
-    "generatedUtc":  "2026-05-22T11:40:28.3790853Z",
+    "appVersion":  "2026.05.22.1459",
+    "generatedUtc":  "2026-05-22T14:59:06.1505771Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -152,10 +152,10 @@
                   },
                   {
                       "path":  "SPARK.html",
-                      "version":  "5558c547dd60",
-                      "sha256":  "5558c547dd6053e98e439d8e50f6b6e619184f7f565a1d40cf0bc5bb4591c202",
-                      "size":  3437475,
-                      "modifiedUtc":  "2026-05-22T11:29:34.8581903Z"
+                      "version":  "180fee53232f",
+                      "sha256":  "180fee53232fa0f0a6dc11dffc4e8b04b28381d95ec7f288867eb632fa781361",
+                      "size":  3437579,
+                      "modifiedUtc":  "2026-05-22T14:55:16.4588475Z"
                   },
                   {
                       "path":  "SPARK-Launcher.cs",
@@ -180,10 +180,10 @@
                   },
                   {
                       "path":  "static-download-server.mjs",
-                      "version":  "381bf58f54d5",
-                      "sha256":  "381bf58f54d571a4ea69deb33de72978b57698f8b12c4c011b844618580aab4b",
-                      "size":  98553,
-                      "modifiedUtc":  "2026-05-22T10:01:26.6881586Z"
+                      "version":  "b531912f1661",
+                      "sha256":  "b531912f1661eb451776823a7875bd8ff92b6e19388566223d697e9cf53943e6",
+                      "size":  99075,
+                      "modifiedUtc":  "2026-05-22T14:55:52.4385677Z"
                   },
                   {
                       "path":  "tools/New-SparkManifest.ps1",

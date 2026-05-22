@@ -2134,6 +2134,8 @@ function mergeReplayParserSummaries(parsedReplay, boostSummary, shotSummary){
         stats: stat.stats || undefined,
         boostPickups: [],
         shotSamples: [],
+        demoEvents: [],
+        bumpEvents: [],
         distanceToBallSamples: [],
         positionSamples: []
       });
@@ -2162,6 +2164,8 @@ function mergeReplayParserSummaries(parsedReplay, boostSummary, shotSummary){
     const player = ensurePlayer(parsedPlayer.name, parsedPlayer);
     if(!player) continue;
     player.shotSamples = Array.isArray(parsedPlayer.shotSamples) ? parsedPlayer.shotSamples : [];
+    player.demoEvents = Array.isArray(parsedPlayer.demoEvents) ? parsedPlayer.demoEvents : [];
+    player.bumpEvents = Array.isArray(parsedPlayer.bumpEvents) ? parsedPlayer.bumpEvents : [];
     player.distanceToBallSamples = Array.isArray(parsedPlayer.distanceToBallSamples) ? parsedPlayer.distanceToBallSamples : [];
     player.positionSamples = Array.isArray(parsedPlayer.positionSamples) ? parsedPlayer.positionSamples : [];
   }
@@ -2178,6 +2182,8 @@ function mergeReplayParserSummaries(parsedReplay, boostSummary, shotSummary){
     totalBoostPickups: boostSummary?.totalBoostPickups || 0,
     mappedBoostPickups: boostSummary?.mappedBoostPickups || 0,
     totalShotSamples: shotSummary?.totalShotSamples || 0,
+    totalDemoEvents: [...players.values()].reduce((sum, player)=>sum + (Array.isArray(player.demoEvents) ? player.demoEvents.length : 0), 0),
+    totalBumpEvents: [...players.values()].reduce((sum, player)=>sum + (Array.isArray(player.bumpEvents) ? player.bumpEvents.length : 0), 0),
     totalDistanceSamples: shotSummary?.totalDistanceSamples || 0,
     totalPositionSamples: shotSummary?.totalPositionSamples || 0,
     totalBallSamples: shotSummary?.totalBallSamples || 0,
