@@ -3102,8 +3102,8 @@ function makePlayerFromReplay(name, team, i, seed, stats=null){
     p.demos = Number.isFinite(Number(stats.demos)) ? Number(stats.demos) : p.demos;
     p.bumps = Number.isFinite(Number(stats.bumps)) ? Number(stats.bumps) : p.bumps;
 
-    // Keep coaching metrics plausible relative to the real scoreboard.
-    p.pressure = Math.max(20, Math.min(95, Math.round((p.shots * 8) + (p.goals * 12) + (p.assists * 8) + (p.saves * 4) + 28)));
+    // Keep coaching pressure tied to attacking actions when decoded field data is unavailable.
+    p.pressure = Math.max(18, Math.min(88, Math.round((p.shots * 9) + (p.goals * 14) + (p.assists * 7) + 22)));
     p.nearMiss = Math.max(0, p.shots - p.goals - Math.floor((p.saves || 0) / 2));
     p.forcedSaves = Math.max(0, p.shots - p.goals - p.nearMiss);
   }
@@ -3678,12 +3678,12 @@ function secondNormalizedDistanceSamples(player){
 
 const ratingBenchmarks = {
   // Calibrated from 1194ae53...: KC blue = elite defense, NRG orange = elite attack/pressure.
-  pressureFloor:28,
-  pressureElite:84,
+  pressureFloor:18,
+  pressureElite:72,
   possessionFloor:18,
   possessionElite:76,
-  playerPressureFloor:34,
-  playerPressureElite:48,
+  playerPressureFloor:16,
+  playerPressureElite:66,
   playerPossessionFloor:26,
   playerPossessionElite:52,
   defensiveDistanceElite:2200,
@@ -3731,6 +3731,71 @@ function averageFinite(values){
   return finite.reduce((sum,value)=>sum + value, 0) / finite.length;
 }
 
+function teamAttackProgressFromY(team, y){
+  if(!Number.isFinite(Number(y))) return null;
+  const normalized = String(team || "").toLowerCase();
+  if(normalized.includes("blue")) return clampValue(((Number(y) + 5120) / 10240) * 100);
+  if(normalized.includes("orange")) return clampValue(((5120 - Number(y)) / 10240) * 100);
+  return null;
+}
+
+function teamOpponentGoalLocation(team){
+  const normalized = String(team || "").toLowerCase();
+  if(normalized.includes("blue")) return {x:0,y:5120,z:0};
+  if(normalized.includes("orange")) return {x:0,y:-5120,z:0};
+  return null;
+}
+
+function eventLocationXY(event, player=null){
+  const source = event?.attackerLocation || event?.carLocation || event?.location || event?.position || event?.victimLocation || null;
+  const direct = samplePositionXY(source);
+  if(direct) return direct;
+  const elapsed = Number(event?.elapsedSeconds ?? event?.scoreboardElapsedSeconds ?? event?.time);
+  if(player && Number.isFinite(elapsed)){
+    const sample = nearestPositionSample(player.positionSamples || [], elapsed, 1.1);
+    if(sample) return samplePositionXY(sample);
+  }
+  return null;
+}
+
+function nearestPositionSample(samples, elapsed, maxDelta=1){
+  let best = null;
+  let bestDelta = Infinity;
+  (samples || []).forEach(sample=>{
+    if(!isGameplayDataSample(sample)) return;
+    const sampleElapsed = sampleElapsedSeconds(sample);
+    if(!Number.isFinite(sampleElapsed)) return;
+    const delta = Math.abs(sampleElapsed - elapsed);
+    if(delta <= maxDelta && delta < bestDelta){
+      best = sample;
+      bestDelta = delta;
+    }
+  });
+  return best;
+}
+
+function offensivePressureValue({team, ball, distance, opponentDistance, selectedHasPossession=false, possessionControl=0}){
+  const progress = teamAttackProgressFromY(team, ball?.y);
+  if(!Number.isFinite(progress) || !Number.isFinite(distance)) return null;
+
+  const opponentHalf = clampValue((progress - 50) / 50 * 100);
+  const midfieldHold = clampValue((progress - 38) / 24 * 100) * clampValue((62 - progress) / 24 * 100) / 100;
+  const ballProximity = clampValue(100 - (distance / 32));
+  const distanceAdvantage = Number.isFinite(opponentDistance)
+    ? clampValue(((opponentDistance - distance + 900) / 2200) * 100)
+    : (selectedHasPossession ? 62 : 28);
+  const controlledOppHalf = selectedHasPossession ? possessionControl * clampValue((progress - 42) / 42) : 0;
+  const deepDefensePenalty = clampValue((42 - progress) / 42);
+
+  const raw =
+    (opponentHalf * .38) +
+    (midfieldHold * .16) +
+    (ballProximity * clampValue((progress - 34) / 46) * .18) +
+    (distanceAdvantage * clampValue((progress - 38) / 42) * .15) +
+    (controlledOppHalf * .13);
+  return clampValue(raw * (1 - deepDefensePenalty * .72));
+}
+
 function smoothedNullableSeries(values, radius=2){
   return values.map((value, index)=>{
     let sum = 0;
@@ -3765,11 +3830,15 @@ function parsedPlayerRatingSignals(player, durationSeconds=300){
     const ball = sample.ballLocation;
     const team = player.team;
     if(ball && Number.isFinite(ball.y) && team){
-      const attackingProgress = team === "Blue"
-        ? clampValue(((ball.y + 5120) / 10240) * 100)
-        : clampValue(((5120 - ball.y) / 10240) * 100);
-      const proximity = clampValue(100 - (distance / 35));
-      pressureValues.push((attackingProgress * .55) + (proximity * .45));
+      const pressure = offensivePressureValue({
+        team,
+        ball,
+        distance,
+        opponentDistance:null,
+        selectedHasPossession:distance < 1800,
+        possessionControl:distance < 1800 ? 70 : 0
+      });
+      if(Number.isFinite(pressure)) pressureValues.push(pressure);
 
       const ownThird = team === "Blue" ? ball.y < -1700 : ball.y > 1700;
       if(ownThird) defensiveDistances.push(distance);
@@ -3929,18 +3998,40 @@ function buildParsedImpactSeries(a, durationSeconds=300, stepSeconds=5){
     const ball = selectedNearest.ballLocation || overallNearest.ballLocation;
     const team = selectedNearest.team || [...selectedTeams][0] || null;
     if(ball && team){
-      const attackingProgress = team === "Blue"
-        ? clampValue(((ball.y + 5120) / 10240) * 100)
-        : clampValue(((5120 - ball.y) / 10240) * 100);
-      const proximity = clampValue(100 - (selectedNearest.distance / 35));
-      const distanceAdvantage = Number.isFinite(opponentDistance)
-        ? clampValue(((opponentDistance - selectedNearest.distance + 1000) / 2000) * 100)
-        : (selectedHasPossession ? 70 : 30);
-      const controlBonus = selectedHasPossession ? 8 : 0;
-      const pressure = clampValue((attackingProgress * 0.48) + (proximity * 0.30) + (distanceAdvantage * 0.22) + controlBonus);
-      pressureBins[binIndex].sum += pressure;
-      pressureBins[binIndex].count++;
+      const pressure = offensivePressureValue({
+        team,
+        ball,
+        distance:selectedNearest.distance,
+        opponentDistance,
+        selectedHasPossession,
+        possessionControl
+      });
+      if(Number.isFinite(pressure)){
+        pressureBins[binIndex].sum += pressure;
+        pressureBins[binIndex].count++;
+      }
     }
+  });
+
+  selectedPlayers.forEach(player=>{
+    const team = player.team;
+    const pickups = Array.isArray(player.boostPickups) ? player.boostPickups : [];
+    pickups.forEach(pickup=>{
+      if(!isGameplayDataSample(pickup)) return;
+      const padIndex = pickupPadIndex(pickup);
+      const pad = padIndex !== null ? boostPadLayout[padIndex] : null;
+      const type = String(pickup?.type || pad?.type || "").toLowerCase();
+      if(type !== "large") return;
+      const fieldY = Number(pickup?.fieldY ?? pickup?.location?.fieldY ?? pickup?.location?.y ?? pad?.fieldY);
+      const progress = teamAttackProgressFromY(team, fieldY);
+      if(!Number.isFinite(progress) || progress < 52) return;
+      const elapsed = sampleElapsedSeconds(pickup);
+      if(!Number.isFinite(elapsed) || elapsed < 0 || elapsed > chartDuration + 0.001) return;
+      const binIndex = elapsedBinIndex(elapsed, durationSeconds, stepSeconds);
+      const stealPressure = 18 + clampValue((progress - 52) / 48 * 20);
+      pressureBins[binIndex].sum += stealPressure;
+      pressureBins[binIndex].count++;
+    });
   });
 
   const possessionValues = possessionBins.map(bin=>{
@@ -4410,10 +4501,12 @@ function stylePerFive(value, durationSeconds){
 function teamPositionStyle(a, durationSeconds=300){
   const players = Array.isArray(a?.ps) ? a.ps : [];
   const isTeamView = players.length > 1;
-  if(!players.length) return {spread:null, defensivePresence:null, sampleCount:0};
+  if(!players.length) return {spread:null, defensivePresence:null, defensiveCover:null, sampleCount:0};
 
   let sampleCount = 0;
   let defensiveCount = 0;
+  let coverScoreSum = 0;
+  let coverScoreCount = 0;
 
   const bySecond = new Map();
   players.forEach(player=>{
@@ -4430,6 +4523,28 @@ function teamPositionStyle(a, durationSeconds=300){
       if(ownHalf) defensiveCount += ownThird ? 1.25 : 1;
       if(!bySecond.has(second)) bySecond.set(second, []);
       bySecond.get(second).push({playerId:player.id, x:pos.x, y:pos.y});
+    });
+
+    const distanceSamples = Array.isArray(player.distanceToBallSamples) ? player.distanceToBallSamples : [];
+    distanceSamples.forEach(sample=>{
+      if(!isGameplayDataSample(sample)) return;
+      const ball = sampleBallLocation(sample);
+      const car = samplePositionXY(sample?.carLocation || sample);
+      if(!ball || !car || !Number.isFinite(ball.y)) return;
+      const isBlue = team.includes("blue");
+      const isOrange = team.includes("orange");
+      if(!isBlue && !isOrange) return;
+      const ballInOwnHalf = isBlue ? ball.y < 0 : ball.y > 0;
+      if(!ballInOwnHalf) return;
+      const behindBall = isBlue ? car.y <= ball.y + 650 : car.y >= ball.y - 650;
+      const ballDistance = Math.hypot(car.x - ball.x, car.y - ball.y);
+      const ownGoalY = isBlue ? -5120 : 5120;
+      const ownGoalDistance = Math.hypot(car.x, car.y - ownGoalY);
+      const backPostBand = clampValue((4200 - ownGoalDistance) / 2800);
+      const closeEnoughToDefend = clampValue((4600 - ballDistance) / 3400);
+      const notOvercommitted = behindBall ? 1 : clampValue((2200 - Math.abs(car.y - ball.y)) / 2200) * .35;
+      coverScoreSum += clampValue((notOvercommitted * 48) + (closeEnoughToDefend * 32) + (backPostBand * 20));
+      coverScoreCount++;
     });
   });
 
@@ -4452,8 +4567,40 @@ function teamPositionStyle(a, durationSeconds=300){
   return {
     spread: spreadPairs ? spreadSum / spreadPairs : null,
     defensivePresence: sampleCount ? clampValue((defensiveCount / sampleCount) * 100) : null,
+    defensiveCover: coverScoreCount ? coverScoreSum / coverScoreCount : null,
     sampleCount
   };
+}
+
+function physicalPressureProfile(a, durationSeconds=300){
+  const players = Array.isArray(a?.ps) ? a.ps : (a ? [a] : []);
+  let weighted = 0;
+  let qualified = 0;
+  let total = 0;
+
+  players.forEach(player=>{
+    const goal = teamOpponentGoalLocation(player.team || a?.label);
+    if(!goal) return;
+    [
+      {events:player.demoEvents, base:1.25},
+      {events:player.bumpEvents, base:1}
+    ].forEach(group=>{
+      (Array.isArray(group.events) ? group.events : []).forEach(event=>{
+        if(!isGameplayDataSample(event)) return;
+        total++;
+        const location = eventLocationXY(event, player);
+        if(!location) return;
+        const distanceToGoal = Math.hypot(location.x - goal.x, location.y - goal.y);
+        if(distanceToGoal > 4000) return;
+        const closeness = clampValue((4000 - distanceToGoal) / 4000, 0, 1);
+        weighted += group.base * (.35 + closeness * .65);
+        qualified++;
+      });
+    });
+  });
+
+  const perFive = weighted * (300 / Math.max(1, Number(durationSeconds) || 300));
+  return {weighted, perFive, qualified, total};
 }
 
 function teamplayRadarMetrics(a, impactChartValues, followupSpeed, durationSeconds=300){
@@ -4465,24 +4612,23 @@ function teamplayRadarMetrics(a, impactChartValues, followupSpeed, durationSecon
   const positionStyle = teamPositionStyle(a, durationSeconds);
   const totals = boostPickupTotals(a);
   const largeSteals = largeBoostSteals(a);
-  const physicalTotal = Number(a?.demos || 0) + Number(a?.bumps || 0);
+  const physicalProfile = physicalPressureProfile(a, durationSeconds);
   const savesPerFive = stylePerFive(Number(a?.stats?.saves ?? a?.saves ?? 0), durationSeconds);
   const largePerFive = stylePerFive(totals.large, durationSeconds);
   const stealsPerFive = stylePerFive(largeSteals, durationSeconds);
-  const physicalPerFive = stylePerFive(physicalTotal, durationSeconds);
 
   const fieldSpread = positionStyle.spread === null
     ? clampValue(Math.round(a?.spacing || 0))
     : styleScale(positionStyle.spread, 5200, 1600, .85);
-  const defensiveCover = positionStyle.defensivePresence === null
+  const defensiveCover = positionStyle.defensiveCover === null
     ? clampValue(Math.round(a?.defense || 0))
-    : clampValue(Math.round((styleScale(positionStyle.defensivePresence, 58, 22, .9) * .68) + (styleScale(savesPerFive, 7, 0, .75) * .32)));
+    : clampValue(Math.round((positionStyle.defensiveCover * .74) + (styleScale(savesPerFive, 6.5, 0, .8) * .26)));
 
   const boostControl = clampValue(Math.round(
     styleScale(stealsPerFive / playerCount, 6.5, 0, .78) * .62 +
     styleScale(largePerFive / playerCount, 13.5, 3, .85) * .38
   ));
-  const physicalPressure = styleScale(physicalPerFive / playerCount, 24, 0, .82);
+  const physicalPressure = styleScale(physicalProfile.perFive / playerCount, 3.4, 0, .92);
 
   const metrics = [
     {label:"Ball Control",value:Number.isFinite(possessionAvg) ? clampValue(Math.round(possessionAvg * 5)) : clampValue(Math.round(a?.possession || 0)), detail:`possession ${Number.isFinite(possessionAvg) ? possessionAvg.toFixed(1) : a?.possession || 0}/20`},
@@ -4490,8 +4636,8 @@ function teamplayRadarMetrics(a, impactChartValues, followupSpeed, durationSecon
     {label:"Support Speed",value:clampValue(Math.round(followupSpeed?.score || 0)), detail:followupSpeed?.avgGap === null ? "no fast teammate follow-ups" : `${followupSpeed.count} fast follow-ups, ${followupSpeed.avgGap.toFixed(2)}s avg`},
     {label:"Field Spread",value:fieldSpread, detail:positionStyle.spread === null ? "position samples unavailable" : `${Math.round(positionStyle.spread).toLocaleString()} uu average teammate spread`},
     {label:"Boost Control",value:boostControl, detail:`${largeSteals} stolen full boosts, ${totals.large} full boosts total`},
-    {label:"Physical Pressure",value:physicalPressure, detail:`${a.demos || 0} demos, ${a.bumps || 0} bumps`},
-    {label:"Defensive Cover",value:defensiveCover, detail:positionStyle.defensivePresence === null ? "defensive positioning unavailable" : `${Math.round(positionStyle.defensivePresence)}% own-half presence`}
+    {label:"Physical Pressure",value:physicalPressure, detail:`${physicalProfile.qualified}/${physicalProfile.total} demos/bumps within 40 m of opponent net`},
+    {label:"Defensive Cover",value:defensiveCover, detail:positionStyle.defensiveCover === null ? "defensive positioning unavailable" : `${Math.round(positionStyle.defensiveCover)}/100 own-half coverage`}
   ];
 
   return {
@@ -4701,6 +4847,14 @@ function formatDistanceFromUU(uu){
   }
 
   return `${Math.round(cm)} cm`;
+}
+
+function formatSpeedFromUUPerSecond(speedUU){
+  const speed = Number(speedUU);
+  if(!Number.isFinite(speed)) return "speed unavailable";
+  const kmh = speed * 0.036;
+  if(useImperialUnits) return `${Math.round(kmh * 0.621371)} mph`;
+  return `${Math.round(kmh)} kmph`;
 }
 
 function scoreboardClockSpan(){
@@ -6318,7 +6472,7 @@ function renderTimeline(a){
 
     if(Number.isFinite(speed) && speed < 900){
       priority += stolenLarge ? 18 : 14;
-      reasons.push(`slow route speed (${Math.round(speed).toLocaleString()} uu/s)`);
+      reasons.push(`slow route speed (${formatSpeedFromUUPerSecond(speed)})`);
     }else if(Number.isFinite(speed) && speed > 2050 && !stolenLarge){
       priority -= 8;
     }
