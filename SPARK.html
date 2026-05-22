@@ -3450,7 +3450,17 @@ function sampleBallLocation(sample){
   return vectorFromApi(sample?.ballLocation ?? sample?.ball ?? sample?.ballPosition);
 }
 
+function isGameplayDataSample(sample){
+  if(!sample) return true;
+  if(sample.deadBall === true || sample.isDeadBall === true || sample.betweenGoalAndKickoff === true) return false;
+  if(sample.isGameplay === false || sample.gameplay === false || sample.activePlay === false) return false;
+  const countdown = Number(sample.countdownNumber ?? sample.roundCountdown ?? sample.kickoffCountdown);
+  if(Number.isFinite(countdown) && countdown > 0) return false;
+  return true;
+}
+
 function secondNormalizedDistanceSamples(player){
+  const bucketSeconds = 0.25;
   const samples = Array.isArray(player?.distanceToBallSamples)
     ? player.distanceToBallSamples
     : Array.isArray(player?.ballDistanceSamples)
@@ -3459,10 +3469,11 @@ function secondNormalizedDistanceSamples(player){
   const bySecond = new Map();
 
   samples.forEach(sample=>{
+    if(!isGameplayDataSample(sample)) return;
     const elapsed = sampleElapsedSeconds(sample);
     const distance = sampleDistanceUU(sample);
     if(!Number.isFinite(elapsed) || !Number.isFinite(distance)) return;
-    const second = Math.max(0, Math.floor(elapsed));
+    const second = Math.max(0, Math.floor(elapsed / bucketSeconds) * bucketSeconds);
     const ball = sampleBallLocation(sample);
     if(!bySecond.has(second)){
       bySecond.set(second, {
@@ -3491,7 +3502,7 @@ function secondNormalizedDistanceSamples(player){
     .map(bucket=>({
       player,
       second:bucket.second,
-      elapsed:bucket.second + 0.5,
+      elapsed:bucket.second + bucketSeconds / 2,
       distance:bucket.sum / bucket.count,
       ballLocation:bucket.ballCount ? {
         x:bucket.ballX / bucket.ballCount,
@@ -3820,6 +3831,7 @@ function exactTouchSeriesFromReplayEvents(scope, durationSeconds=300, stepSecond
 
   players.forEach(player=>{
     const events = (Array.isArray(player?.touchEvents) ? player.touchEvents : [])
+      .filter(event=>isGameplayDataSample(event))
       .map(event=>({elapsed:sampleElapsedSeconds(event)}))
       .filter(event=>Number.isFinite(event.elapsed))
       .sort((a,b)=>a.elapsed - b.elapsed);
@@ -5708,6 +5720,7 @@ function renderPositioningHeatmap(a){
   players.forEach(player=>{
     if(!Array.isArray(player.positionSamples)) return;
     player.positionSamples.forEach(sample=>{
+      if(!isGameplayDataSample(sample)) return;
       const x = Number(sample.x ?? sample.fieldX ?? sample.location?.x ?? sample.position?.x);
       const y = Number(sample.y ?? sample.fieldY ?? sample.location?.y ?? sample.position?.y);
       const elapsed = Number(sample.elapsedSeconds ?? sample.scoreboardElapsedSeconds ?? sample.timeSeconds ?? sample.time);
@@ -6049,6 +6062,7 @@ function renderTimeline(a){
     let best = null;
     let bestDelta = Infinity;
     (samples || []).forEach(sample=>{
+      if(!isGameplayDataSample(sample)) return;
       const sampleElapsed = sampleElapsedSeconds(sample);
       if(!Number.isFinite(sampleElapsed)) return;
       const delta = Math.abs(sampleElapsed - elapsed);
@@ -6062,6 +6076,7 @@ function renderTimeline(a){
 
   function speedAroundElapsed(samples, elapsed, windowSeconds=1.35){
     const timed = (samples || [])
+      .filter(sample=>isGameplayDataSample(sample))
       .map(sample=>({sample, elapsed:sampleElapsedSeconds(sample), pos:samplePositionXY(sample)}))
       .filter(item=>Number.isFinite(item.elapsed) && item.pos && Math.abs(item.elapsed - elapsed) <= windowSeconds)
       .sort((left,right)=>left.elapsed - right.elapsed);
@@ -6194,6 +6209,7 @@ function renderTimeline(a){
     const distanceSamples = Array.isArray(p.distanceToBallSamples) ? p.distanceToBallSamples : [];
     let farthest = null;
     distanceSamples.forEach(sample=>{
+      if(!isGameplayDataSample(sample)) return;
       const distance = sampleDistanceUU(sample);
       const elapsed = sampleElapsedSeconds(sample);
       if(!Number.isFinite(distance) || !Number.isFinite(elapsed) || elapsed > durationSeconds) return;

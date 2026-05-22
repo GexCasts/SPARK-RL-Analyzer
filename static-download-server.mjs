@@ -574,6 +574,8 @@ function summarizeBoostPickups(parsedReplay){
   let isOvertime = false;
   let scoreboardSecondsRemaining = null;
   let scoreboardClockStartSeconds = null;
+  let activeScoredOnTeam = null;
+  let countdownNumber = null;
 
   function currentGameElapsedSeconds(time){
     const start = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
@@ -582,6 +584,15 @@ function summarizeBoostPickups(parsedReplay){
       return clampNumber(start - scoreboardSecondsRemaining, 0, start);
     }
     return Math.max(0, Number(time) || 0);
+  }
+
+  function normalizeScoredOnTeam(value){
+    const team = normalizeTeamNumber(value);
+    return team === null ? null : team;
+  }
+
+  function isGameplaySampleTime(){
+    return activeScoredOnTeam === null && !(Number.isFinite(countdownNumber) && countdownNumber > 0);
   }
 
   function rememberCarSpeed(carActor, time, speed, source="motion"){
@@ -725,6 +736,15 @@ function summarizeBoostPickups(parsedReplay){
         }
       }
 
+      if(objectNameMatches(objectName, "TAGame.GameEvent_Soccar_TA:ReplicatedScoredOnTeam")){
+        activeScoredOnTeam = normalizeScoredOnTeam(replayIntValue(attribute, value));
+      }
+
+      if(objectNameMatches(objectName, "TAGame.GameEvent_TA:ReplicatedRoundCountDownNumber")){
+        const rawCountdown = replayIntValue(attribute, value);
+        countdownNumber = Number.isFinite(rawCountdown) ? rawCountdown : null;
+      }
+
       if(objectNameMatches(objectName, "TAGame.CarComponent_TA:Vehicle")){
         const carActor = extractActorReference(value) ?? extractActorReference(attribute);
         if(Number.isInteger(carActor)){
@@ -772,7 +792,7 @@ function summarizeBoostPickups(parsedReplay){
         if(Number.isFinite(boostAmount)){
           const previousBoost = boostComponentAmount.get(actorId);
           const carActor = boostComponentCar.get(actorId);
-          if(Number.isInteger(carActor) && Number.isFinite(previousBoost) && boostAmount > previousBoost + 2){
+          if(isGameplaySampleTime() && Number.isInteger(carActor) && Number.isFinite(previousBoost) && boostAmount > previousBoost + 2){
             const pri = carPri.get(carActor);
             boostIncreases.push({
               time: Number.isFinite(time) ? time : 0,
@@ -788,7 +808,7 @@ function summarizeBoostPickups(parsedReplay){
               location: carLoc.get(carActor)
             });
           }
-          if(Number.isInteger(carActor) && Number.isFinite(previousBoost) && previousBoost > boostAmount + 1){
+          if(isGameplaySampleTime() && Number.isInteger(carActor) && Number.isFinite(previousBoost) && previousBoost > boostAmount + 1){
             const rawBoostUsed = previousBoost - boostAmount;
             const previousBoostTime = boostComponentLastTime.get(actorId);
             const speedSample = nearestCarSpeed(carActor, time);
@@ -840,6 +860,7 @@ function summarizeBoostPickups(parsedReplay){
       const playerName = cleanName(priName.get(pri));
       const location = carLoc.get(instigator);
       if(!playerName || !location) continue;
+      if(!isGameplaySampleTime()) continue;
 
       if(!padSamples.has(suffix)) padSamples.set(suffix, []);
       padSamples.get(suffix).push(location);
