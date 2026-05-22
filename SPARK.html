@@ -5813,8 +5813,9 @@ function renderPositioningHeatmap(a){
   const heatDuration = Math.max(1, chartDurationSeconds(replayObservedDurationSeconds()));
   const samplesPerSecond = samples.length / heatDuration / Math.max(1, samplesByPlayer.size);
   const sampleDensityFactor = clampValue(samplesPerSecond / POSITIONING_HEAT_REFERENCE_SAMPLES_PER_SECOND, 1, 2.8);
+  const routeSpreadBlend = clampValue((samplesPerSecond - 8) / 7, 0, 1);
   const sampleWeight = 1 / Math.pow(sampleDensityFactor, .42);
-  const bridgeWeight = .16 / Math.pow(sampleDensityFactor, .42);
+  const bridgeWeight = (.16 - routeSpreadBlend * .045) / Math.pow(sampleDensityFactor, .42);
 
   samplesByPlayer.forEach(playerSamples=>{
     playerSamples.sort((a,b)=>(a.elapsed || 0) - (b.elapsed || 0));
@@ -5846,8 +5847,8 @@ function renderPositioningHeatmap(a){
       if(raw <= 0) continue;
       let neighborTotal = 0;
       let neighborWeight = 0;
-      const radius = 4;
-      const sigma = 2.15;
+      const radius = routeSpreadBlend > .55 ? 3 : 4;
+      const sigma = 2.15 - routeSpreadBlend * .55;
       const twoSigmaSquared = 2 * sigma * sigma;
       for(let oy=-radius; oy<=radius; oy++){
         for(let ox=-radius; ox<=radius; ox++){
@@ -5864,7 +5865,9 @@ function renderPositioningHeatmap(a){
       }
       const neighborAverage = neighborWeight ? neighborTotal / neighborWeight : raw;
       const repeatMass = Math.max(0, neighborTotal - raw);
-      const trend = (raw * .72) + (neighborAverage * .74) + (repeatMass * .025);
+      const trend = (raw * (.72 + routeSpreadBlend * .18)) +
+        (neighborAverage * (.74 - routeSpreadBlend * .24)) +
+        (repeatMass * (.025 - routeSpreadBlend * .012));
       trendDensity[index] = trend;
     }
   }
