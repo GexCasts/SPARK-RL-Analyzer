@@ -5222,6 +5222,18 @@ function buildGoalSaveEvents(durationSeconds, scope){
       ? scope
       : null;
 
+  function playerNameKeys(player){
+    return [player?.name, player?.censoredName, playerDisplayName(player)]
+      .map(name=>cleanReplayName(name).toLowerCase())
+      .filter(Boolean);
+  }
+
+  function findPlayerByReplayName(name){
+    const clean = cleanReplayName(name).toLowerCase();
+    if(!clean) return null;
+    return players.find(player=>playerNameKeys(player).includes(clean)) || null;
+  }
+
   function nearestLabelFromElapsed(elapsed){
     const idx = elapsedBinIndex(elapsed, durationSeconds, 5);
     return labels[idx];
@@ -5239,17 +5251,22 @@ function buildGoalSaveEvents(durationSeconds, scope){
         const elapsed = Number.isFinite(replayElapsed) ? replayElapsed : (scoreboardElapsedFromSample(shot) ?? 0);
         if(!Number.isFinite(elapsed)) return;
         if(elapsed < 0 || elapsed > chartDuration + 0.001) return;
-        const isSelectedPlayer = selectedPlayer && p.id === selectedPlayer.id;
-        const isSelectedTeamGoal = selectedTeam && p.team === selectedTeam;
+        const isGoal = result === "goal";
+        const defenderName = cleanReplayName(shot.defender || shot.saver || shot.savedBy || shot.savedByPlayer || shot.savePlayer || "");
+        const defenderPlayer = !isGoal ? findPlayerByReplayName(defenderName) : null;
+        const saveTeam = defenderPlayer?.team || (p.team === "Blue" ? "Orange" : p.team === "Orange" ? "Blue" : p.team);
+        const savePlayerName = defenderPlayer ? playerDisplayName(defenderPlayer) : defenderName || displayName;
+        const isSelectedPlayer = selectedPlayer && (isGoal ? p.id === selectedPlayer.id : defenderPlayer?.id === selectedPlayer.id);
+        const isSelectedTeamEvent = selectedTeam && (isGoal ? p.team === selectedTeam : saveTeam === selectedTeam);
         exactEventCount++;
         events.push({
           label: scoreboardClockFromSample(shot) || shot.goalTime || nearestLabelFromElapsed(elapsed),
           elapsed,
-          player:displayName,
-          team:p.team,
-          type:result === "goal" ? "Goal" : "Saved shot",
+          player:isGoal ? displayName : savePlayerName,
+          team:isGoal ? p.team : saveTeam,
+          type:isGoal ? "Goal" : "Save",
           isSelectedPlayer,
-          color: isSelectedPlayer ? "#ffd000" : result === "goal" ? (isSelectedTeamGoal ? "#22c55e" : "#ef4444") : "#38bdf8"
+          color: isSelectedPlayer ? "#ffd000" : isGoal ? (isSelectedTeamEvent ? "#22c55e" : "#ef4444") : "#38bdf8"
         });
       });
       return;
