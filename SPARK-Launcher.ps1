@@ -25,7 +25,7 @@ $RrrocketFolder = "rrrocket-$RrrocketVersion-x86_64-pc-windows-msvc"
 $RrrocketZip = Join-Path $ToolsDir "rrrocket\$RrrocketFolder.zip"
 $RrrocketExe = Join-Path $ToolsDir "rrrocket\$RrrocketFolder\rrrocket.exe"
 $ServerScript = Join-Path $Root "static-download-server.mjs"
-$AppUrl = "http://127.0.0.1:8765/"
+$AppUrl = "http://127.0.0.1:8765/SPARK.html"
 $TmpDir = Join-Path $Root ".tmp"
 $ServerOutLog = Join-Path $TmpDir "spark-server.out.log"
 $ServerErrLog = Join-Path $TmpDir "spark-server.err.log"
@@ -117,6 +117,30 @@ function Test-Server {
   }
 }
 
+function Resolve-AppModeBrowser {
+  $programFilesX86 = ${env:ProgramFiles(x86)}
+  $candidates = @(
+    (Join-Path $programFilesX86 "Microsoft\Edge\Application\msedge.exe"),
+    (Join-Path $env:ProgramFiles "Microsoft\Edge\Application\msedge.exe"),
+    (Join-Path $env:LOCALAPPDATA "Microsoft\Edge\Application\msedge.exe"),
+    (Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe"),
+    (Join-Path $programFilesX86 "Google\Chrome\Application\chrome.exe"),
+    (Join-Path $env:LOCALAPPDATA "Google\Chrome\Application\chrome.exe")
+  )
+  return $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+}
+
+function Open-SparkAppWindow {
+  $browser = Resolve-AppModeBrowser
+  if($browser) {
+    Start-Process -FilePath $browser -ArgumentList @("--app=$AppUrl","--new-window")
+    Write-Status "Opening SPARK in app window mode..."
+    return
+  }
+  Start-Process $AppUrl
+  Write-Status "Opening SPARK in your default browser..."
+}
+
 function Start-SPARK {
   Set-LauncherProgress 4
   Write-Status "Preparing local parser server..."
@@ -179,7 +203,7 @@ function Start-SPARK {
 
   Write-Status "Opening SPARK..."
   Set-LauncherProgress 96
-  Start-Process $AppUrl
+  Open-SparkAppWindow
   Write-Status "Ready. The local server shuts itself down after all SPARK tabs and overlay sources are closed."
   Set-LauncherProgress 100
 }

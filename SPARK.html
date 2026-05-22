@@ -305,13 +305,109 @@ canvas{width:100%!important;height:100%!important}
 }
 .overlayControlPanel{
   display:grid;
-  gap:18px;
+  gap:14px;
+}
+.overlayStudioLayout{
+  display:grid;
+  grid-template-columns:minmax(320px,.55fr) minmax(560px,1.45fr);
+  gap:16px;
+  align-items:start;
+}
+.overlayControlStack{
+  display:grid;
+  gap:12px;
+}
+.overlayPreviewDesk{
+  display:grid;
+  gap:12px;
+}
+.overlayPreviewFrameWrap{
+  position:relative;
+  min-height:420px;
+  height:clamp(440px,70vh,760px);
+  background:#050607;
+  border:1px solid rgba(255,208,0,.72);
+  border-radius:10px;
+  overflow:hidden;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 18px 40px rgba(0,0,0,.34);
+}
+.overlayPreviewFrameWrap::before{
+  content:"Live preview";
+  position:absolute;
+  left:12px;
+  top:10px;
+  z-index:2;
+  padding:5px 9px;
+  border-radius:999px;
+  background:rgba(0,0,0,.62);
+  border:1px solid rgba(255,255,255,.18);
+  color:#f3f4f6;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  pointer-events:none;
+}
+.overlayPreviewFrame{
+  width:100%;
+  height:100%;
+  border:0;
+  background:transparent;
+}
+.overlayQuickControls{
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  gap:10px;
+  align-items:stretch;
+}
+.overlayQuickTeam{
+  display:grid;
+  grid-template-columns:40px 1fr 40px;
+  gap:8px;
+  align-items:center;
+  padding:10px;
+  border:1px solid #55575d;
+  border-radius:10px;
+  background:linear-gradient(180deg,#17191d,#0d0e11);
+}
+.overlayQuickTeam.blue{border-color:rgba(29,167,255,.55)}
+.overlayQuickTeam.orange{border-color:rgba(255,122,32,.55)}
+.overlayQuickTeam b{text-align:center;font-size:26px;color:var(--spark-yellow)}
+.overlayQuickActions{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(120px,1fr));
+  gap:8px;
+}
+.overlayQuickActions button,
+.overlayQuickTeam button{border-radius:8px}
+.overlayCategory{
+  border:1px solid #55575d;
+  border-radius:10px;
+  background:linear-gradient(180deg,#17191d,#0d0e11);
+  overflow:hidden;
+}
+.overlayCategory summary{
+  cursor:pointer;
+  padding:12px 14px;
+  color:#f3f4f6;
+  font-size:13px;
+  font-weight:1000;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  background:rgba(255,255,255,.035);
+}
+.overlayCategoryBody{
+  display:grid;
+  gap:12px;
+  padding:14px;
+  border-top:1px solid rgba(255,255,255,.08);
 }
 .overlayControlGrid{
   display:grid;
   grid-template-columns:repeat(2,minmax(260px,1fr));
   gap:14px;
 }
+.overlayControlStack .overlayControlGrid{grid-template-columns:1fr}
 .overlayField{
   display:grid;
   gap:7px;
@@ -361,6 +457,20 @@ canvas{width:100%!important;height:100%!important}
   border:1px solid var(--spark-yellow);
   padding:12px;
   color:#fff;
+}
+.overlayControlFooter{
+  margin-top:0;
+}
+.overlayCopyStatus{
+  min-height:18px;
+  color:var(--spark-yellow);
+  font-size:12px;
+  font-weight:800;
+}
+@media(max-width:1100px){
+  .overlayStudioLayout{grid-template-columns:1fr}
+  .overlayQuickControls{grid-template-columns:1fr}
+  .overlayQuickActions{grid-template-columns:1fr}
 }
 .overlayPreviewTeam{
   display:flex;
@@ -3215,6 +3325,29 @@ function toggleOverlayFinalStatsPreview(){
   updateOverlayConfigField("testFinalStatsPreview", !overlayConfig.testFinalStatsPreview);
 }
 
+async function copyOverlayUrl(){
+  const status = $("overlayCopyStatus");
+  try{
+    await navigator.clipboard.writeText(obsOverlayUrl);
+    if(status) status.textContent = "Overlay URL copied.";
+  }catch{
+    const helper = document.createElement("textarea");
+    helper.value = obsOverlayUrl;
+    helper.style.position = "fixed";
+    helper.style.left = "-9999px";
+    document.body.appendChild(helper);
+    helper.focus();
+    helper.select();
+    try{
+      document.execCommand("copy");
+      if(status) status.textContent = "Overlay URL copied.";
+    }catch{
+      if(status) status.textContent = obsOverlayUrl;
+    }
+    helper.remove();
+  }
+}
+
 function loadOverlayLogoFile(side, input){
   const file = input?.files?.[0];
   if(!file) return;
@@ -3234,76 +3367,106 @@ function renderOverlayControl(){
   const blueName = overlayTeamName("Blue", "Blue");
   const orangeName = overlayTeamName("Orange", "Orange");
   const maxWins = overlayMaxSeriesWins();
+  const statsPreviewUrl = location.protocol === "file:"
+    ? `${obsOverlayFileUrl}&finalPreview=1`
+    : `${location.origin}/SPARK.html?overlay=obs&finalPreview=1`;
+  const previewUrl = overlayConfig.testFinalStatsPreview ? statsPreviewUrl : obsOverlayUrl;
   panel.innerHTML = `
-    <div class="overlayPreviewStrip">
-      <div class="overlayPreviewTeam"><img src="${escapeHtml(blueLogo)}" alt=""><span>${escapeHtml(blueName)}</span></div>
-      <div class="overlayPreviewSeries">${escapeHtml(overlaySeriesLabel())}</div>
-      <div class="overlayPreviewTeam right"><span>${escapeHtml(orangeName)}</span><img src="${escapeHtml(orangeLogo)}" alt=""></div>
-    </div>
-    <div class="overlayControlGrid">
-      <label class="overlayField">Left / Blue Team Name
-        <input class="overlayInput" id="overlayBlueNameInput" value="${escapeHtml(overlayConfig.blueTeamName)}" placeholder="Leave blank to use live API team name">
-      </label>
-      <label class="overlayField">Right / Orange Team Name
-        <input class="overlayInput" id="overlayOrangeNameInput" value="${escapeHtml(overlayConfig.orangeTeamName)}" placeholder="Leave blank to use live API team name">
-      </label>
-      <label class="overlayField">Left / Blue Logo URL
-        <input class="overlayInput" id="overlayBlueLogoInput" value="${escapeHtml(overlayConfig.blueLogoUrl)}" placeholder="https://... or blank for SPARK logo">
-        <div class="overlayLogoTools">
-          <button type="button" onclick="$('overlayBlueLogoFile').click()">Choose Local Logo</button>
-          <button type="button" onclick="updateOverlayConfigField('blueLogoUrl','')">Use 1NE Logo</button>
-          <input class="overlayFileInput" id="overlayBlueLogoFile" type="file" accept="image/*" onchange="loadOverlayLogoFile('Blue',this)">
+    <div class="overlayStudioLayout">
+      <div class="overlayControlStack">
+        <div class="overlayPreviewStrip">
+          <div class="overlayPreviewTeam"><img src="${escapeHtml(blueLogo)}" alt=""><span>${escapeHtml(blueName)}</span></div>
+          <div class="overlayPreviewSeries">${escapeHtml(overlaySeriesLabel())}</div>
+          <div class="overlayPreviewTeam right"><span>${escapeHtml(orangeName)}</span><img src="${escapeHtml(orangeLogo)}" alt=""></div>
         </div>
-      </label>
-      <label class="overlayField">Right / Orange Logo URL
-        <input class="overlayInput" id="overlayOrangeLogoInput" value="${escapeHtml(overlayConfig.orangeLogoUrl)}" placeholder="https://... or blank for SPARK logo">
-        <div class="overlayLogoTools">
-          <button type="button" onclick="$('overlayOrangeLogoFile').click()">Choose Local Logo</button>
-          <button type="button" onclick="updateOverlayConfigField('orangeLogoUrl','')">Use 1NE Logo</button>
-          <input class="overlayFileInput" id="overlayOrangeLogoFile" type="file" accept="image/*" onchange="loadOverlayLogoFile('Orange',this)">
+
+        <details class="overlayCategory" open>
+          <summary>Series Controls</summary>
+          <div class="overlayCategoryBody">
+            <div class="overlayControlGrid">
+              <label class="overlayField">Series Format
+                <select class="overlaySelect" id="overlayBestOfInput">
+                  <option value="3" ${overlayConfig.seriesBestOf===3?"selected":""}>Best of 3</option>
+                  <option value="5" ${overlayConfig.seriesBestOf===5?"selected":""}>Best of 5</option>
+                  <option value="7" ${overlayConfig.seriesBestOf===7?"selected":""}>Best of 7</option>
+                </select>
+              </label>
+              <label class="overlayField">Left / Blue Team Name
+                <input class="overlayInput" id="overlayBlueNameInput" value="${escapeHtml(overlayConfig.blueTeamName)}" placeholder="Leave blank to use live API team name">
+              </label>
+              <label class="overlayField">Right / Orange Team Name
+                <input class="overlayInput" id="overlayOrangeNameInput" value="${escapeHtml(overlayConfig.orangeTeamName)}" placeholder="Leave blank to use live API team name">
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <details class="overlayCategory">
+          <summary>Logos</summary>
+          <div class="overlayCategoryBody">
+            <label class="overlayField">Left / Blue Logo URL
+              <input class="overlayInput" id="overlayBlueLogoInput" value="${escapeHtml(overlayConfig.blueLogoUrl)}" placeholder="https://... or blank for 1NE logo">
+              <div class="overlayLogoTools">
+                <button type="button" onclick="$('overlayBlueLogoFile').click()">Choose Local Logo</button>
+                <button type="button" onclick="updateOverlayConfigField('blueLogoUrl','')">Use 1NE Logo</button>
+                <input class="overlayFileInput" id="overlayBlueLogoFile" type="file" accept="image/*" onchange="loadOverlayLogoFile('Blue',this)">
+              </div>
+            </label>
+            <label class="overlayField">Right / Orange Logo URL
+              <input class="overlayInput" id="overlayOrangeLogoInput" value="${escapeHtml(overlayConfig.orangeLogoUrl)}" placeholder="https://... or blank for 1NE logo">
+              <div class="overlayLogoTools">
+                <button type="button" onclick="$('overlayOrangeLogoFile').click()">Choose Local Logo</button>
+                <button type="button" onclick="updateOverlayConfigField('orangeLogoUrl','')">Use 1NE Logo</button>
+                <input class="overlayFileInput" id="overlayOrangeLogoFile" type="file" accept="image/*" onchange="loadOverlayLogoFile('Orange',this)">
+              </div>
+            </label>
+          </div>
+        </details>
+
+        <details class="overlayCategory" open>
+          <summary>Stats Screen Test</summary>
+          <div class="overlayCategoryBody">
+            <div class="overlayTestTools">
+              <div>
+                <strong>End-of-game stats screen test</strong>
+                <span>Shows the stats screen in the preview only; the real end-of-game trigger still behaves normally.</span>
+              </div>
+              <button type="button" class="overlayTestToggle ${overlayConfig.testFinalStatsPreview ? "active" : ""}" onclick="toggleOverlayFinalStatsPreview()">
+                ${overlayConfig.testFinalStatsPreview ? "Stats Test On" : "Stats Test Off"}
+              </button>
+            </div>
+          </div>
+        </details>
+
+        <div class="note overlayControlFooter">
+          Overlay URL: <b>${obsOverlayUrl}</b><br>
+          Manual logo fields work best with hosted http/https image URLs. Blank fields use the 1NE logo.
         </div>
-      </label>
-    </div>
-    <div class="overlayControlGrid">
-      <label class="overlayField">Series Format
-        <select class="overlaySelect" id="overlayBestOfInput">
-          <option value="3" ${overlayConfig.seriesBestOf===3?"selected":""}>Best of 3</option>
-          <option value="5" ${overlayConfig.seriesBestOf===5?"selected":""}>Best of 5</option>
-          <option value="7" ${overlayConfig.seriesBestOf===7?"selected":""}>Best of 7</option>
-        </select>
-      </label>
-      <div class="overlayField">Manual Series Score
-        <div class="overlaySeriesControls">
-          <div class="overlayStepper">
+      </div>
+
+      <div class="overlayPreviewDesk">
+        <div class="overlayPreviewFrameWrap">
+          <iframe class="overlayPreviewFrame" src="${escapeHtml(previewUrl)}" title="Overlay Preview"></iframe>
+        </div>
+        <div class="overlayQuickControls">
+          <div class="overlayQuickTeam blue">
             <button type="button" onclick="setOverlaySeriesScore('Blue',-1)">-</button>
-            <strong>${overlayConfig.blueSeriesScore}</strong>
+            <b>${overlayConfig.blueSeriesScore}</b>
             <button type="button" onclick="setOverlaySeriesScore('Blue',1)" ${overlayConfig.blueSeriesScore>=maxWins?"disabled":""}>+</button>
           </div>
-          <div class="overlayStepper">
-            <button type="button" onclick="saveOverlayConfig({...overlayConfig, blueSeriesScore:0, orangeSeriesScore:0})">Reset</button>
-            <strong>${overlayConfig.blueSeriesScore}-${overlayConfig.orangeSeriesScore}</strong>
-            <button type="button" onclick="window.open(obsOverlayUrl,'_blank','noopener')">Open</button>
+          <div class="overlayQuickActions">
+            <button type="button" onclick="saveOverlayConfig({...overlayConfig, blueSeriesScore:0, orangeSeriesScore:0})">Wipe Score</button>
+            <button type="button" onclick="copyOverlayUrl()">Copy Overlay URL</button>
+            <button type="button" onclick="window.open(obsOverlayUrl,'_blank','noopener')">Open Overlay</button>
           </div>
-          <div class="overlayStepper">
+          <div class="overlayQuickTeam orange">
             <button type="button" onclick="setOverlaySeriesScore('Orange',-1)">-</button>
-            <strong>${overlayConfig.orangeSeriesScore}</strong>
+            <b>${overlayConfig.orangeSeriesScore}</b>
             <button type="button" onclick="setOverlaySeriesScore('Orange',1)" ${overlayConfig.orangeSeriesScore>=maxWins?"disabled":""}>+</button>
           </div>
         </div>
+        <div class="overlayCopyStatus" id="overlayCopyStatus"></div>
       </div>
-    </div>
-    <div class="overlayTestTools">
-      <div>
-        <strong>End-of-game stats screen test</strong>
-        <span>Forces the OBS stats screen visible for layout checks only.</span>
-      </div>
-      <button type="button" class="overlayTestToggle ${overlayConfig.testFinalStatsPreview ? "active" : ""}" onclick="toggleOverlayFinalStatsPreview()">
-        ${overlayConfig.testFinalStatsPreview ? "Stats Test On" : "Stats Test Off"}
-      </button>
-    </div>
-    <div class="note">
-      OBS URL: <b>${obsOverlayUrl}</b><br>
-      Manual logo fields work best with hosted http/https image URLs. Blank fields use the SPARK wordmark.
     </div>`;
 
   const bind = (id,key,eventName="change")=>{

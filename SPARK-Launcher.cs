@@ -41,7 +41,7 @@ namespace SparkLauncher
         private readonly string rrrocketVersion = "0.11.1";
         private readonly string rrrocketFolder = "rrrocket-0.11.1-x86_64-pc-windows-msvc";
         private readonly string githubRawBase = "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main";
-        private readonly string appUrl = "http://127.0.0.1:8765/";
+        private readonly string appUrl = "http://127.0.0.1:8765/SPARK.html";
 
         private Button launchButton;
         private Button updateButton;
@@ -303,9 +303,50 @@ namespace SparkLauncher
 
             WriteStatus("Opening SPARK...");
             SetProgress(96);
-            Process.Start(appUrl);
+            OpenSparkAppWindow();
             WriteStatus("Ready. The local server shuts itself down after all SPARK tabs and overlay sources are closed.");
             SetProgress(100);
+        }
+
+        private void OpenSparkAppWindow()
+        {
+            string browserPath = ResolveAppModeBrowser();
+            if (!String.IsNullOrEmpty(browserPath))
+            {
+                ProcessStartInfo appInfo = new ProcessStartInfo();
+                appInfo.FileName = browserPath;
+                appInfo.Arguments = "--app=" + appUrl + " --new-window";
+                appInfo.UseShellExecute = false;
+                Process.Start(appInfo);
+                WriteStatus("Opening SPARK in app window mode...");
+                return;
+            }
+
+            ProcessStartInfo fallback = new ProcessStartInfo();
+            fallback.FileName = appUrl;
+            fallback.UseShellExecute = true;
+            Process.Start(fallback);
+            WriteStatus("Opening SPARK in your default browser...");
+        }
+
+        private string ResolveAppModeBrowser()
+        {
+            string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            string pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+            string[] candidates = new string[] {
+                Path.Combine(pf86, "Microsoft", "Edge", "Application", "msedge.exe"),
+                Path.Combine(pf, "Microsoft", "Edge", "Application", "msedge.exe"),
+                Path.Combine(local, "Microsoft", "Edge", "Application", "msedge.exe"),
+                Path.Combine(pf, "Google", "Chrome", "Application", "chrome.exe"),
+                Path.Combine(pf86, "Google", "Chrome", "Application", "chrome.exe"),
+                Path.Combine(local, "Google", "Chrome", "Application", "chrome.exe")
+            };
+            foreach (string candidate in candidates)
+            {
+                if (File.Exists(candidate)) return candidate;
+            }
+            return null;
         }
 
         private string ResolveNode()
