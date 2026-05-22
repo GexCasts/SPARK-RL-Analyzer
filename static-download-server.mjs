@@ -555,6 +555,9 @@ function summarizeBoostPickups(parsedReplay){
   const carLoc = new Map();
   const boostComponentCar = new Map();
   const boostComponentAmount = new Map();
+  const boostComponentActive = new Map();
+  const boostComponentHadActive = new Set();
+  const boostComponentLastTime = new Map();
   const carBoostAmount = new Map();
   const actorObject = new Map();
   const pickupState = new Map();
@@ -613,6 +616,25 @@ function summarizeBoostPickups(parsedReplay){
     return null;
   }
 
+  function replayComponentActiveValue(attribute, value){
+    const boolValue = replayBoolValue(attribute, value);
+    if(typeof boolValue === "boolean") return boolValue;
+    const byte = Number(getObject(attribute, "Byte") ?? getObject(value, "Byte"));
+    // rrrocket exposes ReplicatedActive as a change counter; even values line up
+    // with the boost component actively draining in decoded replays.
+    if(Number.isFinite(byte)) return Math.round(byte) % 2 === 0;
+    return null;
+  }
+
+  function isPlausibleBoostDrain(rawBoostUsed, previousTime, currentTime){
+    if(!Number.isFinite(rawBoostUsed) || rawBoostUsed <= 0) return false;
+    if(!Number.isFinite(previousTime) || !Number.isFinite(currentTime)) return rawBoostUsed <= 12;
+    const dt = currentTime - previousTime;
+    if(dt <= 0 || dt > 1.25) return false;
+    const maxRawDrain = Math.max(8, dt * 96 + 8);
+    return rawBoostUsed <= maxRawDrain;
+  }
+
   function addSupersonicBoostSpend(playerName, rawBoostUsed, speedSample){
     if(!playerName || !Number.isFinite(rawBoostUsed) || rawBoostUsed <= 0) return;
     const previous = supersonicBoostSpend.get(playerName) || {raw:0, events:0, speedSamples:0};
@@ -651,6 +673,9 @@ function summarizeBoostPickups(parsedReplay){
       }
       boostComponentCar.delete(actorId);
       boostComponentAmount.delete(actorId);
+      boostComponentActive.delete(actorId);
+      boostComponentHadActive.delete(actorId);
+      boostComponentLastTime.delete(actorId);
     }
     for(const update of frame.updated_actors || []){
       const actorId = update.actor_id;
@@ -688,6 +713,14 @@ function summarizeBoostPickups(parsedReplay){
           boostComponentCar.set(actorId, carActor);
           const boostAmount = boostComponentAmount.get(actorId);
           if(Number.isFinite(boostAmount)) carBoostAmount.set(carActor, boostAmount);
+        }
+      }
+
+      if(objectNameMatches(objectName, "TAGame.CarComponent_TA:ReplicatedActive")){
+        const activeValue = replayComponentActiveValue(attribute, value);
+        if(typeof activeValue === "boolean"){
+          boostComponentActive.set(actorId, activeValue);
+          boostComponentHadActive.add(actorId);
         }
       }
 
@@ -738,16 +771,22 @@ function summarizeBoostPickups(parsedReplay){
             });
           }
           if(Number.isInteger(carActor) && Number.isFinite(previousBoost) && previousBoost > boostAmount + 1){
+            const rawBoostUsed = previousBoost - boostAmount;
+            const previousBoostTime = boostComponentLastTime.get(actorId);
             const speedSample = nearestCarSpeed(carActor, time);
-            const isSupersonic = carSupersonicState.get(carActor) === true || (speedSample && speedSample.speed >= 2180);
-            if(isSupersonic){
+            const atMaxSpeed = speedSample && speedSample.speed >= 2280 && speedSample.speed <= 2450;
+            const activeKnown = boostComponentHadActive.has(actorId);
+            const boostActive = boostComponentActive.get(actorId) === true;
+            const activeEnough = activeKnown ? boostActive : rawBoostUsed <= 10;
+            if(atMaxSpeed && activeEnough && isPlausibleBoostDrain(rawBoostUsed, previousBoostTime, time)){
               const pri = carPri.get(carActor);
               const playerName = cleanName(priName.get(pri));
-              addSupersonicBoostSpend(playerName, previousBoost - boostAmount, speedSample);
+              addSupersonicBoostSpend(playerName, rawBoostUsed, speedSample);
             }
           }
           if(Number.isInteger(carActor)) carBoostAmount.set(carActor, boostAmount);
           boostComponentAmount.set(actorId, boostAmount);
+          boostComponentLastTime.set(actorId, Number.isFinite(time) ? time : null);
         }
       }
 

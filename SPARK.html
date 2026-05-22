@@ -6650,22 +6650,23 @@ function updateLivePlayerFromApi(player){
   p.shortcut = firstDefined(valueByKey(player,["Shortcut","shortcut","Index","index"]), p.shortcut);
   const isBoosting = valueByKey(player,["bBoosting","boosting","Boosting","isBoosting","IsBoosting"]) === true;
   const isSupersonic = valueByKey(player,["bSupersonic","supersonic","Supersonic","isSupersonic","IsSupersonic"]) === true;
+  const speed = valueByKey(player,["speed","Speed","velocity","Velocity"]);
+  const speedNumber = speed !== undefined ? Math.abs(toNumber(speed, 0)) : null;
   const boost = valueByKey(player,["boost","Boost","boostAmount","BoostAmount"]);
   if(boost !== undefined){
     const currentBoost = Math.max(0, Math.min(100, toNumber(boost, 0)));
-    if(p.lastSupersonic && currentBoost < p.currentBoost){
+    const atMaxSpeed = isSupersonic && (speedNumber === null || speedNumber >= 2280);
+    if(isBoosting && atMaxSpeed && currentBoost < p.currentBoost){
       p.supersonicBoostUsed += p.currentBoost - currentBoost;
     }
     p.currentBoost = currentBoost;
     p.boostSum += currentBoost;
     p.boostSamples++;
   }
-  const speed = valueByKey(player,["speed","Speed","velocity","Velocity"]);
-  if(speed !== undefined){
-    const n = Math.abs(toNumber(speed, 0));
-    p.speedSum += n;
+  if(speedNumber !== null){
+    p.speedSum += speedNumber;
     p.speedSamples++;
-    p.maxSpeed = Math.max(p.maxSpeed, n);
+    p.maxSpeed = Math.max(p.maxSpeed, speedNumber);
   }
   if(isBoosting) p.boostingSamples++;
   if(isSupersonic) p.supersonicSamples++;
