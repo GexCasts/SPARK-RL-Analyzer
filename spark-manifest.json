@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.05.23.0753",
-    "generatedUtc":  "2026-05-23T07:53:00.4421153Z",
+    "appVersion":  "2026.05.23.1002",
+    "generatedUtc":  "2026-05-23T10:02:14.7099529Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -152,24 +152,24 @@
                   },
                   {
                       "path":  "SPARK Launcher.exe",
-                      "version":  "d582df702ceb",
-                      "sha256":  "d582df702ceb1b23e51fcfe77b027e8a24c417793bef544b95a8916e8a9808b9",
-                      "size":  40448,
-                      "modifiedUtc":  "2026-05-23T07:51:59.8436733Z"
+                      "version":  "6a6aa917991c",
+                      "sha256":  "6a6aa917991c890c8a7e17e235753122cf864627734299d95548e622bba04189",
+                      "size":  47616,
+                      "modifiedUtc":  "2026-05-23T09:58:25.9694309Z"
                   },
                   {
                       "path":  "SPARK.html",
-                      "version":  "27c465d94e56",
-                      "sha256":  "27c465d94e56cad3eacf77a62aa5b16d15c43878e171375cbc917a7503838105",
-                      "size":  3442904,
-                      "modifiedUtc":  "2026-05-23T07:09:04.5358862Z"
+                      "version":  "fb84d009d371",
+                      "sha256":  "fb84d009d371a9d8b5f7c561bcbbd533c71bff99d8a91ebd110197dbb6141204",
+                      "size":  3443114,
+                      "modifiedUtc":  "2026-05-23T09:56:45.4361047Z"
                   },
                   {
                       "path":  "SPARK-Launcher.cs",
-                      "version":  "f714df504ca9",
-                      "sha256":  "f714df504ca9422b5239cb1149bf86f85fc2366f38fe02884067bc65348712f7",
-                      "size":  29748,
-                      "modifiedUtc":  "2026-05-23T07:42:05.6050992Z"
+                      "version":  "e8ce4604c29e",
+                      "sha256":  "e8ce4604c29efc4ac6c7309d9efb7611b0ed22e4c80caddeb7bff260d3060605",
+                      "size":  37786,
+                      "modifiedUtc":  "2026-05-23T09:55:47.6278909Z"
                   },
                   {
                       "path":  "SPARK-Launcher.ps1",
@@ -187,17 +187,17 @@
                   },
                   {
                       "path":  "static-download-server.mjs",
-                      "version":  "ee4d87f4a015",
-                      "sha256":  "ee4d87f4a0156bb2954d095469ffc29906c7d195b40307440c44a11e78606315",
-                      "size":  109692,
-                      "modifiedUtc":  "2026-05-23T07:40:10.0638966Z"
+                      "version":  "b15090f844b9",
+                      "sha256":  "b15090f844b94f5845f6e6c0790ff7aa9803e3d20a98f7acfb91d842a8d5636a",
+                      "size":  109803,
+                      "modifiedUtc":  "2026-05-23T09:57:25.9571316Z"
                   },
                   {
                       "path":  "tools/New-SparkManifest.ps1",
-                      "version":  "4749c9201323",
-                      "sha256":  "4749c920132353b21b8aa7faa7cc4e2c1bf4dd9055af5de340d63445aed64a63",
-                      "size":  3229,
-                      "modifiedUtc":  "2026-05-21T12:15:57.2245637Z"
+                      "version":  "e3a7a7f14648",
+                      "sha256":  "e3a7a7f14648a29c6261c0071418ce48703b918ab249c513203ba10b2e5c4e20",
+                      "size":  3239,
+                      "modifiedUtc":  "2026-05-23T10:01:32.4264983Z"
                   },
                   {
                       "path":  "tools/rrrocket/rrrocket-0.11.1-x86_64-pc-windows-msvc/rrrocket.exe",
@@ -205,6 +205,27 @@
                       "sha256":  "f41185b62d9c956f9e704f516f70970c245e37286b673c535553ca9e71bba348",
                       "size":  2213888,
                       "modifiedUtc":  "2026-04-28T12:48:50.0000000Z"
+                  },
+                  {
+                      "path":  "tools/webview2/runtime/Microsoft.Web.WebView2.Core.dll",
+                      "version":  "fcc07f6b8ddb",
+                      "sha256":  "fcc07f6b8ddb7c90915dbeaa2d959880bc52266dd49d7fab082f9da698f2bf0c",
+                      "size":  650080,
+                      "modifiedUtc":  "2026-05-04T00:06:12.0000000Z"
+                  },
+                  {
+                      "path":  "tools/webview2/runtime/Microsoft.Web.WebView2.WinForms.dll",
+                      "version":  "1935405eaede",
+                      "sha256":  "1935405eaede5c985cdb60a81175817ece52f132e3fa356b6a6db753bbf45207",
+                      "size":  38792,
+                      "modifiedUtc":  "2026-05-04T00:06:24.0000000Z"
+                  },
+                  {
+                      "path":  "tools/webview2/runtime/WebView2Loader.dll",
+                      "version":  "bb5fda5f2d3a",
+                      "sha256":  "bb5fda5f2d3aae5e0977ab28d8a8a00acfd63d73748aaac32daf4fc6645b6677",
+                      "size":  159112,
+                      "modifiedUtc":  "2026-05-04T00:06:34.0000000Z"
                   }
               ]
 }

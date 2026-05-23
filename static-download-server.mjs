@@ -2466,7 +2466,8 @@ function handleServerInfo(req, res){
     root,
     pid:process.pid,
     activeClients:activeClients.size,
-    livePacketRateEndpoint:true
+    livePacketRateEndpoint:true,
+    windowControlEndpoint:true
   }));
 }
 
@@ -2618,7 +2619,7 @@ public static class SparkWindowControl {
       GetClassName(hWnd, cls, cls.Capacity);
       string t = title.ToString();
       string c = cls.ToString();
-      if(t.IndexOf("SPARK", StringComparison.OrdinalIgnoreCase) >= 0 && (c.IndexOf("Chrome_WidgetWin", StringComparison.OrdinalIgnoreCase) >= 0 || c.IndexOf("ApplicationFrameWindow", StringComparison.OrdinalIgnoreCase) >= 0)) {
+      if(t.IndexOf("SPARK", StringComparison.OrdinalIgnoreCase) >= 0 && (c.IndexOf("Chrome_WidgetWin", StringComparison.OrdinalIgnoreCase) >= 0 || c.IndexOf("ApplicationFrameWindow", StringComparison.OrdinalIgnoreCase) >= 0 || c.IndexOf("WindowsForms10.Window", StringComparison.OrdinalIgnoreCase) >= 0)) {
         found = hWnd;
         return false;
       }

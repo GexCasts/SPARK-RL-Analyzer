@@ -8622,6 +8622,10 @@ if($("obsOverlayBtn")){
 function sendSparkWindowCommand(action){
   const normalized = String(action || "").toLowerCase();
   if(!["minimize","maximize","close","drag"].includes(normalized)) return;
+  if(window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === "function"){
+    window.chrome.webview.postMessage({type:"spark-window-control", action:normalized});
+    return;
+  }
   fetch("/api/window-control", {
     method:"POST",
     headers:{"Content-Type":"application/json"},

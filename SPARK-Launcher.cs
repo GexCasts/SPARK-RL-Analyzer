@@ -6,12 +6,16 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
 
 namespace SparkLauncher
 {
@@ -325,6 +329,17 @@ namespace SparkLauncher
 
         private void OpenSparkAppWindow()
         {
+            if (File.Exists(Program.WebView2WinFormsPath) && File.Exists(Program.WebView2CorePath) && File.Exists(Program.WebView2LoaderPath))
+            {
+                ProcessStartInfo appInfo = new ProcessStartInfo();
+                appInfo.FileName = Application.ExecutablePath;
+                appInfo.Arguments = "--spark-app-shell";
+                appInfo.UseShellExecute = false;
+                Process.Start(appInfo);
+                WriteStatus("Opening SPARK in the native borderless app shell...");
+                return;
+            }
+
             string browserPath = ResolveAppModeBrowser();
             if (!String.IsNullOrEmpty(browserPath))
             {
@@ -333,7 +348,7 @@ namespace SparkLauncher
                 appInfo.Arguments = "--app=" + appUrl + " --new-window";
                 appInfo.UseShellExecute = false;
                 Process.Start(appInfo);
-                WriteStatus("Opening SPARK in frameless app window mode...");
+                WriteStatus("Opening SPARK in browser app mode because WebView2 shell files are missing.");
                 ApplyFramelessChromeShell();
                 return;
             }
@@ -393,7 +408,8 @@ namespace SparkLauncher
                 bool titleMatches = title.IndexOf("SPARK", StringComparison.OrdinalIgnoreCase) >= 0;
                 bool classMatches =
                     className.IndexOf("Chrome_WidgetWin", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    className.IndexOf("ApplicationFrameWindow", StringComparison.OrdinalIgnoreCase) >= 0;
+                    className.IndexOf("ApplicationFrameWindow", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    className.IndexOf("WindowsForms10.Window", StringComparison.OrdinalIgnoreCase) >= 0;
                 if (titleMatches && classMatches)
                 {
                     found = hWnd;
@@ -701,15 +717,181 @@ namespace SparkLauncher
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
     }
 
+    internal sealed class SparkAppShellForm : Form
+    {
+        private const int WM_NCLBUTTONDOWN = 0x00A1;
+        private const int WM_NCHITTEST = 0x0084;
+        private const int HTCAPTION = 2;
+        private const int HTLEFT = 10;
+        private const int HTRIGHT = 11;
+        private const int HTTOP = 12;
+        private const int HTTOPLEFT = 13;
+        private const int HTTOPRIGHT = 14;
+        private const int HTBOTTOM = 15;
+        private const int HTBOTTOMLEFT = 16;
+        private const int HTBOTTOMRIGHT = 17;
+
+        private readonly string appUrl;
+        private readonly string root;
+        private readonly WebView2 webView;
+
+        public SparkAppShellForm(string appUrl, string root)
+        {
+            this.appUrl = appUrl;
+            this.root = root;
+            Text = "SPARK";
+            StartPosition = FormStartPosition.CenterScreen;
+            MinimumSize = new Size(1040, 680);
+            Size = new Size(1440, 920);
+            BackColor = Color.Black;
+            FormBorderStyle = FormBorderStyle.None;
+
+            string iconPath = Path.Combine(root, "assets", "SPARK Launcher.ico");
+            if (File.Exists(iconPath))
+            {
+                try { Icon = new Icon(iconPath); } catch { }
+            }
+
+            webView = new WebView2();
+            webView.Dock = DockStyle.Fill;
+            webView.DefaultBackgroundColor = Color.Black;
+            Controls.Add(webView);
+        }
+
+        protected override async void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            await InitializeWebViewAsync();
+        }
+
+        private async Task InitializeWebViewAsync()
+        {
+            string userDataFolder = Path.Combine(root, ".tmp", "webview2-profile");
+            Directory.CreateDirectory(userDataFolder);
+            CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+            await webView.EnsureCoreWebView2Async(environment);
+            webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+            webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+            webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+            webView.CoreWebView2.NewWindowRequested += delegate(object sender, CoreWebView2NewWindowRequestedEventArgs args)
+            {
+                args.Handled = true;
+                try
+                {
+                    ProcessStartInfo info = new ProcessStartInfo();
+                    info.FileName = args.Uri;
+                    info.UseShellExecute = true;
+                    Process.Start(info);
+                }
+                catch { }
+            };
+            webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+            webView.CoreWebView2.Navigate(appUrl);
+        }
+
+        private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            string json = e.WebMessageAsJson;
+            Dictionary<string, object> message;
+            try
+            {
+                message = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(json);
+            }
+            catch
+            {
+                return;
+            }
+            if (message == null || !message.ContainsKey("type")) return;
+            string type = Convert.ToString(message["type"]);
+            if (!String.Equals(type, "spark-window-control", StringComparison.OrdinalIgnoreCase)) return;
+            string action = message.ContainsKey("action") ? Convert.ToString(message["action"]) : "";
+            ApplyWindowAction(action);
+        }
+
+        private void ApplyWindowAction(string action)
+        {
+            action = (action ?? "").Trim().ToLowerInvariant();
+            if (action == "close")
+            {
+                Close();
+                return;
+            }
+            if (action == "minimize")
+            {
+                WindowState = FormWindowState.Minimized;
+                return;
+            }
+            if (action == "maximize")
+            {
+                WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+                return;
+            }
+            if (action == "drag")
+            {
+                if (WindowState == FormWindowState.Maximized) WindowState = FormWindowState.Normal;
+                ReleaseCapture();
+                SendMessage(Handle, WM_NCLBUTTONDOWN, new IntPtr(HTCAPTION), IntPtr.Zero);
+            }
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            if (m.Msg != WM_NCHITTEST || WindowState == FormWindowState.Maximized) return;
+
+            int border = 8;
+            Point point = PointToClient(new Point((short)((long)m.LParam & 0xFFFF), (short)(((long)m.LParam >> 16) & 0xFFFF)));
+            bool left = point.X <= border;
+            bool right = point.X >= ClientSize.Width - border;
+            bool top = point.Y <= border;
+            bool bottom = point.Y >= ClientSize.Height - border;
+            if (left && top) m.Result = new IntPtr(HTTOPLEFT);
+            else if (right && top) m.Result = new IntPtr(HTTOPRIGHT);
+            else if (left && bottom) m.Result = new IntPtr(HTBOTTOMLEFT);
+            else if (right && bottom) m.Result = new IntPtr(HTBOTTOMRIGHT);
+            else if (left) m.Result = new IntPtr(HTLEFT);
+            else if (right) m.Result = new IntPtr(HTRIGHT);
+            else if (top) m.Result = new IntPtr(HTTOP);
+            else if (bottom) m.Result = new IntPtr(HTBOTTOM);
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool ReleaseCapture();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+    }
+
     internal static class Program
     {
+        public static readonly string Root = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+        public static readonly string WebView2RuntimeDir = Path.Combine(Root, "tools", "webview2", "runtime");
+        public static readonly string WebView2CorePath = Path.Combine(WebView2RuntimeDir, "Microsoft.Web.WebView2.Core.dll");
+        public static readonly string WebView2WinFormsPath = Path.Combine(WebView2RuntimeDir, "Microsoft.Web.WebView2.WinForms.dll");
+        public static readonly string WebView2LoaderPath = Path.Combine(WebView2RuntimeDir, "WebView2Loader.dll");
+        private const string AppUrl = "http://127.0.0.1:8765/SPARK.html";
+
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
+            AppDomain.CurrentDomain.AssemblyResolve += ResolveSparkAssembly;
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            if (args.Any(arg => String.Equals(arg, "--spark-app-shell", StringComparison.OrdinalIgnoreCase)))
+            {
+                Application.Run(new SparkAppShellForm(AppUrl, Root));
+                return;
+            }
             Application.Run(new LauncherForm());
+        }
+
+        private static Assembly ResolveSparkAssembly(object sender, ResolveEventArgs args)
+        {
+            string fileName = new AssemblyName(args.Name).Name + ".dll";
+            string candidate = Path.Combine(WebView2RuntimeDir, fileName);
+            if (File.Exists(candidate)) return Assembly.LoadFrom(candidate);
+            return null;
         }
     }
 }

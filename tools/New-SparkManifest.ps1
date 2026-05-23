@@ -16,6 +16,7 @@ $excludedFiles = @(
 
 $binaryExtensions = @(
   ".exe",
+  ".dll",
   ".ico",
   ".png",
   ".zip"
