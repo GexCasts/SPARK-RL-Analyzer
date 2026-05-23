@@ -16,17 +16,69 @@
   --spark-yellow:#ffd000; --spark-amber:#f0a020; --spark-deep:#111111;
   --spark-graphite:#3f3f3f; --spark-steel:#8f8f8f; --spark-chrome:#f2f2f2;
   --spark-watermark:url("assets/SPARK%20app%20logo%20transparent.png");
+  --spark-window-top-frame:22px;
+  --spark-window-side-frame:3px;
+  --spark-window-inner-radius:16px;
 }
 *{box-sizing:border-box}
+html{
+  min-height:100%;
+  background:#050505;
+}
 html,body{height:100%}
 body{
   margin:0;
+  min-height:100%;
+  padding:
+    var(--spark-window-top-frame)
+    var(--spark-window-side-frame)
+    var(--spark-window-side-frame);
   background:
     linear-gradient(115deg,transparent 0 42%,rgba(255,208,0,.08) 43%,rgba(240,160,32,.13) 45%,transparent 47%),
     radial-gradient(circle at 50% -12%,#4a4a4a 0,#202020 34%,#0a0a0a 76%);
   color:var(--text);
   font-family:Inter,Segoe UI,Arial,sans-serif;
   overflow-x:hidden;
+}
+body::before,
+body::after{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:100000;
+}
+body::before{
+  height:var(--spark-window-top-frame);
+  background:
+    linear-gradient(90deg,rgba(7,7,7,.98),rgba(255,208,0,.88) 17%,rgba(244,244,244,.95) 35%,rgba(240,160,32,.9) 55%,rgba(15,15,15,.98) 78%),
+    linear-gradient(180deg,rgba(255,255,255,.36),transparent 48%,rgba(0,0,0,.58));
+  box-shadow:
+    inset 0 -1px 0 rgba(255,255,255,.48),
+    inset 0 -5px 12px rgba(0,0,0,.52),
+    0 8px 22px rgba(0,0,0,.42);
+  clip-path:polygon(0 0,100% 0,100% calc(100% - 5px),72% calc(100% - 5px),69% 100%,31% 100%,28% calc(100% - 5px),0 calc(100% - 5px));
+}
+body::after{
+  border-style:solid;
+  border-width:var(--spark-window-top-frame) var(--spark-window-side-frame) var(--spark-window-side-frame);
+  border-image:linear-gradient(135deg,var(--spark-yellow),var(--spark-chrome) 34%,var(--spark-amber) 68%,#202020) 1;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.10),
+    inset 0 0 0 2px rgba(0,0,0,.55);
+}
+.windowInnerCorners{
+  position:fixed;
+  inset:
+    var(--spark-window-top-frame)
+    var(--spark-window-side-frame)
+    var(--spark-window-side-frame);
+  border-radius:var(--spark-window-inner-radius);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.16),
+    inset 0 0 22px rgba(0,0,0,.62);
+  pointer-events:none;
+  z-index:99999;
 }
 header{
   min-height:82px;
@@ -35,7 +87,7 @@ header{
   background:
     linear-gradient(90deg,rgba(255,208,0,.15),transparent 28%,rgba(255,255,255,.07) 52%,transparent 78%),
     rgba(12,12,12,.96);
-  position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);
+  position:sticky;top:var(--spark-window-top-frame);z-index:20;backdrop-filter:blur(10px);
   box-shadow:0 8px 28px rgba(0,0,0,.34);
 }
 
@@ -2199,6 +2251,7 @@ body.obsOverlayMode #obsOverlayRoot{
 </style>
 </head>
 <body>
+<div class="windowInnerCorners" aria-hidden="true"></div>
 <header>
   <div class="headerBrand">
     <span class="logoSlot" aria-hidden="true"><img class="logo" src="assets/Spark%20Logo.png" alt=""></span>
