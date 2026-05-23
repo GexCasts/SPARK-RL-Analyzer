@@ -18,12 +18,13 @@
   --spark-watermark:url("assets/SPARK%20app%20logo%20transparent.png");
   --spark-window-top-frame:48px;
   --spark-window-side-frame:2px;
-  --spark-window-inner-radius:16px;
+  --spark-window-inner-radius:18px;
 }
 *{box-sizing:border-box}
 html{
   min-height:100%;
   background:#050505;
+  scrollbar-width:none;
 }
 html,body{height:100%}
 body{
@@ -39,6 +40,16 @@ body{
   color:var(--text);
   font-family:Inter,Segoe UI,Arial,sans-serif;
   overflow-x:hidden;
+  scrollbar-width:none;
+}
+*{
+  scrollbar-width:none;
+  -ms-overflow-style:none;
+}
+*::-webkit-scrollbar{
+  width:0!important;
+  height:0!important;
+  display:none!important;
 }
 body::before,
 body::after{
@@ -64,6 +75,7 @@ body::after{
   border-style:solid;
   border-width:var(--spark-window-top-frame) var(--spark-window-side-frame) var(--spark-window-side-frame);
   border-image:linear-gradient(135deg,var(--spark-yellow),var(--spark-chrome) 34%,var(--spark-amber) 68%,#202020) 1;
+  border-radius:0 0 var(--spark-window-inner-radius) var(--spark-window-inner-radius);
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,.10),
     inset 0 0 0 2px rgba(0,0,0,.55);
@@ -81,6 +93,28 @@ body::after{
   pointer-events:none;
   z-index:99999;
 }
+.sparkScrollThumb{
+  position:fixed;
+  right:7px;
+  top:calc(var(--spark-window-top-frame) + 14px);
+  width:8px;
+  height:58px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.34);
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.82),rgba(255,208,0,.64) 48%,rgba(240,160,32,.76)),
+    rgba(255,255,255,.18);
+  box-shadow:
+    0 0 10px rgba(255,208,0,.18),
+    inset 0 1px rgba(255,255,255,.42);
+  opacity:.3;
+  pointer-events:none;
+  z-index:100002;
+  transition:opacity .2s ease, top .12s ease, height .12s ease, right .12s ease;
+}
+.sparkScrollThumb.scrolling{
+  opacity:.9;
+}
 .sparkWindowFrame{
   position:fixed;
   inset:0 0 auto 0;
@@ -89,7 +123,7 @@ body::after{
   display:grid;
   grid-template-columns:minmax(240px,1fr) auto;
   align-items:center;
-  padding:0 10px 7px 18px;
+  padding:0 14px 0 22px;
   pointer-events:none;
   color:#050505;
 }
@@ -98,7 +132,7 @@ body::after{
   position:absolute;
   left:22px;
   right:180px;
-  bottom:9px;
+  bottom:6px;
   height:2px;
   background:linear-gradient(90deg,transparent,rgba(0,0,0,.72),rgba(255,255,255,.55),transparent);
   opacity:.72;
@@ -169,6 +203,8 @@ header{
     rgba(12,12,12,.96);
   position:sticky;top:var(--spark-window-top-frame);z-index:20;backdrop-filter:blur(10px);
   box-shadow:0 8px 28px rgba(0,0,0,.34);
+  border-radius:var(--spark-window-inner-radius) var(--spark-window-inner-radius) 0 0;
+  overflow:hidden;
 }
 
 .headerBrand{
@@ -1410,7 +1446,8 @@ body.obsOverlayMode{
 body.obsOverlayMode::before,
 body.obsOverlayMode::after,
 body.obsOverlayMode .sparkWindowFrame,
-body.obsOverlayMode .windowInnerCorners{
+body.obsOverlayMode .windowInnerCorners,
+body.obsOverlayMode .sparkScrollThumb{
   display:none!important;
 }
 body.obsOverlayMode header,
@@ -2351,6 +2388,7 @@ body.obsOverlayMode #obsOverlayRoot{
   </div>
 </div>
 <div class="windowInnerCorners" aria-hidden="true"></div>
+<div class="sparkScrollThumb" id="sparkScrollThumb" aria-hidden="true"></div>
 <header>
   <div class="headerBrand">
     <span class="logoSlot" aria-hidden="true"><img class="logo" src="assets/Spark%20Logo.png" alt=""></span>
@@ -8655,6 +8693,78 @@ document.querySelectorAll("[data-window-action]").forEach(control=>{
     });
   }
 });
+
+const sparkScrollThumb = $("sparkScrollThumb");
+let sparkScrollFadeTimer = null;
+let sparkScrollTarget = window;
+function getSparkScrollMetrics(target){
+  if(!target || target === window || target === document || target === document.body || target === document.documentElement){
+    const root = document.scrollingElement || document.documentElement;
+    return {
+      viewportTop: Math.max(6, parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--spark-window-top-frame")) + 12),
+      viewportBottom: window.innerHeight - 12,
+      viewportRight: 7,
+      scrollTop: root.scrollTop,
+      scrollHeight: root.scrollHeight,
+      clientHeight: window.innerHeight
+    };
+  }
+  const rect = target.getBoundingClientRect();
+  return {
+    viewportTop: Math.max(rect.top + 8, 8),
+    viewportBottom: Math.min(rect.bottom - 8, window.innerHeight - 8),
+    viewportRight: Math.max(window.innerWidth - rect.right + 8, 7),
+    scrollTop: target.scrollTop,
+    scrollHeight: target.scrollHeight,
+    clientHeight: target.clientHeight
+  };
+}
+function updateSparkScrollThumb(target, active){
+  if(!sparkScrollThumb || document.body.classList.contains("obsOverlayMode")) return;
+  const metrics = getSparkScrollMetrics(target || sparkScrollTarget || window);
+  const trackHeight = Math.max(40, metrics.viewportBottom - metrics.viewportTop);
+  const scrollable = Math.max(1, metrics.scrollHeight - metrics.clientHeight);
+  if(metrics.scrollHeight <= metrics.clientHeight + 2){
+    sparkScrollThumb.style.display = "none";
+    return;
+  }
+  const thumbHeight = Math.max(34, Math.min(78, trackHeight * (metrics.clientHeight / Math.max(metrics.clientHeight, metrics.scrollHeight))));
+  const ratio = Math.max(0, Math.min(1, metrics.scrollTop / scrollable));
+  const top = metrics.viewportTop + ((trackHeight - thumbHeight) * ratio);
+  sparkScrollThumb.style.display = "block";
+  sparkScrollThumb.style.height = `${thumbHeight}px`;
+  sparkScrollThumb.style.top = `${top}px`;
+  sparkScrollThumb.style.right = `${metrics.viewportRight}px`;
+  sparkScrollThumb.classList.toggle("scrolling", !!active);
+}
+function pulseSparkScrollThumb(target){
+  sparkScrollTarget = target || window;
+  updateSparkScrollThumb(sparkScrollTarget, true);
+  clearTimeout(sparkScrollFadeTimer);
+  sparkScrollFadeTimer = setTimeout(()=>updateSparkScrollThumb(sparkScrollTarget, false), 1000);
+}
+function findSparkScrollableTarget(node){
+  let current = node && node.nodeType === 1 ? node : node?.parentElement;
+  while(current && current !== document.body){
+    if(current.scrollHeight > current.clientHeight + 2) return current;
+    current = current.parentElement;
+  }
+  return window;
+}
+document.addEventListener("scroll", event=>{
+  const target = event.target === document ? window : event.target;
+  pulseSparkScrollThumb(target);
+}, true);
+document.addEventListener("wheel", event=>{
+  const target = findSparkScrollableTarget(event.target);
+  setTimeout(()=>pulseSparkScrollThumb(target), 0);
+}, {capture:true, passive:true});
+document.addEventListener("touchmove", event=>{
+  const target = findSparkScrollableTarget(event.target);
+  setTimeout(()=>pulseSparkScrollThumb(target), 0);
+}, {capture:true, passive:true});
+window.addEventListener("resize", ()=>updateSparkScrollThumb(sparkScrollTarget, false));
+requestAnimationFrame(()=>updateSparkScrollThumb(window, false));
 
 if(isObsOverlayMode){
   document.body.classList.add("obsOverlayMode");
