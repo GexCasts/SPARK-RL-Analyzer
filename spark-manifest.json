@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.05.22.1631",
-    "generatedUtc":  "2026-05-22T16:31:18.8796188Z",
+    "appVersion":  "2026.05.23.0638",
+    "generatedUtc":  "2026-05-23T06:38:47.0555066Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -40,10 +40,17 @@
                   },
                   {
                       "path":  "assets/Field background.png",
-                      "version":  "1f96c053c68c",
-                      "sha256":  "1f96c053c68cb7dbc7a46302d62b6b3345c95e3bb55897ed24eb60c950918f79",
-                      "size":  150645,
-                      "modifiedUtc":  "2026-05-14T11:58:16.6184284Z"
+                      "version":  "535e2fed3108",
+                      "sha256":  "535e2fed3108aa62052953022de5fce6e0ceaa02f943eff60f8f0743658882ae",
+                      "size":  143442,
+                      "modifiedUtc":  "2026-05-23T05:01:47.3539555Z"
+                  },
+                  {
+                      "path":  "assets/Field-mask.png",
+                      "version":  "1bca88af86ed",
+                      "sha256":  "1bca88af86edaa32cf7c5fc82b614f7e0bd27b9b62e97f54321398a47ae9ccd4",
+                      "size":  17970,
+                      "modifiedUtc":  "2026-05-23T05:02:19.0108722Z"
                   },
                   {
                       "path":  "assets/SPARK app logo transparent.png",
@@ -152,10 +159,10 @@
                   },
                   {
                       "path":  "SPARK.html",
-                      "version":  "1399f3664600",
-                      "sha256":  "1399f36646008459653890dba28caedb6f8b86feeb013132bdb92247cc9035c1",
-                      "size":  3437075,
-                      "modifiedUtc":  "2026-05-22T16:28:47.0451214Z"
+                      "version":  "d4af907183a9",
+                      "sha256":  "d4af907183a9c997c6ff98225de5dafbf7188850a14e82a057a344f13437c96b",
+                      "size":  3437355,
+                      "modifiedUtc":  "2026-05-23T06:37:53.9954188Z"
                   },
                   {
                       "path":  "SPARK-Launcher.cs",

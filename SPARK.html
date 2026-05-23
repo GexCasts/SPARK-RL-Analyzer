@@ -1217,6 +1217,14 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
   height:100%;
   pointer-events:none;
   z-index:4;
+  -webkit-mask-image:url("assets/Field-mask.png");
+  mask-image:url("assets/Field-mask.png");
+  -webkit-mask-size:100% 100%;
+  mask-size:100% 100%;
+  -webkit-mask-repeat:no-repeat;
+  mask-repeat:no-repeat;
+  -webkit-mask-position:center;
+  mask-position:center;
 }
 .positioningLegend{
   display:flex;
@@ -4278,10 +4286,10 @@ const fieldMapBounds = {
 const customFieldMap = {
   width: 1748,
   height: 1147,
-  centerX: 874,
-  centerY: 573.5,
-  scaleX: 0.14535,
-  scaleY: 0.14535
+  centerX: 873.109,
+  centerY: 572.95,
+  scaleX: 0.134457,
+  scaleY: 0.135245
 };
 
 function clampPercent(value){
@@ -4301,7 +4309,7 @@ function fieldCoordToMapPercent(fieldX, fieldY){
   return imagePixelToMapPercent(x, y);
 }
 
-function insetMapPercent(point, insetX=3.55, insetY=3.7){
+function insetMapPercent(point, insetX=.55, insetY=.55){
   const xScale = Math.max(0, (100 - insetX * 2) / 100);
   const yScale = Math.max(0, (100 - insetY * 2) / 100);
   return {
@@ -4324,45 +4332,45 @@ function fieldDisplayPercent(point){
 }
 
 const customBoostPadDisplayPositions = [
-  [254.3,573],
-  [261.6,309.7],
-  [261.6,836.3],
-  [275,124.5],
-  [275,1021.5],
-  [390.8,434.1],
-  [390.8,711.9],
-  [462.7,571.8],
-  [512.6,50.1],
-  [512.6,1095.9],
-  [542,312.3],
-  [542,833.7],
-  [720.8,273.4],
-  [721.9,571.7],
-  [720.8,872.6],
-  [874,32],
-  [874,423.4],
-  [874,722.6],
-  [874,1115],
-  [1025.4,273.4],
-  [1024,573],
-  [1025.4,872.6],
-  [1206,314.3],
-  [1206,831.7],
-  [1235.4,52.2],
-  [1235.4,1093.8],
-  [1278.3,572.8],
-  [1357.1,436.1],
-  [1357.1,709.9],
-  [1473,126.5],
-  [1473,1019.5],
-  [1486.3,311.7],
-  [1486.3,834.3],
-  [1486.7,574]
+  [302,573],
+  [308.9,815.9],
+  [308.9,330.1],
+  [321.3,986.7],
+  [321.3,159.3],
+  [428.1,701.2],
+  [428.1,444.8],
+  [494.5,571.9],
+  [540.5,1055.2],
+  [540.5,90.8],
+  [567.5,813.6],
+  [567.5,332.4],
+  [735,849.6],
+  [737.3,571.9],
+  [735,296.4],
+  [873.4,1072.2],
+  [873.3,714.6],
+  [873.4,431.4],
+  [873.4,73.8],
+  [1012.5,847.6],
+  [1003.7,572.8],
+  [1012.5,298.4],
+  [1180,811.7],
+  [1180,334.3],
+  [1206.9,1053.5],
+  [1206.9,92.5],
+  [1246.5,572.8],
+  [1319.4,699.4],
+  [1319.4,446.6],
+  [1426.1,984.9],
+  [1426.1,161.1],
+  [1438.5,814],
+  [1438.5,332],
+  [1438.8,573.9]
 ].map(([x,y])=>imagePixelToMapPercent(x,y));
 
 function boostPadDisplayPercent(pad){
   const customPos = customBoostPadDisplayPositions[pad.index];
-  if(customPos) return {x: customPos.x, y: 100 - customPos.y};
+  if(customPos) return {x: customPos.x, y: customPos.y};
   return fieldDisplayPercent(pad);
 }
 
