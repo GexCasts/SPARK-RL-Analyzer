@@ -2542,6 +2542,113 @@ async function handleLivePacketRate(req, res){
   res.end(JSON.stringify({ok:true, path:liveApiStatsConfigPath, packetSendRate:rate, changed:next !== current}));
 }
 
+function runPowerShell(script){
+  return new Promise((resolve, reject)=>{
+    execFile("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {windowsHide:true}, (error, stdout, stderr)=>{
+      if(error){
+        reject(new Error(String(stderr || stdout || error.message || "Window control failed").trim()));
+        return;
+      }
+      resolve(String(stdout || "").trim());
+    });
+  });
+}
+
+async function handleWindowControl(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use POST.");
+    return;
+  }
+
+  const body = await readRequestBody(req, 16 * 1024);
+  let message = {};
+  try{
+    message = JSON.parse(body.toString("utf8") || "{}");
+  }catch{
+    message = {};
+  }
+  const action = String(message.action || "").toLowerCase();
+  if(!["minimize","maximize","close","drag"].includes(action)){
+    throw new Error("Unsupported window action.");
+  }
+  if(process.platform !== "win32"){
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify({ok:false, reason:"window controls are only available in the Windows app shell"}));
+    return;
+  }
+
+  const psAction = JSON.stringify(action);
+  const script = `
+$action = ${psAction}
+Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class SparkWindowControl {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder text, int count);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool ReleaseCapture();
+  [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+  const int SW_MINIMIZE = 6;
+  const int SW_MAXIMIZE = 3;
+  const int SW_RESTORE = 9;
+  const uint WM_CLOSE = 0x0010;
+  const uint WM_NCLBUTTONDOWN = 0x00A1;
+  const int HTCAPTION = 2;
+  public static IntPtr Find() {
+    IntPtr found = IntPtr.Zero;
+    EnumWindows(delegate(IntPtr hWnd, IntPtr lParam) {
+      if(found != IntPtr.Zero || !IsWindowVisible(hWnd)) return true;
+      StringBuilder title = new StringBuilder(256);
+      StringBuilder cls = new StringBuilder(128);
+      GetWindowText(hWnd, title, title.Capacity);
+      GetClassName(hWnd, cls, cls.Capacity);
+      string t = title.ToString();
+      string c = cls.ToString();
+      if(t.IndexOf("SPARK", StringComparison.OrdinalIgnoreCase) >= 0 && (c.IndexOf("Chrome_WidgetWin", StringComparison.OrdinalIgnoreCase) >= 0 || c.IndexOf("ApplicationFrameWindow", StringComparison.OrdinalIgnoreCase) >= 0)) {
+        found = hWnd;
+        return false;
+      }
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
+  public static bool Act(string action) {
+    IntPtr hWnd = Find();
+    if(hWnd == IntPtr.Zero) return false;
+    if(action == "close") return PostMessage(hWnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+    if(action == "minimize") return ShowWindow(hWnd, SW_MINIMIZE);
+    if(action == "maximize") return ShowWindow(hWnd, IsZoomed(hWnd) ? SW_RESTORE : SW_MAXIMIZE);
+    if(action == "drag") {
+      SetForegroundWindow(hWnd);
+      ReleaseCapture();
+      SendMessage(hWnd, WM_NCLBUTTONDOWN, new IntPtr(HTCAPTION), IntPtr.Zero);
+      return true;
+    }
+    return false;
+  }
+}
+"@
+if(-not [SparkWindowControl]::Act($action)){ throw "SPARK app window not found." }
+`;
+  await runPowerShell(script);
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify({ok:true, action}));
+}
+
 server = http.createServer(async (req,res)=>{
   try{
     const url = new URL(req.url, "http://127.0.0.1");
@@ -2555,6 +2662,10 @@ server = http.createServer(async (req,res)=>{
     }
     if(url.pathname === "/api/live-packet-rate"){
       await handleLivePacketRate(req, res);
+      return;
+    }
+    if(url.pathname === "/api/window-control"){
+      await handleWindowControl(req, res);
       return;
     }
     if(url.pathname === "/api/parse-replay-boosts"){

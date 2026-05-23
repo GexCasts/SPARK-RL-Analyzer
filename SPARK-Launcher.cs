@@ -6,8 +6,10 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
@@ -33,6 +35,19 @@ namespace SparkLauncher
 
     internal sealed class LauncherForm : Form
     {
+        private const int GWL_STYLE = -16;
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOZORDER = 0x0004;
+        private const uint SWP_NOOWNERZORDER = 0x0200;
+        private const uint SWP_FRAMECHANGED = 0x0020;
+        private const uint SWP_SHOWWINDOW = 0x0040;
+        private const long WS_CAPTION = 0x00C00000L;
+        private const long WS_THICKFRAME = 0x00040000L;
+        private const long WS_SYSMENU = 0x00080000L;
+        private const long WS_MINIMIZEBOX = 0x00020000L;
+        private const long WS_MAXIMIZEBOX = 0x00010000L;
+
         private readonly string root;
         private readonly string toolsDir;
         private readonly string tmpDir;
@@ -318,7 +333,8 @@ namespace SparkLauncher
                 appInfo.Arguments = "--app=" + appUrl + " --new-window";
                 appInfo.UseShellExecute = false;
                 Process.Start(appInfo);
-                WriteStatus("Opening SPARK in app window mode...");
+                WriteStatus("Opening SPARK in frameless app window mode...");
+                ApplyFramelessChromeShell();
                 return;
             }
 
@@ -347,6 +363,78 @@ namespace SparkLauncher
                 if (File.Exists(candidate)) return candidate;
             }
             return null;
+        }
+
+        private void ApplyFramelessChromeShell()
+        {
+            for (int attempt = 0; attempt < 60; attempt++)
+            {
+                IntPtr hWnd = FindSparkBrowserWindow();
+                if (hWnd != IntPtr.Zero)
+                {
+                    MakeWindowFrameless(hWnd);
+                    WriteStatus("Native browser frame hidden. SPARK frame controls are active.");
+                    return;
+                }
+                Thread.Sleep(100);
+                Application.DoEvents();
+            }
+            WriteStatus("SPARK opened, but the native browser frame could not be hidden.");
+        }
+
+        private static IntPtr FindSparkBrowserWindow()
+        {
+            IntPtr found = IntPtr.Zero;
+            EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
+            {
+                if (found != IntPtr.Zero || !IsWindowVisible(hWnd)) return true;
+                string title = GetWindowTextSafe(hWnd);
+                string className = GetClassNameSafe(hWnd);
+                bool titleMatches = title.IndexOf("SPARK", StringComparison.OrdinalIgnoreCase) >= 0;
+                bool classMatches =
+                    className.IndexOf("Chrome_WidgetWin", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    className.IndexOf("ApplicationFrameWindow", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (titleMatches && classMatches)
+                {
+                    found = hWnd;
+                    return false;
+                }
+                return true;
+            }, IntPtr.Zero);
+            return found;
+        }
+
+        private static void MakeWindowFrameless(IntPtr hWnd)
+        {
+            long style = GetWindowLongPtrSafe(hWnd, GWL_STYLE).ToInt64();
+            style &= ~(WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+            SetWindowLongPtrSafe(hWnd, GWL_STYLE, new IntPtr(style));
+            SetWindowPos(hWnd, IntPtr.Zero, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        }
+
+        private static string GetWindowTextSafe(IntPtr hWnd)
+        {
+            StringBuilder buffer = new StringBuilder(256);
+            GetWindowText(hWnd, buffer, buffer.Capacity);
+            return buffer.ToString();
+        }
+
+        private static string GetClassNameSafe(IntPtr hWnd)
+        {
+            StringBuilder buffer = new StringBuilder(128);
+            GetClassName(hWnd, buffer, buffer.Capacity);
+            return buffer.ToString();
+        }
+
+        private static IntPtr GetWindowLongPtrSafe(IntPtr hWnd, int index)
+        {
+            return IntPtr.Size == 8 ? GetWindowLongPtr64(hWnd, index) : new IntPtr(GetWindowLong32(hWnd, index));
+        }
+
+        private static IntPtr SetWindowLongPtrSafe(IntPtr hWnd, int index, IntPtr value)
+        {
+            return IntPtr.Size == 8 ? SetWindowLongPtr64(hWnd, index, value) : new IntPtr(SetWindowLong32(hWnd, index, value.ToInt32()));
         }
 
         private string ResolveNode()
@@ -582,6 +670,35 @@ namespace SparkLauncher
         {
             return "\"" + value.Replace("\"", "\\\"") + "\"";
         }
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
+        private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
+        private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
+        private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
+        private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
     }
 
     internal static class Program

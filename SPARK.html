@@ -16,8 +16,8 @@
   --spark-yellow:#ffd000; --spark-amber:#f0a020; --spark-deep:#111111;
   --spark-graphite:#3f3f3f; --spark-steel:#8f8f8f; --spark-chrome:#f2f2f2;
   --spark-watermark:url("assets/SPARK%20app%20logo%20transparent.png");
-  --spark-window-top-frame:22px;
-  --spark-window-side-frame:3px;
+  --spark-window-top-frame:48px;
+  --spark-window-side-frame:2px;
   --spark-window-inner-radius:16px;
 }
 *{box-sizing:border-box}
@@ -51,13 +51,14 @@ body::after{
 body::before{
   height:var(--spark-window-top-frame);
   background:
-    linear-gradient(90deg,rgba(7,7,7,.98),rgba(255,208,0,.88) 17%,rgba(244,244,244,.95) 35%,rgba(240,160,32,.9) 55%,rgba(15,15,15,.98) 78%),
-    linear-gradient(180deg,rgba(255,255,255,.36),transparent 48%,rgba(0,0,0,.58));
+    radial-gradient(circle at 50% 0,rgba(255,255,255,.34),transparent 42%),
+    linear-gradient(100deg,#050505 0 15%,rgba(255,208,0,.96) 25%,rgba(242,242,242,.98) 42%,rgba(240,160,32,.94) 61%,#060606 86%),
+    linear-gradient(180deg,rgba(255,255,255,.46),transparent 45%,rgba(0,0,0,.72));
   box-shadow:
-    inset 0 -1px 0 rgba(255,255,255,.48),
-    inset 0 -5px 12px rgba(0,0,0,.52),
-    0 8px 22px rgba(0,0,0,.42);
-  clip-path:polygon(0 0,100% 0,100% calc(100% - 5px),72% calc(100% - 5px),69% 100%,31% 100%,28% calc(100% - 5px),0 calc(100% - 5px));
+    inset 0 -1px 0 rgba(255,255,255,.62),
+    inset 0 -12px 22px rgba(0,0,0,.62),
+    0 10px 28px rgba(0,0,0,.58);
+  clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),76% calc(100% - 10px),71% 100%,29% 100%,24% calc(100% - 10px),0 calc(100% - 10px));
 }
 body::after{
   border-style:solid;
@@ -79,6 +80,85 @@ body::after{
     inset 0 0 22px rgba(0,0,0,.62);
   pointer-events:none;
   z-index:99999;
+}
+.sparkWindowFrame{
+  position:fixed;
+  inset:0 0 auto 0;
+  height:var(--spark-window-top-frame);
+  z-index:100001;
+  display:grid;
+  grid-template-columns:minmax(240px,1fr) auto;
+  align-items:center;
+  padding:0 10px 7px 18px;
+  pointer-events:none;
+  color:#050505;
+}
+.sparkWindowFrame::before{
+  content:"";
+  position:absolute;
+  left:22px;
+  right:180px;
+  bottom:9px;
+  height:2px;
+  background:linear-gradient(90deg,transparent,rgba(0,0,0,.72),rgba(255,255,255,.55),transparent);
+  opacity:.72;
+}
+.sparkWindowTitle{
+  position:relative;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+  pointer-events:auto;
+  user-select:none;
+  -webkit-user-select:none;
+  font-weight:1000;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  text-shadow:0 1px 0 rgba(255,255,255,.5);
+}
+.sparkWindowTitle img{
+  width:29px;
+  height:29px;
+  object-fit:contain;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.36));
+}
+.sparkWindowTitle small{
+  color:rgba(0,0,0,.72);
+  font-size:10px;
+  letter-spacing:.08em;
+  font-weight:900;
+}
+.sparkWindowControls{
+  position:relative;
+  display:flex;
+  gap:7px;
+  pointer-events:auto;
+}
+.sparkWindowControl{
+  width:42px;
+  height:30px;
+  border:1px solid rgba(0,0,0,.62);
+  border-radius:8px;
+  color:#f8f8f8;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.18),transparent 48%),
+    linear-gradient(135deg,#272727,#070707);
+  box-shadow:
+    inset 0 1px rgba(255,255,255,.18),
+    0 4px 10px rgba(0,0,0,.35);
+  font:900 14px/1 "Segoe UI",Arial,sans-serif;
+  cursor:pointer;
+}
+.sparkWindowControl:hover{
+  border-color:rgba(255,208,0,.9);
+  color:var(--spark-yellow);
+  transform:translateY(-1px);
+}
+.sparkWindowControl.close:hover{
+  border-color:#ff6555;
+  color:#fff;
+  background:linear-gradient(180deg,#ff6555,#8f1515);
 }
 header{
   min-height:82px;
@@ -1324,7 +1404,14 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
 .priority{font-size:12px;color:var(--green);font-weight:800;margin-bottom:5px}.warning{color:var(--orange)}.bad{color:var(--red)}
 body.obsOverlayMode{
   background:transparent!important;
+  padding:0!important;
   overflow:hidden;
+}
+body.obsOverlayMode::before,
+body.obsOverlayMode::after,
+body.obsOverlayMode .sparkWindowFrame,
+body.obsOverlayMode .windowInnerCorners{
+  display:none!important;
 }
 body.obsOverlayMode header,
 body.obsOverlayMode .app{
@@ -2251,6 +2338,18 @@ body.obsOverlayMode #obsOverlayRoot{
 </style>
 </head>
 <body>
+<div class="sparkWindowFrame" aria-label="SPARK window frame">
+  <div class="sparkWindowTitle" data-window-action="drag" title="SPARK">
+    <img src="assets/SPARK%20app%20logo%20transparent.png" alt="">
+    <span>SPARK</span>
+    <small>Replay Analysis</small>
+  </div>
+  <div class="sparkWindowControls" aria-label="Window controls">
+    <button class="sparkWindowControl" type="button" data-window-action="minimize" aria-label="Minimize">-</button>
+    <button class="sparkWindowControl" type="button" data-window-action="maximize" aria-label="Maximize or restore">□</button>
+    <button class="sparkWindowControl close" type="button" data-window-action="close" aria-label="Close">X</button>
+  </div>
+</div>
 <div class="windowInnerCorners" aria-hidden="true"></div>
 <header>
   <div class="headerBrand">
@@ -8520,6 +8619,38 @@ if($("obsOverlayBtn")){
       (location.protocol === "file:" ? `<span style="color:var(--muted)">Fallback file URL: ${obsOverlayFileUrl}</span>` : "");
   };
 }
+function sendSparkWindowCommand(action){
+  const normalized = String(action || "").toLowerCase();
+  if(!["minimize","maximize","close","drag"].includes(normalized)) return;
+  fetch("/api/window-control", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:normalized}),
+    cache:"no-store"
+  }).catch(()=>{
+    if(normalized === "close") window.close();
+  });
+}
+document.querySelectorAll("[data-window-action]").forEach(control=>{
+  control.addEventListener("click", event=>{
+    const action = control.dataset.windowAction;
+    if(action === "drag") return;
+    event.preventDefault();
+    event.stopPropagation();
+    sendSparkWindowCommand(action);
+  });
+  if(control.dataset.windowAction === "drag"){
+    control.addEventListener("dblclick", event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      sendSparkWindowCommand("maximize");
+    });
+    control.addEventListener("pointerdown", event=>{
+      if(event.button !== 0) return;
+      sendSparkWindowCommand("drag");
+    });
+  }
+});
 
 if(isObsOverlayMode){
   document.body.classList.add("obsOverlayMode");
