@@ -734,6 +734,8 @@ namespace SparkLauncher
         private readonly string appUrl;
         private readonly string root;
         private readonly WebView2 webView;
+        private Rectangle restoreBounds;
+        private bool isCustomMaximized;
 
         public SparkAppShellForm(string appUrl, string root)
         {
@@ -823,21 +825,51 @@ namespace SparkLauncher
             }
             if (action == "maximize")
             {
-                WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+                ToggleCustomMaximize();
                 return;
             }
             if (action == "drag")
             {
-                if (WindowState == FormWindowState.Maximized) WindowState = FormWindowState.Normal;
+                if (isCustomMaximized) RestoreFromCustomMaximize();
                 ReleaseCapture();
                 SendMessage(Handle, WM_NCLBUTTONDOWN, new IntPtr(HTCAPTION), IntPtr.Zero);
             }
         }
 
+        private void ToggleCustomMaximize()
+        {
+            if (isCustomMaximized)
+            {
+                RestoreFromCustomMaximize();
+                return;
+            }
+
+            restoreBounds = Bounds;
+            Rectangle workingArea = Screen.FromControl(this).WorkingArea;
+            SuspendLayout();
+            Bounds = workingArea;
+            isCustomMaximized = true;
+            ResumeLayout(true);
+        }
+
+        private void RestoreFromCustomMaximize()
+        {
+            Rectangle targetBounds = restoreBounds;
+            if (targetBounds.Width < MinimumSize.Width || targetBounds.Height < MinimumSize.Height)
+            {
+                targetBounds = new Rectangle(Location, SizeFromClientSize(MinimumSize));
+            }
+
+            SuspendLayout();
+            Bounds = targetBounds;
+            isCustomMaximized = false;
+            ResumeLayout(true);
+        }
+
         protected override void WndProc(ref Message m)
         {
             base.WndProc(ref m);
-            if (m.Msg != WM_NCHITTEST || WindowState == FormWindowState.Maximized) return;
+            if (m.Msg != WM_NCHITTEST || isCustomMaximized) return;
 
             int border = 8;
             Point point = PointToClient(new Point((short)((long)m.LParam & 0xFFFF), (short)(((long)m.LParam >> 16) & 0xFFFF)));
