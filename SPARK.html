@@ -463,14 +463,14 @@ button.unitSwitch{
 .kpi .meaning{font-size:clamp(10px,.65vw,12px);color:var(--green);line-height:1.35}
 .dashboard{
   display:grid;
-  grid-template-columns:repeat(12,minmax(72px,1fr));
+  grid-template-columns:repeat(24,minmax(34px,1fr));
   grid-auto-flow:dense;
-  grid-auto-rows:auto;
-  gap:14px;
-  align-items:start;
+  grid-auto-rows:8px;
+  gap:10px;
+  align-items:stretch;
 }
-.span2{grid-column:span 8}
-.full{grid-column:1 / -1}
+.span2{grid-column:span 16}
+.full{grid-column:1 / -1;grid-row:span var(--tile-rows,20)}
 .tileToolbar{
   display:flex;
   flex-wrap:wrap;
@@ -515,10 +515,12 @@ button.unitSwitch{
 .tileMenuHint{color:var(--muted);font-size:11px;line-height:1.35;margin-top:4px}
 .tileManaged{
   position:relative;
-  grid-column:span var(--tile-span,4);
+  grid-column:span var(--tile-span,8);
+  grid-row:span var(--tile-rows,40);
   min-width:0;
   min-height:120px;
   cursor:grab;
+  overflow:hidden;
 }
 .tileManaged:active{cursor:grabbing}
 .tileManaged button,
@@ -2545,7 +2547,7 @@ body.obsOverlayMode #obsOverlayRoot{
   header{height:auto}.topbar{grid-template-columns:1fr}
   .dashboard{grid-template-columns:1fr}
   .coach{grid-template-columns:1fr;max-height:70vh;overflow:auto}
-  .tileManaged,.span2{grid-column:1 / -1!important}.kpis{grid-template-columns:repeat(2,1fr)}
+  .tileManaged,.span2{grid-column:1 / -1!important;grid-row:auto!important;overflow:visible}.kpis{grid-template-columns:repeat(2,1fr)}
   .event{grid-template-columns:1fr}.tag{text-align:left}
   .overviewPanel{grid-template-columns:1fr}
   .overviewPanel > .tableWrap{grid-column:auto;grid-row:auto}
@@ -2653,7 +2655,7 @@ body.obsOverlayMode #obsOverlayRoot{
       </div>
     </div>
 
-    <div class="card full" id="gameOverviewCard" data-tile-id="gameOverview" data-tile-title="Game Overview" data-tile-span="12">
+    <div class="card full" id="gameOverviewCard" data-tile-id="gameOverview" data-tile-title="Game Overview" data-tile-span="24">
       <div class="overviewPanel">
         <div class="overviewHero">
           <div class="overviewTeamCard blue">
@@ -2685,21 +2687,21 @@ body.obsOverlayMode #obsOverlayRoot{
       </div>
     </div>
 
-    <div class="card span2" data-tile-id="impact" data-tile-title="Impact on Play" data-tile-span="8">
+    <div class="card span2" data-tile-id="impact" data-tile-title="Impact on Play" data-tile-span="16">
       <h2>Impact on Play</h2>
       <div class="help">Shows 2-second game-time windows. Possession and pressure use replay car and ball positions when available and are smoothed for trend readability. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Hover a vertical line to see who made the play.</div>
       <div class="chartWrap tall"><canvas id="trendChart"></canvas></div>
       <div class="note" id="trendNote"></div>
     </div>
 
-    <div class="card" data-tile-id="boostManagement" data-tile-title="Boost Management" data-tile-span="4">
+    <div class="card" data-tile-id="boostManagement" data-tile-title="Boost Management" data-tile-span="8">
       <h2>Boost Management</h2>
       <div class="help">Boost efficiency is not “use less boost”; it means spending boost where it creates speed, pressure, recovery, or safety.</div>
       <div id="boostBars"></div>
       <div class="note" id="boostNote"></div>
     </div>
 
-    <div class="card" id="positioningMapCard" data-tile-id="positioning" data-tile-title="Positioning Heatmap" data-tile-span="6">
+    <div class="card" id="positioningMapCard" data-tile-id="positioning" data-tile-title="Positioning Heatmap" data-tile-span="12">
       <h2>Positioning Heatmap</h2>
       <div class="help">Shows selected-player field positioning. Repeated positioning gets hotter, moving from dim grey to yellow, orange, and red. The map uses the same top-down field orientation as the boost pickup map.</div>
       <div class="field" id="positioningMap"></div>
@@ -2712,7 +2714,7 @@ body.obsOverlayMode #obsOverlayRoot{
       <div class="note" id="positioningMapNote"></div>
     </div>
 
-    <div class="card" data-tile-id="boostMap" data-tile-title="Boost Pickup Map" data-tile-span="6">
+    <div class="card" data-tile-id="boostMap" data-tile-title="Boost Pickup Map" data-tile-span="12">
       <h2>Boost Pickup Map</h2>
       <div class="help">Uses the standard 34-pad Soccar layout, aligned to the supplied top-down map with blue net on the left and orange net on the right. Pads shift from light grey to orange as pickups increase.</div>
       <div class="field" id="boostMap"></div>
@@ -2724,34 +2726,34 @@ body.obsOverlayMode #obsOverlayRoot{
       <div class="note" id="boostPickupNote"></div>
     </div>
 
-    <div class="card" id="teamComparisonCard" data-tile-id="comparison" data-tile-title="Player / Team Comparison" data-tile-span="4">
+    <div class="card" id="teamComparisonCard" data-tile-id="comparison" data-tile-title="Player / Team Comparison" data-tile-span="8">
       <h2>Player / Team Comparison</h2>
       <div class="help">Compare contribution across the lobby. In team view, compare overall contribution distribution across players on the selected team.</div>
       <div class="chartWrap"><canvas id="compareChart"></canvas></div>
     </div>
 
-    <div class="card" id="physicalComparisonCard" data-tile-id="physical" data-tile-title="Demos / Bumps" data-tile-span="4">
+    <div class="card" id="physicalComparisonCard" data-tile-id="physical" data-tile-title="Demos / Bumps" data-tile-span="8">
       <h2>Demos / Bumps</h2>
       <div class="help">Compare physical pressure from confirmed demos and bumps. Team tabs show players on that team; player tabs show the selected player only.</div>
       <div class="chartWrap"><canvas id="physicalChart"></canvas></div>
       <div class="note" id="physicalNote"></div>
     </div>
 
-    <div class="card" id="distanceCard" data-tile-id="distance" data-tile-title="Distance to Ball" data-tile-span="4">
+    <div class="card" id="distanceCard" data-tile-id="distance" data-tile-title="Distance to Ball" data-tile-span="8">
       <h2>Distance to Ball</h2>
       <div class="help">Shows car-to-ball distance for the selected player or team average. Distances follow the app unit switch with sensible small-distance units. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Lower values usually mean closer pressure; consistently too low can indicate overcommitting or ball-chasing.</div>
       <div class="chartWrap"><canvas id="distanceChart"></canvas></div>
       <div class="note" id="distanceNote"></div>
     </div>
 
-    <div class="card" data-tile-id="shotQuality" data-tile-title="Shot Quality & Near Misses" data-tile-span="4">
+    <div class="card" data-tile-id="shotQuality" data-tile-title="Shot Quality & Near Misses" data-tile-span="8">
       <h2>Shot Quality & Near Misses</h2>
       <div class="help">Shot conversion alone can lie. Near misses and forced saves show whether attempts are dangerous even when they do not score.</div>
       <div class="chartWrap"><canvas id="shotChart"></canvas></div>
       <div class="note" id="shotNote"></div>
     </div>
 
-    <div class="card" data-tile-id="shootingMap" data-tile-title="Shooting Heatmap" data-tile-span="4">
+    <div class="card" data-tile-id="shootingMap" data-tile-title="Shooting Heatmap" data-tile-span="8">
       <h2>Shooting Heatmap</h2>
       <div class="help">Shows shot placement, defender distance, and shooter touch distance from replay ball and car positions. Saved shots use projected goal-entry placement when the incoming ball path is determinable.</div>
       <div class="goalMap" id="shootingHeatmap">
@@ -2772,20 +2774,20 @@ body.obsOverlayMode #obsOverlayRoot{
       <div class="note" id="shootingHeatmapNote"></div>
     </div>
 
-    <div class="card" id="teamRadarCard" data-tile-id="teamRadar" data-tile-title="Teamplay Radar" data-tile-span="4">
+    <div class="card" id="teamRadarCard" data-tile-id="teamRadar" data-tile-title="Teamplay Radar" data-tile-span="8">
       <h2>Teamplay Radar</h2>
       <div class="help">Shows team playstyle from replay-derived pressure, possession, positioning, boost control, physical play, and defensive coverage. Values are fixed 0-100 style intensities so different teams and replays are easier to compare.</div>
       <div class="chartWrap"><canvas id="radarChart"></canvas></div>
       <div class="note" id="radarNote"></div>
     </div>
 
-    <div class="card span2" id="playerTableCard" data-tile-id="playerTable" data-tile-title="Detailed Player Table" data-tile-span="8">
+    <div class="card span2" id="playerTableCard" data-tile-id="playerTable" data-tile-title="Detailed Player Table" data-tile-span="16">
       <h2>Detailed Player Table</h2>
       <div class="help">Use this to find who needs what coaching. “Meaning” explains the stat in gameplay terms.</div>
       <div class="tableWrap"><table id="playerTable"></table></div>
     </div>
 
-    <div class="card" data-tile-id="keyEvents" data-tile-title="Key Events" data-tile-span="4">
+    <div class="card" data-tile-id="keyEvents" data-tile-title="Key Events" data-tile-span="8">
       <h2>Key Events</h2>
       <div class="help">Displays coaching-relevant moments determined by the app. These highlight review points such as pressure swings, boost decisions, shot outcomes, recoveries, and spacing issues.</div>
       <div class="timeline" id="timeline"></div>
@@ -3604,7 +3606,7 @@ function aggregate(scope){
 
 
 function chart(id,cfg){ if(charts[id])charts[id].destroy(); charts[id]=new Chart($(id),cfg); }
-const tileLayoutStorageKey = "spark.tileLayout.v1";
+const tileLayoutStorageKey = "spark.tileLayout.v2";
 const coachDockStorageKey = "spark.coachDockCollapsed.v1";
 const playerDefaultTileIds = new Set(["boostManagement","positioning","boostMap","shootingMap","keyEvents"]);
 let tileLayoutState = {};
@@ -3649,11 +3651,72 @@ function resizeVisibleCharts(){
       if(chartInstance && typeof chartInstance.resize === "function") chartInstance.resize();
     });
     window.dispatchEvent(new Event("resize"));
+    updateTileRowSpans();
+  });
+}
+
+function updateTileRowSpans(){
+  const dashboard = $("analysisDashboard");
+  if(!dashboard || window.matchMedia("(max-width:900px)").matches) return;
+  const styles = getComputedStyle(dashboard);
+  const rowHeight = Number.parseFloat(styles.gridAutoRows) || 8;
+  const rowGap = Number.parseFloat(styles.rowGap) || 10;
+  const rowSizedItems = [
+    ...managedTileElements().filter(tile=>tile.classList.contains("tileManaged")),
+    $("tileToolbar"),
+    $("gameOverviewCard")
+  ].filter(Boolean);
+  rowSizedItems.forEach(tile=>{
+    if(tile.hidden || tile.style.display === "none") return;
+    tile.style.gridRow = "auto";
+    const height = tile.scrollHeight;
+    const rows = Math.max(14, Math.ceil((height + rowGap) / (rowHeight + rowGap)));
+    tile.style.setProperty("--tile-rows", rows);
+    tile.style.gridRow = `span ${rows}`;
   });
 }
 
 function clearTileDropMarkers(){
   managedTileElements().forEach(tile=>tile.classList.remove("tileDropBefore","tileDropAfter"));
+}
+
+function visibleManagedTiles(){
+  return managedTileElements().filter(tile =>
+    tile !== draggedTile &&
+    tile.classList.contains("tileManaged") &&
+    tile.style.display !== "none"
+  );
+}
+
+function tileInsertionTarget(event){
+  const direct = event.target.closest?.(".tileManaged");
+  if(direct && direct !== draggedTile && direct.style.display !== "none") return direct;
+
+  const candidates = visibleManagedTiles();
+  if(!candidates.length) return null;
+  const pointerX = event.clientX;
+  const pointerY = event.clientY;
+
+  let closest = null;
+  let closestDistance = Infinity;
+  for(const tile of candidates){
+    const rect = tile.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const distance = Math.hypot(pointerX - centerX, pointerY - centerY);
+    if(distance < closestDistance){
+      closest = tile;
+      closestDistance = distance;
+    }
+  }
+  return closest;
+}
+
+function shouldInsertBeforeTile(event, target){
+  const rect = target.getBoundingClientRect();
+  const verticalBias = event.clientY < rect.top + rect.height * .42;
+  const horizontalBias = event.clientX < rect.left + rect.width / 2;
+  return verticalBias || horizontalBias;
 }
 
 function saveCurrentTileOrder(){
@@ -3668,7 +3731,7 @@ function saveTileSize(tile){
   const scope = tileScopeState();
   if(!scope.sizes) scope.sizes = {};
   scope.sizes[tile.dataset.tileId] = {
-    span:Number(tile.style.getPropertyValue("--tile-span")) || Number(tile.dataset.tileSpan) || 4,
+    span:Number(tile.style.getPropertyValue("--tile-span")) || Number(tile.dataset.tileSpan) || 8,
     chartHeight:Number((tile.style.getPropertyValue("--tile-chart-height") || "").replace("px","")) || null
   };
   saveTileLayoutState();
@@ -3686,11 +3749,12 @@ function beginTileResize(event, tile){
 
   function onMove(moveEvent){
     const gridWidth = Math.max(1, dashboard.getBoundingClientRect().width);
-    const columnWidth = gridWidth / 12;
-    const nextSpan = clampValue(Math.round(startSpan + (moveEvent.clientX - startX) / columnWidth), 3, 12);
-    const nextHeight = clampValue(Math.round(startHeight + moveEvent.clientY - startY), 180, 780);
+    const columnWidth = gridWidth / 24;
+    const nextSpan = clampValue(Math.round(startSpan + (moveEvent.clientX - startX) / columnWidth), 4, 24);
+    const nextHeight = clampValue(Math.round((startHeight + moveEvent.clientY - startY) / 8) * 8, 160, 900);
     tile.style.setProperty("--tile-span", nextSpan);
     tile.style.setProperty("--tile-chart-height", `${nextHeight}px`);
+    updateTileRowSpans();
     resizeVisibleCharts();
   }
 
@@ -3760,7 +3824,7 @@ function initializeManagedTiles(){
     if(tile.dataset.tileId === "gameOverview") return;
     tile.classList.add("tileManaged");
     tile.draggable = true;
-    tile.style.setProperty("--tile-span", Number(tile.dataset.tileSpan) || 4);
+    tile.style.setProperty("--tile-span", Number(tile.dataset.tileSpan) || 8);
     tile.addEventListener("dragstart", event=>beginTileDrag(event, tile));
     tile.addEventListener("dragend", ()=>finishTileDrag(tile));
     const handle = document.createElement("span");
@@ -3775,19 +3839,17 @@ function initializeManagedTiles(){
     dashboard.addEventListener("dragover", event=>{
       if(!draggedTile) return;
       event.preventDefault();
-      const target = event.target.closest?.(".tileManaged");
+      const target = tileInsertionTarget(event);
       clearTileDropMarkers();
-      if(!target || target === draggedTile || target.style.display === "none") return;
-      const rect = target.getBoundingClientRect();
-      target.classList.add(event.clientX < rect.left + rect.width / 2 ? "tileDropBefore" : "tileDropAfter");
+      if(!target) return;
+      target.classList.add(shouldInsertBeforeTile(event, target) ? "tileDropBefore" : "tileDropAfter");
     });
     dashboard.addEventListener("drop", event=>{
       if(!draggedTile) return;
       event.preventDefault();
-      const target = event.target.closest?.(".tileManaged");
+      const target = tileInsertionTarget(event);
       if(target && target !== draggedTile){
-        const rect = target.getBoundingClientRect();
-        if(event.clientX < rect.left + rect.width / 2) target.before(draggedTile);
+        if(shouldInsertBeforeTile(event, target)) target.before(draggedTile);
         else target.after(draggedTile);
       }
       clearTileDropMarkers();
@@ -3842,8 +3904,8 @@ function applyTileSizes(scope){
   const sizes = scope.sizes || {};
   managedTileElements().forEach(tile=>{
     const size = sizes[tile.dataset.tileId];
-    const span = Number(size?.span ?? tile.dataset.tileSpan ?? 4);
-    tile.style.setProperty("--tile-span", clampValue(span, 3, 12));
+    const span = Number(size?.span ?? tile.dataset.tileSpan ?? 8);
+    tile.style.setProperty("--tile-span", clampValue(span, 4, 24));
     if(Number.isFinite(Number(size?.chartHeight))){
       tile.style.setProperty("--tile-chart-height", `${clampValue(Number(size.chartHeight), 180, 780)}px`);
     }else{
