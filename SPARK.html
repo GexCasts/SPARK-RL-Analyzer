@@ -448,12 +448,95 @@ button.unitSwitch{
 .kpi .meaning{font-size:clamp(10px,.65vw,12px);color:var(--green);line-height:1.35}
 .dashboard{
   display:grid;
-  grid-template-columns:1.45fr 1fr 1fr;
-  grid-template-rows:auto auto auto;
+  grid-template-columns:repeat(12,minmax(72px,1fr));
+  grid-auto-flow:dense;
+  grid-auto-rows:auto;
   gap:14px;
+  align-items:start;
 }
-.span2{grid-column:span 2}
+.span2{grid-column:span 8}
 .full{grid-column:1 / -1}
+.tileToolbar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin:0 0 14px;
+}
+.tileToolbar[hidden]{display:none}
+.tileToolbarSummary{
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.35;
+}
+.tileMenu{position:relative}
+.tileMenu > button{min-width:118px}
+.tileMenuPanel{
+  position:absolute;
+  right:0;
+  top:calc(100% + 8px);
+  z-index:30;
+  display:none;
+  min-width:260px;
+  max-height:420px;
+  overflow:auto;
+  padding:10px;
+  border:1px solid rgba(255,208,0,.55);
+  border-radius:8px;
+  background:linear-gradient(180deg,#2d2d2d,#101112);
+  box-shadow:0 18px 36px rgba(0,0,0,.42);
+}
+.tileMenu.open .tileMenuPanel{display:grid;gap:8px}
+.tileMenuPanel label{
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:8px;
+  align-items:center;
+  color:#f2f2f2;
+  font-size:12px;
+}
+.tileMenuPanel input{accent-color:var(--spark-yellow)}
+.tileMenuHint{color:var(--muted);font-size:11px;line-height:1.35;margin-top:4px}
+.tileManaged{
+  position:relative;
+  grid-column:span var(--tile-span,4);
+  min-width:0;
+  min-height:120px;
+}
+.tileManaged.dragging{
+  opacity:.48;
+  outline:2px solid var(--spark-yellow);
+}
+.tileManaged.tileDropBefore{box-shadow:-6px 0 0 var(--spark-yellow)}
+.tileManaged.tileDropAfter{box-shadow:6px 0 0 var(--spark-yellow)}
+.tileManaged > h2{
+  cursor:grab;
+  user-select:none;
+  padding-right:42px;
+}
+.tileManaged > h2:active{cursor:grabbing}
+.tileResizeHandle{
+  position:absolute;
+  right:7px;
+  bottom:7px;
+  width:18px;
+  height:18px;
+  border-right:2px solid rgba(255,208,0,.82);
+  border-bottom:2px solid rgba(255,208,0,.82);
+  border-radius:3px;
+  cursor:nwse-resize;
+  opacity:.42;
+  z-index:8;
+}
+.tileManaged:hover .tileResizeHandle{opacity:.9}
+.tileManaged .chartWrap{height:var(--tile-chart-height,clamp(240px,24vh,330px))}
+.tileManaged .chartWrap.tall{height:var(--tile-chart-height,clamp(280px,30vh,420px))}
+.tileManaged .timeline{height:var(--tile-chart-height,clamp(340px,48vh,700px))}
+.tileManaged .field,
+.tileManaged .goalMap{
+  max-height:none;
+}
 .chartWrap{height:clamp(240px,24vh,330px);position:relative;overflow:hidden;border-radius:6px}
 .chartWrap.tall{height:clamp(280px,30vh,420px)}
 .chartWrap::before{
@@ -1440,7 +1523,56 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
   background:#1d1f24;border:1px solid #4e5056;border-radius:10px;padding:9px;font-size:clamp(11px,.72vw,13px)
 }
 .time{color:var(--gold);font-weight:850}.tag{text-align:right;color:#c9d7eb}
-.coach{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.coach{
+  position:fixed;
+  left:10px;
+  right:10px;
+  bottom:8px;
+  z-index:45;
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+  padding:16px 12px 12px;
+  border:1px solid rgba(255,208,0,.55);
+  border-radius:14px;
+  background:linear-gradient(180deg,rgba(34,34,34,.98),rgba(8,8,8,.96));
+  box-shadow:0 -12px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.08);
+  transform:translateY(0);
+  transition:transform .22s ease, opacity .22s ease;
+}
+.coach::before{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:5px;
+  width:90px;
+  height:4px;
+  transform:translateX(-50%);
+  border-radius:999px;
+  background:rgba(255,208,0,.68);
+  box-shadow:0 0 12px rgba(255,208,0,.42);
+}
+.coach.collapsed{
+  transform:translateY(calc(100% - 12px));
+  opacity:.72;
+}
+.coach.collapsed:hover,
+.coach.peek{
+  transform:translateY(0);
+  opacity:1;
+}
+.coachDockToggle{
+  position:absolute;
+  right:12px;
+  top:7px;
+  min-height:24px;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:11px;
+  z-index:2;
+}
+.coachTile{min-height:100%}
+.app{padding-bottom:210px}
 .priority{font-size:12px;color:var(--green);font-weight:800;margin-bottom:5px}.warning{color:var(--orange)}.bad{color:var(--red)}
 body.obsOverlayMode{
   background:transparent!important;
@@ -2356,17 +2488,17 @@ body.obsOverlayMode #obsOverlayRoot{
   font-size:15px;
 }
 @media (min-width:1920px){
-  .app{padding:18px;gap:16px}
+  .app{padding:18px 18px 230px;gap:16px}
   .dashboard{gap:16px}
 }
 @media (max-width:1500px){
-  .dashboard{grid-template-columns:1fr 1fr}
-  .span2{grid-column:span 2}
   .kpis{grid-template-columns:repeat(3,1fr)}
 }
 @media (max-width:900px){
-  header{height:auto}.topbar,.dashboard,.coach{grid-template-columns:1fr}
-  .span2{grid-column:auto}.kpis{grid-template-columns:repeat(2,1fr)}
+  header{height:auto}.topbar{grid-template-columns:1fr}
+  .dashboard{grid-template-columns:1fr}
+  .coach{grid-template-columns:1fr;max-height:70vh;overflow:auto}
+  .tileManaged,.span2{grid-column:1 / -1!important}.kpis{grid-template-columns:repeat(2,1fr)}
   .event{grid-template-columns:1fr}.tag{text-align:left}
   .overviewPanel{grid-template-columns:1fr}
   .overviewPanel > .tableWrap{grid-column:auto;grid-row:auto}
@@ -2466,8 +2598,15 @@ body.obsOverlayMode #obsOverlayRoot{
   </section>
 
   <section class="dashboard" id="analysisDashboard">
+    <div class="tileToolbar full" id="tileToolbar" hidden>
+      <div class="tileToolbarSummary">Drag panel titles to reorder. Pull a panel corner to resize.</div>
+      <div class="tileMenu" id="tileMenu">
+        <button type="button" id="tileMenuButton">Tiles</button>
+        <div class="tileMenuPanel" id="tileMenuPanel"></div>
+      </div>
+    </div>
 
-    <div class="card full" id="gameOverviewCard">
+    <div class="card full" id="gameOverviewCard" data-tile-id="gameOverview" data-tile-title="Game Overview" data-tile-span="12">
       <div class="overviewPanel">
         <div class="overviewHero">
           <div class="overviewTeamCard blue">
@@ -2499,21 +2638,21 @@ body.obsOverlayMode #obsOverlayRoot{
       </div>
     </div>
 
-    <div class="card span2">
+    <div class="card span2" data-tile-id="impact" data-tile-title="Impact on Play" data-tile-span="8">
       <h2>Impact on Play</h2>
       <div class="help">Shows 2-second game-time windows. Possession and pressure use replay car and ball positions when available and are smoothed for trend readability. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Hover a vertical line to see who made the play.</div>
       <div class="chartWrap tall"><canvas id="trendChart"></canvas></div>
       <div class="note" id="trendNote"></div>
     </div>
 
-    <div class="card">
+    <div class="card" data-tile-id="boostManagement" data-tile-title="Boost Management" data-tile-span="4">
       <h2>Boost Management</h2>
       <div class="help">Boost efficiency is not “use less boost”; it means spending boost where it creates speed, pressure, recovery, or safety.</div>
       <div id="boostBars"></div>
       <div class="note" id="boostNote"></div>
     </div>
 
-    <div class="card" id="positioningMapCard">
+    <div class="card" id="positioningMapCard" data-tile-id="positioning" data-tile-title="Positioning Heatmap" data-tile-span="6">
       <h2>Positioning Heatmap</h2>
       <div class="help">Shows selected-player field positioning. Repeated positioning gets hotter, moving from dim grey to yellow, orange, and red. The map uses the same top-down field orientation as the boost pickup map.</div>
       <div class="field" id="positioningMap"></div>
@@ -2526,7 +2665,7 @@ body.obsOverlayMode #obsOverlayRoot{
       <div class="note" id="positioningMapNote"></div>
     </div>
 
-    <div class="card">
+    <div class="card" data-tile-id="boostMap" data-tile-title="Boost Pickup Map" data-tile-span="6">
       <h2>Boost Pickup Map</h2>
       <div class="help">Uses the standard 34-pad Soccar layout, aligned to the supplied top-down map with blue net on the left and orange net on the right. Pads shift from light grey to orange as pickups increase.</div>
       <div class="field" id="boostMap"></div>
@@ -2538,34 +2677,34 @@ body.obsOverlayMode #obsOverlayRoot{
       <div class="note" id="boostPickupNote"></div>
     </div>
 
-    <div class="card" id="teamComparisonCard">
+    <div class="card" id="teamComparisonCard" data-tile-id="comparison" data-tile-title="Player / Team Comparison" data-tile-span="4">
       <h2>Player / Team Comparison</h2>
       <div class="help">Compare contribution across the lobby. In team view, compare overall contribution distribution across players on the selected team.</div>
       <div class="chartWrap"><canvas id="compareChart"></canvas></div>
     </div>
 
-    <div class="card" id="physicalComparisonCard">
+    <div class="card" id="physicalComparisonCard" data-tile-id="physical" data-tile-title="Demos / Bumps" data-tile-span="4">
       <h2>Demos / Bumps</h2>
       <div class="help">Compare physical pressure from confirmed demos and bumps. Team tabs show players on that team; player tabs show the selected player only.</div>
       <div class="chartWrap"><canvas id="physicalChart"></canvas></div>
       <div class="note" id="physicalNote"></div>
     </div>
 
-    <div class="card" id="distanceCard">
+    <div class="card" id="distanceCard" data-tile-id="distance" data-tile-title="Distance to Ball" data-tile-span="4">
       <h2>Distance to Ball</h2>
       <div class="help">Shows car-to-ball distance for the selected player or team average. Distances follow the app unit switch with sensible small-distance units. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Lower values usually mean closer pressure; consistently too low can indicate overcommitting or ball-chasing.</div>
       <div class="chartWrap"><canvas id="distanceChart"></canvas></div>
       <div class="note" id="distanceNote"></div>
     </div>
 
-    <div class="card">
+    <div class="card" data-tile-id="shotQuality" data-tile-title="Shot Quality & Near Misses" data-tile-span="4">
       <h2>Shot Quality & Near Misses</h2>
       <div class="help">Shot conversion alone can lie. Near misses and forced saves show whether attempts are dangerous even when they do not score.</div>
       <div class="chartWrap"><canvas id="shotChart"></canvas></div>
       <div class="note" id="shotNote"></div>
     </div>
 
-    <div class="card">
+    <div class="card" data-tile-id="shootingMap" data-tile-title="Shooting Heatmap" data-tile-span="4">
       <h2>Shooting Heatmap</h2>
       <div class="help">Shows shot placement, defender distance, and shooter touch distance from replay ball and car positions. Saved shots use projected goal-entry placement when the incoming ball path is determinable.</div>
       <div class="goalMap" id="shootingHeatmap">
@@ -2586,20 +2725,20 @@ body.obsOverlayMode #obsOverlayRoot{
       <div class="note" id="shootingHeatmapNote"></div>
     </div>
 
-    <div class="card" id="teamRadarCard">
+    <div class="card" id="teamRadarCard" data-tile-id="teamRadar" data-tile-title="Teamplay Radar" data-tile-span="4">
       <h2>Teamplay Radar</h2>
       <div class="help">Shows team playstyle from replay-derived pressure, possession, positioning, boost control, physical play, and defensive coverage. Values are fixed 0-100 style intensities so different teams and replays are easier to compare.</div>
       <div class="chartWrap"><canvas id="radarChart"></canvas></div>
       <div class="note" id="radarNote"></div>
     </div>
 
-    <div class="card span2" id="playerTableCard">
+    <div class="card span2" id="playerTableCard" data-tile-id="playerTable" data-tile-title="Detailed Player Table" data-tile-span="8">
       <h2>Detailed Player Table</h2>
       <div class="help">Use this to find who needs what coaching. “Meaning” explains the stat in gameplay terms.</div>
       <div class="tableWrap"><table id="playerTable"></table></div>
     </div>
 
-    <div class="card">
+    <div class="card" data-tile-id="keyEvents" data-tile-title="Key Events" data-tile-span="4">
       <h2>Key Events</h2>
       <div class="help">Displays coaching-relevant moments determined by the app. These highlight review points such as pressure swings, boost decisions, shot outcomes, recoveries, and spacing issues.</div>
       <div class="timeline" id="timeline"></div>
@@ -3418,6 +3557,288 @@ function aggregate(scope){
 
 
 function chart(id,cfg){ if(charts[id])charts[id].destroy(); charts[id]=new Chart($(id),cfg); }
+const tileLayoutStorageKey = "spark.tileLayout.v1";
+const coachDockStorageKey = "spark.coachDockCollapsed.v1";
+const playerDefaultTileIds = new Set(["boostManagement","positioning","boostMap","shootingMap","keyEvents"]);
+let tileLayoutState = {};
+let managedTilesReady = false;
+let draggedTile = null;
+let coachDockCollapsed = localStorage.getItem(coachDockStorageKey) === "1";
+let defaultTileOrder = [];
+
+function loadTileLayoutState(){
+  try{
+    const parsed = JSON.parse(localStorage.getItem(tileLayoutStorageKey) || "{}");
+    tileLayoutState = parsed && typeof parsed === "object" ? parsed : {};
+  }catch{
+    tileLayoutState = {};
+  }
+}
+
+function saveTileLayoutState(){
+  localStorage.setItem(tileLayoutStorageKey, JSON.stringify(tileLayoutState));
+}
+
+loadTileLayoutState();
+
+function currentTileScopeKind(){
+  if(selected === "overview") return "overview";
+  const aggregateTarget = data?.players?.some(player=>player.id === selected);
+  return aggregateTarget ? "player" : "team";
+}
+
+function tileScopeState(scopeKind=currentTileScopeKind()){
+  if(!tileLayoutState[scopeKind]) tileLayoutState[scopeKind] = {};
+  return tileLayoutState[scopeKind];
+}
+
+function managedTileElements(){
+  return [...document.querySelectorAll("#analysisDashboard > .card[data-tile-id]")];
+}
+
+function resizeVisibleCharts(){
+  requestAnimationFrame(()=>{
+    Object.values(charts || {}).forEach(chartInstance=>{
+      if(chartInstance && typeof chartInstance.resize === "function") chartInstance.resize();
+    });
+    window.dispatchEvent(new Event("resize"));
+  });
+}
+
+function clearTileDropMarkers(){
+  managedTileElements().forEach(tile=>tile.classList.remove("tileDropBefore","tileDropAfter"));
+}
+
+function saveCurrentTileOrder(){
+  const scope = tileScopeState();
+  scope.order = managedTileElements()
+    .filter(tile=>tile.dataset.tileId !== "gameOverview")
+    .map(tile=>tile.dataset.tileId);
+  saveTileLayoutState();
+}
+
+function saveTileSize(tile){
+  const scope = tileScopeState();
+  if(!scope.sizes) scope.sizes = {};
+  scope.sizes[tile.dataset.tileId] = {
+    span:Number(tile.style.getPropertyValue("--tile-span")) || Number(tile.dataset.tileSpan) || 4,
+    chartHeight:Number((tile.style.getPropertyValue("--tile-chart-height") || "").replace("px","")) || null
+  };
+  saveTileLayoutState();
+}
+
+function beginTileResize(event, tile){
+  event.preventDefault();
+  event.stopPropagation();
+  const dashboard = $("analysisDashboard");
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const startSpan = Number(tile.style.getPropertyValue("--tile-span")) || Number(tile.dataset.tileSpan) || 4;
+  const startHeight = Number((tile.style.getPropertyValue("--tile-chart-height") || "").replace("px","")) ||
+    tile.querySelector(".chartWrap,.timeline")?.getBoundingClientRect().height || 300;
+
+  function onMove(moveEvent){
+    const gridWidth = Math.max(1, dashboard.getBoundingClientRect().width);
+    const columnWidth = gridWidth / 12;
+    const nextSpan = clampValue(Math.round(startSpan + (moveEvent.clientX - startX) / columnWidth), 3, 12);
+    const nextHeight = clampValue(Math.round(startHeight + moveEvent.clientY - startY), 180, 780);
+    tile.style.setProperty("--tile-span", nextSpan);
+    tile.style.setProperty("--tile-chart-height", `${nextHeight}px`);
+    resizeVisibleCharts();
+  }
+
+  function onUp(){
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    saveTileSize(tile);
+    resizeVisibleCharts();
+  }
+
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp, {once:true});
+}
+
+function initializeManagedTiles(){
+  if(managedTilesReady) return;
+  managedTilesReady = true;
+  defaultTileOrder = managedTileElements()
+    .filter(tile=>tile.dataset.tileId !== "gameOverview")
+    .map(tile=>tile.dataset.tileId);
+
+  managedTileElements().forEach(tile=>{
+    if(tile.dataset.tileId === "gameOverview") return;
+    tile.classList.add("tileManaged");
+    tile.style.setProperty("--tile-span", Number(tile.dataset.tileSpan) || 4);
+    const title = tile.querySelector("h2");
+    if(title){
+      title.draggable = true;
+      title.addEventListener("dragstart", event=>{
+        draggedTile = tile;
+        tile.classList.add("dragging");
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", tile.dataset.tileId);
+      });
+      title.addEventListener("dragend", ()=>{
+        tile.classList.remove("dragging");
+        clearTileDropMarkers();
+        saveCurrentTileOrder();
+        draggedTile = null;
+      });
+    }
+    const handle = document.createElement("span");
+    handle.className = "tileResizeHandle";
+    handle.title = "Resize tile";
+    handle.addEventListener("pointerdown", event=>beginTileResize(event, tile));
+    tile.appendChild(handle);
+  });
+
+  const dashboard = $("analysisDashboard");
+  if(dashboard){
+    dashboard.addEventListener("dragover", event=>{
+      if(!draggedTile) return;
+      event.preventDefault();
+      const target = event.target.closest?.(".tileManaged");
+      clearTileDropMarkers();
+      if(!target || target === draggedTile || target.style.display === "none") return;
+      const rect = target.getBoundingClientRect();
+      target.classList.add(event.clientX < rect.left + rect.width / 2 ? "tileDropBefore" : "tileDropAfter");
+    });
+    dashboard.addEventListener("drop", event=>{
+      if(!draggedTile) return;
+      event.preventDefault();
+      const target = event.target.closest?.(".tileManaged");
+      if(target && target !== draggedTile){
+        const rect = target.getBoundingClientRect();
+        if(event.clientX < rect.left + rect.width / 2) target.before(draggedTile);
+        else target.after(draggedTile);
+      }
+      clearTileDropMarkers();
+      saveCurrentTileOrder();
+      resizeVisibleCharts();
+    });
+  }
+
+  const button = $("tileMenuButton");
+  const menu = $("tileMenu");
+  if(button && menu){
+    button.addEventListener("click", event=>{
+      event.stopPropagation();
+      menu.classList.toggle("open");
+    });
+    document.addEventListener("click", event=>{
+      if(!menu.contains(event.target)) menu.classList.remove("open");
+    });
+  }
+}
+
+function tileIsAvailableInScope(tile, scopeKind){
+  if(tile.dataset.tileId === "gameOverview") return scopeKind === "overview";
+  if(scopeKind === "player") return !["comparison","teamRadar","playerTable"].includes(tile.dataset.tileId);
+  if(scopeKind === "team") return !["positioning","distance"].includes(tile.dataset.tileId);
+  return false;
+}
+
+function defaultHiddenTileSet(scopeKind){
+  if(scopeKind !== "player") return new Set();
+  return new Set(managedTileElements()
+    .filter(tile=>tile.dataset.tileId !== "gameOverview" && !playerDefaultTileIds.has(tile.dataset.tileId))
+    .map(tile=>tile.dataset.tileId));
+}
+
+function applyTileOrder(scope){
+  const dashboard = $("analysisDashboard");
+  if(!dashboard) return;
+  const order = Array.isArray(scope.order) ? scope.order : defaultTileOrder;
+  const byId = new Map(managedTileElements().map(tile=>[tile.dataset.tileId, tile]));
+  let anchor = $("tileToolbar") || $("gameOverviewCard");
+  order.forEach(id=>{
+    const tile = byId.get(id);
+    if(tile && tile !== anchor){
+      anchor.after(tile);
+      anchor = tile;
+    }
+  });
+}
+
+function applyTileSizes(scope){
+  const sizes = scope.sizes || {};
+  managedTileElements().forEach(tile=>{
+    const size = sizes[tile.dataset.tileId];
+    const span = Number(size?.span ?? tile.dataset.tileSpan ?? 4);
+    tile.style.setProperty("--tile-span", clampValue(span, 3, 12));
+    if(Number.isFinite(Number(size?.chartHeight))){
+      tile.style.setProperty("--tile-chart-height", `${clampValue(Number(size.chartHeight), 180, 780)}px`);
+    }else{
+      tile.style.removeProperty("--tile-chart-height");
+    }
+  });
+}
+
+function renderTileMenu(scopeKind, hiddenSet){
+  const panel = $("tileMenuPanel");
+  if(!panel) return;
+  const availableTiles = managedTileElements()
+    .filter(tile=>tile.dataset.tileId !== "gameOverview" && tileIsAvailableInScope(tile, scopeKind));
+  panel.innerHTML = availableTiles.map(tile=>{
+    const id = tile.dataset.tileId;
+    const checked = !hiddenSet.has(id);
+    return `<label><input type="checkbox" data-tile-toggle="${id}" ${checked ? "checked" : ""}>${tile.dataset.tileTitle || id}</label>`;
+  }).join("") + `<button type="button" id="tileResetButton">Reset ${scopeKind} layout</button><div class="tileMenuHint">Hidden tiles keep their data. Re-enable them here whenever you want them back.</div>`;
+
+  panel.querySelectorAll("[data-tile-toggle]").forEach(input=>{
+    input.addEventListener("change", ()=>{
+      const scope = tileScopeState(scopeKind);
+      const nextHidden = new Set(scope.hidden || [...defaultHiddenTileSet(scopeKind)]);
+      if(input.checked) nextHidden.delete(input.dataset.tileToggle);
+      else nextHidden.add(input.dataset.tileToggle);
+      scope.hidden = [...nextHidden];
+      saveTileLayoutState();
+      applyManagedTiles();
+    });
+  });
+  const reset = $("tileResetButton");
+  if(reset){
+    reset.addEventListener("click", ()=>{
+      tileLayoutState[scopeKind] = {};
+      saveTileLayoutState();
+      applyManagedTiles();
+      resizeVisibleCharts();
+    });
+  }
+}
+
+function applyManagedTiles(){
+  initializeManagedTiles();
+  const scopeKind = currentTileScopeKind();
+  const toolbar = $("tileToolbar");
+  if(toolbar) toolbar.hidden = scopeKind === "overview" || activeView !== "analysis";
+  const scope = tileScopeState(scopeKind);
+  applyTileOrder(scope);
+  applyTileSizes(scope);
+  const hiddenSet = new Set(Array.isArray(scope.hidden) ? scope.hidden : [...defaultHiddenTileSet(scopeKind)]);
+
+  managedTileElements().forEach(tile=>{
+    const id = tile.dataset.tileId;
+    if(scopeKind === "overview"){
+      tile.style.display = id === "gameOverview" ? "" : "none";
+      return;
+    }
+    if(id === "gameOverview" || !tileIsAvailableInScope(tile, scopeKind)){
+      tile.style.display = "none";
+      return;
+    }
+    tile.style.display = hiddenSet.has(id) ? "none" : "";
+  });
+  renderTileMenu(scopeKind, hiddenSet);
+  resizeVisibleCharts();
+}
+
+window.toggleCoachDock = forceState => {
+  coachDockCollapsed = typeof forceState === "boolean" ? forceState : !coachDockCollapsed;
+  localStorage.setItem(coachDockStorageKey, coachDockCollapsed ? "1" : "0");
+  const dock = $("coachCards");
+  if(dock) dock.classList.toggle("collapsed", coachDockCollapsed);
+};
 const axis={grid:{color:"rgba(255,208,0,.14)"},ticks:{color:"#d5d5d5"}};
 const legend={labels:{color:"#f2f2f2",boxWidth:14,font:{size:11}}};
 
@@ -6035,6 +6456,7 @@ function render(){
     const overview = $("gameOverviewCard");
     if(overview) overview.style.display = "";
     renderGameOverview();
+    applyManagedTiles();
     return;
   }
 
@@ -6235,6 +6657,7 @@ function render(){
   renderTable();
   renderTimeline(a);
   renderCoach(a, impactChartValues, followupSpeed);
+  applyManagedTiles();
 }
 
 
@@ -6945,7 +7368,12 @@ function renderCoach(a, impactChartValues=null, followupSpeed=null){
     ["Shooting",(shotQualityBreakdown(a).values[3] > 0 || a.nearMiss>=5)?"warning":"",shootingAdvice(a)],
     ["Team Impact",(a.pressure>70 && a.defense>=60)?"":"warning",impactAdvice(a, impactChartValues, followupSpeed)]
   ];
-  $("coachCards").innerHTML=cards.map(c=>`<div class="card"><div class="priority ${c[1]}">${c[0]}</div><div class="help">${c[2]}</div></div>`).join("");
+  const dock = $("coachCards");
+  dock.innerHTML=`<button type="button" class="coachDockToggle" onclick="toggleCoachDock()">${coachDockCollapsed ? "Show advice" : "Minimize"}</button>` +
+    cards.map(c=>`<div class="card coachTile"><div class="priority ${c[1]}">${c[0]}</div><div class="help">${c[2]}</div></div>`).join("");
+  dock.classList.toggle("collapsed", coachDockCollapsed);
+  dock.onmouseenter=()=>dock.classList.add("peek");
+  dock.onmouseleave=()=>dock.classList.remove("peek");
 }
 function resetPhysicsAnalysis(message="Upload a replay to start parser analysis."){
   if(physicsWorker){
