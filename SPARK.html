@@ -3690,11 +3690,35 @@ function formatGameClock(secondsRemaining){
   return `${m}:${String(s).padStart(2,"0")}`;
 }
 
+const SOCCAR_REGULATION_SECONDS = 300;
+
+function safeScoreboardStartSeconds(value){
+  const seconds = Math.round(Number(value));
+  if(!Number.isFinite(seconds) || seconds <= 0) return null;
+  return SOCCAR_REGULATION_SECONDS;
+}
+
+function safeScoreboardFinalSeconds(value, hasOvertime=false, durationSeconds=null){
+  const seconds = Math.round(Number(value));
+  if(!Number.isFinite(seconds) || seconds < 0) return null;
+  if(!hasOvertime) return Math.min(seconds, SOCCAR_REGULATION_SECONDS);
+  if(seconds >= SOCCAR_REGULATION_SECONDS){
+    const overtimeOnlySeconds = seconds - SOCCAR_REGULATION_SECONDS;
+    return overtimeOnlySeconds <= 900 ? overtimeOnlySeconds : null;
+  }
+  const duration = Math.round(Number(durationSeconds));
+  if(Number.isFinite(duration) && duration > SOCCAR_REGULATION_SECONDS){
+    const expectedOvertime = Math.max(0, duration - SOCCAR_REGULATION_SECONDS);
+    if(seconds > expectedOvertime + 45 && seconds > SOCCAR_REGULATION_SECONDS) return null;
+  }
+  return seconds <= 900 ? seconds : null;
+}
+
 function chartDurationSeconds(durationSeconds=300){
   if(liveApiDashboardActive()) return liveApiChartDurationSeconds();
   const rawDuration = Math.max(1, Number(durationSeconds) || 300);
-  const scoreboardStart = Number(data?.scoreboardClockStartSeconds);
-  const scoreboardFinal = Number(data?.scoreboardClockFinalSeconds);
+  const scoreboardStart = safeScoreboardStartSeconds(data?.scoreboardClockStartSeconds);
+  const scoreboardFinal = safeScoreboardFinalSeconds(data?.scoreboardClockFinalSeconds, data?.hasOvertime, rawDuration);
 
   if(Number.isFinite(scoreboardStart) && Number.isFinite(scoreboardFinal) && scoreboardStart >= scoreboardFinal){
     if(data?.hasOvertime) return Math.max(1, Math.round(scoreboardStart + Math.max(0, scoreboardFinal)));
@@ -3717,8 +3741,8 @@ function gameTimeElapsedTicks(durationSeconds=300, stepSeconds=15){
 
 function gameClockLabelFromElapsed(elapsed, durationSeconds=300){
   const total = chartDurationSeconds(durationSeconds);
-  const scoreboardStart = Number(data?.scoreboardClockStartSeconds);
-  const scoreboardFinal = Number(data?.scoreboardClockFinalSeconds);
+  const scoreboardStart = safeScoreboardStartSeconds(data?.scoreboardClockStartSeconds);
+  const scoreboardFinal = safeScoreboardFinalSeconds(data?.scoreboardClockFinalSeconds, data?.hasOvertime, total);
   elapsed = Math.max(0, Math.min(total, Math.round(Number(elapsed) || 0)));
 
   if(Number.isFinite(scoreboardStart) && Number.isFinite(scoreboardFinal) && scoreboardStart >= scoreboardFinal){
@@ -3798,7 +3822,7 @@ function replayObservedDurationSeconds(){
     });
   });
 
-  const scoreboardStart = Number(data?.scoreboardClockStartSeconds);
+  const scoreboardStart = safeScoreboardStartSeconds(data?.scoreboardClockStartSeconds);
   if(data?.hasOvertime && Number.isFinite(scoreboardStart)){
     maxDuration = Math.max(maxDuration, scoreboardStart);
   }
@@ -5061,8 +5085,8 @@ function formatSpeedFromUUPerSecond(speedUU){
 }
 
 function scoreboardClockSpan(){
-  const start = Number(data?.scoreboardClockStartSeconds);
-  const final = Number(data?.scoreboardClockFinalSeconds);
+  const start = safeScoreboardStartSeconds(data?.scoreboardClockStartSeconds);
+  const final = safeScoreboardFinalSeconds(data?.scoreboardClockFinalSeconds, data?.hasOvertime, data?.durationSeconds);
   if(data?.hasOvertime && Number.isFinite(start)) return Math.max(1, start);
   if(Number.isFinite(start) && Number.isFinite(final) && start >= final) return Math.max(0, start - final);
   return Number(data?.durationSeconds) > 300 ? 300 : null;
@@ -5096,16 +5120,16 @@ function scoreboardElapsedFromSample(shot){
   const elapsed = Number(shot?.scoreboardElapsedSeconds ?? shot?.clockElapsedSeconds);
   if(Number.isFinite(elapsed)) return elapsed;
   const secondsRemaining = Number(shot?.scoreboardSecondsRemaining ?? shot?.clockSecondsRemaining ?? shot?.secondsRemaining);
-  const start = Number(data?.scoreboardClockStartSeconds);
+  const start = safeScoreboardStartSeconds(data?.scoreboardClockStartSeconds);
   if(shot?.isOvertime && Number.isFinite(secondsRemaining) && Number.isFinite(start)) return start + secondsRemaining;
   if(Number.isFinite(secondsRemaining)) return Math.max(0, 300 - secondsRemaining);
   return null;
 }
 
 function shotClockFromElapsed(elapsed, durationSeconds){
-  const start = Number(data?.scoreboardClockStartSeconds);
-  const final = Number(data?.scoreboardClockFinalSeconds);
   durationSeconds = chartDurationSeconds(durationSeconds);
+  const start = safeScoreboardStartSeconds(data?.scoreboardClockStartSeconds);
+  const final = safeScoreboardFinalSeconds(data?.scoreboardClockFinalSeconds, data?.hasOvertime, durationSeconds);
   elapsed = Math.max(0, Math.round(elapsed || 0));
   if(Number.isFinite(start) && Number.isFinite(final)){
     if(data?.hasOvertime && elapsed > start){
@@ -6551,7 +6575,7 @@ function primaryFocusAdvice(a, impactChartValues=null){
 function keyEventClockFromElapsed(elapsed, durationSeconds){
   elapsed = Math.max(0, Math.round(Number(elapsed) || 0));
   durationSeconds = chartDurationSeconds(durationSeconds);
-  const start = Number(data?.scoreboardClockStartSeconds);
+  const start = safeScoreboardStartSeconds(data?.scoreboardClockStartSeconds);
   if(Number.isFinite(start)){
     if((data?.hasOvertime || durationSeconds > start) && elapsed > start){
       return "OT +" + formatGameClock(elapsed - start);
@@ -8480,8 +8504,10 @@ async function loadFile(file){
   if(parsedReplay && !parsedReplay.error){
     const clockStart = Number(parsedReplay.scoreboardClockStartSeconds);
     const clockFinal = Number(parsedReplay.scoreboardClockFinalSeconds);
-    if(Number.isFinite(clockStart)) data.scoreboardClockStartSeconds = clockStart;
-    if(Number.isFinite(clockFinal)) data.scoreboardClockFinalSeconds = clockFinal;
+    const safeClockStart = safeScoreboardStartSeconds(clockStart);
+    const safeClockFinal = safeScoreboardFinalSeconds(clockFinal, parsedReplay.hasOvertime, parsedReplay.durationSeconds);
+    if(Number.isFinite(safeClockStart)) data.scoreboardClockStartSeconds = safeClockStart;
+    if(Number.isFinite(safeClockFinal)) data.scoreboardClockFinalSeconds = safeClockFinal;
     data.hasOvertime = !!parsedReplay.hasOvertime || (!Number.isFinite(clockStart) && data.durationSeconds > 300);
   }
   if(parsedJson) applyParsedShotSamplesToData(parsedJson);
@@ -8560,8 +8586,10 @@ async function loadFile(file){
       : parsedReplay?.error
         ? `Replay loaded from metadata only because the parser could not run. Position-based screens are intentionally blank rather than using saved or guessed replay data.`
         : `Replay loaded. The parser ran, but did not decode positional samples from this replay; position-based screens are intentionally blank rather than using saved or guessed replay data.`;
-  const scoreboardClockLine = Number.isFinite(data.scoreboardClockStartSeconds) && Number.isFinite(data.scoreboardClockFinalSeconds)
-    ? `Scoreboard clock used for charts: <b>${formatGameClock(data.scoreboardClockStartSeconds)}</b> to <b>${data.hasOvertime ? "OT +" : ""}${formatGameClock(data.scoreboardClockFinalSeconds)}</b><br>`
+  const statusClockStart = safeScoreboardStartSeconds(data.scoreboardClockStartSeconds);
+  const statusClockFinal = safeScoreboardFinalSeconds(data.scoreboardClockFinalSeconds, data.hasOvertime, data.durationSeconds);
+  const scoreboardClockLine = Number.isFinite(statusClockStart) && Number.isFinite(statusClockFinal)
+    ? `Scoreboard clock used for charts: <b>${formatGameClock(statusClockStart)}</b> to <b>${data.hasOvertime ? "OT +" : ""}${formatGameClock(statusClockFinal)}</b><br>`
     : `Gameplay duration used for charts: <b>${formatGameClock(data.durationSeconds || 300)}</b><br>`;
 
   $("fileStatus").innerHTML=

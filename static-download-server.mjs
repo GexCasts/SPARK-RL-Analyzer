@@ -652,6 +652,33 @@ function scoreboardClockLabel(secondsRemaining, isOvertime=false, overtimeSecond
   return null;
 }
 
+const SOCCAR_REGULATION_SECONDS = 300;
+
+function validScoreboardSecondsRemaining(value, isOvertime=false, elapsedFallback=null){
+  const seconds = Math.round(Number(value));
+  if(!Number.isFinite(seconds) || seconds < 0) return null;
+  if(!isOvertime){
+    return seconds <= SOCCAR_REGULATION_SECONDS ? seconds : null;
+  }
+
+  if(seconds >= SOCCAR_REGULATION_SECONDS){
+    const overtimeOnlySeconds = seconds - SOCCAR_REGULATION_SECONDS;
+    return overtimeOnlySeconds <= 900 ? overtimeOnlySeconds : null;
+  }
+
+  return seconds;
+}
+
+function scoreboardDurationSecondsFromClock(startSeconds, finalSeconds, hasOvertime=false){
+  const start = Math.round(Number(startSeconds));
+  const final = Math.round(Number(finalSeconds));
+  if(!Number.isFinite(start) || !Number.isFinite(final) || start <= 0 || final < 0) return null;
+  const regulationStart = SOCCAR_REGULATION_SECONDS;
+  if(hasOvertime) return regulationStart + Math.max(0, final);
+  if(start >= final) return Math.max(1, start - final);
+  return null;
+}
+
 function distanceToOpponentNet(location, teamNumber){
   if(!location || !Number.isFinite(location.x) || !Number.isFinite(location.y)) return null;
   const normalizedTeam = normalizeTeamNumber(teamNumber);
@@ -722,7 +749,7 @@ function summarizeBoostPickups(parsedReplay){
   let countdownNumber = null;
 
   function currentGameElapsedSeconds(time){
-    const start = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
+    const start = SOCCAR_REGULATION_SECONDS;
     if(Number.isFinite(scoreboardSecondsRemaining)){
       if(isOvertime) return start + Math.max(0, scoreboardSecondsRemaining);
       return clampNumber(start - scoreboardSecondsRemaining, 0, start);
@@ -869,14 +896,18 @@ function summarizeBoostPickups(parsedReplay){
 
       if(objectNameMatches(objectName, "TAGame.GameEvent_Soccar_TA:bOverTime")){
         const overtimeValue = getObject(attribute, "Boolean") ?? getObject(value, "Boolean");
-        if(typeof overtimeValue === "boolean") isOvertime = overtimeValue;
+        if(typeof overtimeValue === "boolean"){
+          const enteringOvertime = overtimeValue && !isOvertime;
+          isOvertime = overtimeValue;
+          if(enteringOvertime) scoreboardSecondsRemaining = 0;
+        }
       }
 
       if(objectNameMatches(objectName, "TAGame.GameEvent_Soccar_TA:SecondsRemaining")){
-        const secondsRemaining = replayIntValue(attribute, value);
+        const secondsRemaining = validScoreboardSecondsRemaining(replayIntValue(attribute, value), isOvertime, Number(time) || 0);
         if(Number.isFinite(secondsRemaining)){
           scoreboardSecondsRemaining = secondsRemaining;
-          scoreboardClockStartSeconds = Math.max(scoreboardClockStartSeconds ?? secondsRemaining, secondsRemaining);
+          scoreboardClockStartSeconds = SOCCAR_REGULATION_SECONDS;
         }
       }
 
@@ -1371,7 +1402,7 @@ function summarizeShotSamples(parsedReplay){
 
   function currentGameElapsedSeconds(time){
     const fallback = replayElapsedSeconds(time, firstFrameTime, lastFrameTime, totalSeconds);
-    const start = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
+    const start = SOCCAR_REGULATION_SECONDS;
     if(Number.isFinite(scoreboardSecondsRemaining)){
       if(isOvertime) return start + Math.max(0, scoreboardSecondsRemaining);
       return clampNumber(start - scoreboardSecondsRemaining, 0, start);
@@ -1395,7 +1426,7 @@ function summarizeShotSamples(parsedReplay){
     const ballVelocity = currentBallVelocity();
     const elapsedSeconds = currentGameElapsedSeconds(time);
     noteObservedElapsed(elapsedSeconds);
-    const overtimeBaseSeconds = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
+    const overtimeBaseSeconds = SOCCAR_REGULATION_SECONDS;
     const overtimeSeconds = isOvertime ? Math.max(0, elapsedSeconds - overtimeBaseSeconds) : null;
     const referenceLocation = ballLocation || shooterLocation;
     const opponent = nearestOpponent(referenceLocation, teamNumber, pri);
@@ -1451,7 +1482,7 @@ function summarizeShotSamples(parsedReplay){
     const key = `${touchedBy.pri}:${normalizedTeam}:${Math.round(time * 20)}`;
     if(touchEventKeys.has(key)) return;
     touchEventKeys.add(key);
-    const overtimeBaseSeconds = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
+    const overtimeBaseSeconds = SOCCAR_REGULATION_SECONDS;
     const overtimeSeconds = isOvertime ? Math.max(0, elapsedSeconds - overtimeBaseSeconds) : null;
     const event = {
       time: Number.isFinite(time) ? time : 0,
@@ -1714,11 +1745,15 @@ function summarizeShotSamples(parsedReplay){
       }
 
       if(objectNameMatches(objectName, "TAGame.GameEvent_Soccar_TA:SecondsRemaining")){
-        const secondsRemaining = replayIntValue(attribute, value);
+        const secondsRemaining = validScoreboardSecondsRemaining(
+          replayIntValue(attribute, value),
+          isOvertime,
+          replayElapsedSeconds(time, firstFrameTime, lastFrameTime, totalSeconds)
+        );
         if(Number.isFinite(secondsRemaining)){
           scoreboardSecondsRemaining = secondsRemaining;
           scoreboardClockFinalSeconds = secondsRemaining;
-          scoreboardClockStartSeconds = Math.max(scoreboardClockStartSeconds ?? secondsRemaining, secondsRemaining);
+          scoreboardClockStartSeconds = SOCCAR_REGULATION_SECONDS;
         }
       }
 
@@ -1727,7 +1762,7 @@ function summarizeShotSamples(parsedReplay){
         const scoredOnTeam = normalizeScoredOnTeam(rawScoredOnTeam);
         scoredOnTeamChange = scoredOnTeam;
         const elapsedSeconds = currentGameElapsedSeconds(time);
-        const overtimeBaseSeconds = Number.isFinite(scoreboardClockStartSeconds) ? scoreboardClockStartSeconds : 300;
+        const overtimeBaseSeconds = SOCCAR_REGULATION_SECONDS;
         goalStateEvents.push({
           time: Number.isFinite(time) ? time : 0,
           elapsedSeconds: Number(elapsedSeconds.toFixed(3)),
@@ -1744,7 +1779,9 @@ function summarizeShotSamples(parsedReplay){
       if(objectNameMatches(objectName, "TAGame.GameEvent_Soccar_TA:bOverTime")){
         const overtimeValue = getObject(attribute, "Boolean") ?? getObject(value, "Boolean");
         if(typeof overtimeValue === "boolean"){
+          const enteringOvertime = overtimeValue && !isOvertime;
           isOvertime = overtimeValue;
+          if(enteringOvertime) scoreboardSecondsRemaining = 0;
           if(overtimeValue) hasOvertime = true;
         }
       }
@@ -2214,10 +2251,17 @@ function summarizeShotSamples(parsedReplay){
       positionSamples: player.positionSamples.sort((a,b)=>(a.elapsedSeconds || 0) - (b.elapsedSeconds || 0))
     }))
     .sort((a,b)=>a.name.localeCompare(b.name));
+  const scoreboardDurationSeconds = scoreboardDurationSecondsFromClock(
+    scoreboardClockStartSeconds,
+    scoreboardClockFinalSeconds,
+    hasOvertime
+  );
 
   return {
     parser: "rrrocket",
-    durationSeconds: observedElapsedCount ? observedDurationSeconds : Math.ceil(Math.max(totalSeconds, 1)),
+    durationSeconds: Number.isFinite(scoreboardDurationSeconds)
+      ? scoreboardDurationSeconds
+      : observedElapsedCount ? observedDurationSeconds : Math.ceil(Math.max(totalSeconds, 1)),
     hasOvertime,
     players: sortedPlayers,
     nameAliases: [...nameAliases].map(([censoredName, realName])=>({name:realName, censoredName})),
