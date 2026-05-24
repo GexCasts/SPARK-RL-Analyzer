@@ -6426,7 +6426,7 @@ function renderPositioningHeatmap(a){
 
   function colourFor(v){
     if(v <= 0) return null;
-    const alpha = (.42 + Math.min(1, v) * .50).toFixed(2);
+    const alpha = (.50 + Math.min(1, v) * .40).toFixed(2);
     if(v < .24) return `rgba(65,108,198,${alpha})`;
     if(v < .52) return `rgba(65,210,135,${alpha})`;
     if(v < .76) return `rgba(255,208,0,${alpha})`;
