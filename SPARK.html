@@ -471,22 +471,44 @@ button.unitSwitch{
 }
 .span2{grid-column:span 16}
 .full{grid-column:1 / -1;grid-row:span var(--tile-rows,20)}
-.tileToolbar{
-  display:flex;
-  flex-wrap:wrap;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  margin:0 0 14px;
+.tileAddTile{
+  position:relative;
+  grid-column:span 4;
+  grid-row:span var(--tile-rows,14);
+  min-height:118px;
+  display:grid;
+  place-items:center;
+  padding:12px;
+  border-style:dashed;
+  border-color:rgba(255,208,0,.5);
+  background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(0,0,0,.22));
+  cursor:pointer;
+  user-select:none;
 }
-.tileToolbar[hidden]{display:none}
-.tileToolbarSummary{
-  color:var(--muted);
-  font-size:12px;
-  line-height:1.35;
+.tileAddTile[hidden]{display:none}
+.tileAddButton{
+  width:64px;
+  height:64px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  padding:0 0 5px;
+  font-size:48px;
+  line-height:1;
+  color:#111;
+  background:linear-gradient(180deg,#fff7b5,var(--spark-yellow));
+  border:1px solid rgba(255,208,0,.9);
+  box-shadow:0 10px 28px rgba(0,0,0,.35),0 0 18px rgba(255,208,0,.18);
+}
+.tileAddTile:hover .tileAddButton,
+.tileMenu.open .tileAddButton{
+  transform:translateY(-1px);
+  box-shadow:0 14px 34px rgba(0,0,0,.42),0 0 24px rgba(255,208,0,.34);
 }
 .tileMenu{position:relative}
+.tileAddTile .tileMenu{position:static}
 .tileMenu > button{min-width:118px}
+.tileAddTile .tileMenu > button{min-width:0}
 .tileMenuPanel{
   position:absolute;
   right:0;
@@ -502,6 +524,10 @@ button.unitSwitch{
   background:linear-gradient(180deg,#2d2d2d,#101112);
   box-shadow:0 18px 36px rgba(0,0,0,.42);
 }
+.tileAddTile .tileMenuPanel{
+  right:10px;
+  top:calc(100% + 8px);
+}
 .tileMenu.open .tileMenuPanel{display:grid;gap:8px}
 .tileMenuPanel label{
   display:grid;
@@ -513,6 +539,29 @@ button.unitSwitch{
 }
 .tileMenuPanel input{accent-color:var(--spark-yellow)}
 .tileMenuHint{color:var(--muted);font-size:11px;line-height:1.35;margin-top:4px}
+.tileLayoutActions{
+  display:grid;
+  gap:8px;
+  margin-top:4px;
+  padding-top:8px;
+  border-top:1px solid rgba(255,255,255,.12);
+}
+.tileMenuPanel button,
+.tileLayoutFileButton{
+  width:100%;
+  justify-content:center;
+  text-align:center;
+}
+.tileLayoutFileButton{
+  display:block;
+  padding:8px 12px;
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:8px;
+  background:linear-gradient(180deg,#282a2c,#111315);
+  color:#f2f2f2;
+  cursor:pointer;
+}
+.tileLayoutFileButton input{display:none}
 .tileManaged{
   position:relative;
   grid-column:span var(--tile-span,8);
@@ -2647,10 +2696,9 @@ body.obsOverlayMode #obsOverlayRoot{
   </section>
 
   <section class="dashboard" id="analysisDashboard">
-    <div class="tileToolbar full" id="tileToolbar" hidden>
-      <div class="tileToolbarSummary">Drag panel titles to reorder. Pull a panel corner to resize.</div>
+    <div class="card tileAddTile" id="tileAddTile" hidden role="button" tabindex="0" aria-label="Tile controls">
       <div class="tileMenu" id="tileMenu">
-        <button type="button" id="tileMenuButton">Tiles</button>
+        <button type="button" class="tileAddButton" id="tileMenuButton" aria-label="Add or remove tiles">+</button>
         <div class="tileMenuPanel" id="tileMenuPanel"></div>
       </div>
     </div>
@@ -3628,6 +3676,45 @@ function saveTileLayoutState(){
   localStorage.setItem(tileLayoutStorageKey, JSON.stringify(tileLayoutState));
 }
 
+function tileLayoutExportPayload(scopeKind=currentTileScopeKind()){
+  return {
+    app:"SPARK",
+    type:"spark-tile-layout",
+    version:2,
+    exportedAt:new Date().toISOString(),
+    scope:scopeKind,
+    layout:tileScopeState(scopeKind)
+  };
+}
+
+function downloadCurrentTileLayout(scopeKind=currentTileScopeKind()){
+  const payload = JSON.stringify(tileLayoutExportPayload(scopeKind), null, 2);
+  const blob = new Blob([payload], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `SPARK-${scopeKind}-layout.spark-layout`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1200);
+}
+
+async function loadTileLayoutFile(file, scopeKind=currentTileScopeKind()){
+  if(!file) return;
+  const parsed = JSON.parse(await file.text());
+  const layout = parsed?.layout || parsed;
+  if(!layout || typeof layout !== "object") throw new Error("Invalid layout file");
+  const nextLayout = {};
+  if(Array.isArray(layout.order)) nextLayout.order = layout.order.filter(Boolean);
+  if(Array.isArray(layout.hidden)) nextLayout.hidden = layout.hidden.filter(Boolean);
+  if(layout.sizes && typeof layout.sizes === "object") nextLayout.sizes = layout.sizes;
+  tileLayoutState[scopeKind] = nextLayout;
+  saveTileLayoutState();
+  applyManagedTiles();
+  resizeVisibleCharts();
+}
+
 loadTileLayoutState();
 
 function currentTileScopeKind(){
@@ -3663,14 +3750,15 @@ function updateTileRowSpans(){
   const rowGap = Number.parseFloat(styles.rowGap) || 10;
   const rowSizedItems = [
     ...managedTileElements().filter(tile=>tile.classList.contains("tileManaged")),
-    $("tileToolbar"),
+    $("tileAddTile"),
     $("gameOverviewCard")
   ].filter(Boolean);
   rowSizedItems.forEach(tile=>{
     if(tile.hidden || tile.style.display === "none") return;
     tile.style.gridRow = "auto";
     const height = tile.scrollHeight;
-    const rows = Math.max(14, Math.ceil((height + rowGap) / (rowHeight + rowGap)));
+    const minRows = tile.id === "tileAddTile" ? 8 : 14;
+    const rows = Math.max(minRows, Math.ceil((height + rowGap) / (rowHeight + rowGap)));
     tile.style.setProperty("--tile-rows", rows);
     tile.style.gridRow = `span ${rows}`;
   });
@@ -3860,11 +3948,24 @@ function initializeManagedTiles(){
 
   const button = $("tileMenuButton");
   const menu = $("tileMenu");
+  const addTile = $("tileAddTile");
   if(button && menu){
-    button.addEventListener("click", event=>{
+    const toggleMenu = event=>{
       event.stopPropagation();
       menu.classList.toggle("open");
-    });
+    };
+    button.addEventListener("click", toggleMenu);
+    if(addTile){
+      addTile.addEventListener("click", event=>{
+        if(event.target.closest(".tileMenuPanel") || event.target === button) return;
+        toggleMenu(event);
+      });
+      addTile.addEventListener("keydown", event=>{
+        if(event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        toggleMenu(event);
+      });
+    }
     document.addEventListener("click", event=>{
       if(!menu.contains(event.target)) menu.classList.remove("open");
     });
@@ -3890,7 +3991,7 @@ function applyTileOrder(scope){
   if(!dashboard) return;
   const order = Array.isArray(scope.order) ? scope.order : defaultTileOrder;
   const byId = new Map(managedTileElements().map(tile=>[tile.dataset.tileId, tile]));
-  let anchor = $("tileToolbar") || $("gameOverviewCard");
+  let anchor = $("tileAddTile") || $("gameOverviewCard");
   order.forEach(id=>{
     const tile = byId.get(id);
     if(tile && tile !== anchor){
@@ -3923,7 +4024,13 @@ function renderTileMenu(scopeKind, hiddenSet){
     const id = tile.dataset.tileId;
     const checked = !hiddenSet.has(id);
     return `<label><input type="checkbox" data-tile-toggle="${id}" ${checked ? "checked" : ""}>${tile.dataset.tileTitle || id}</label>`;
-  }).join("") + `<button type="button" id="tileResetButton">Reset ${scopeKind} layout</button><div class="tileMenuHint">Hidden tiles keep their data. Re-enable them here whenever you want them back.</div>`;
+  }).join("") + `
+    <div class="tileLayoutActions">
+      <button type="button" id="tileSaveLayoutButton">Save layout file</button>
+      <label class="tileLayoutFileButton">Load layout file<input type="file" id="tileLoadLayoutInput" accept=".spark-layout,.json,application/json"></label>
+      <button type="button" id="tileResetButton">Reset ${scopeKind} layout</button>
+    </div>
+    <div class="tileMenuHint">Use the checkboxes to add or remove tiles. Layout files store this ${scopeKind} view's tile order, hidden tiles, and sizes.</div>`;
 
   panel.querySelectorAll("[data-tile-toggle]").forEach(input=>{
     input.addEventListener("change", ()=>{
@@ -3945,13 +4052,33 @@ function renderTileMenu(scopeKind, hiddenSet){
       resizeVisibleCharts();
     });
   }
+  const saveLayout = $("tileSaveLayoutButton");
+  if(saveLayout){
+    saveLayout.addEventListener("click", event=>{
+      event.stopPropagation();
+      downloadCurrentTileLayout(scopeKind);
+    });
+  }
+  const loadLayout = $("tileLoadLayoutInput");
+  if(loadLayout){
+    loadLayout.addEventListener("change", async event=>{
+      event.stopPropagation();
+      try{
+        await loadTileLayoutFile(event.target.files?.[0], scopeKind);
+      }catch(error){
+        alert(`Could not load that SPARK layout file: ${error?.message || error}`);
+      }finally{
+        event.target.value = "";
+      }
+    });
+  }
 }
 
 function applyManagedTiles(){
   initializeManagedTiles();
   const scopeKind = currentTileScopeKind();
-  const toolbar = $("tileToolbar");
-  if(toolbar) toolbar.hidden = scopeKind === "overview" || activeView !== "analysis";
+  const addTile = $("tileAddTile");
+  if(addTile) addTile.hidden = scopeKind === "overview" || activeView !== "analysis";
   const scope = tileScopeState(scopeKind);
   applyTileOrder(scope);
   applyTileSizes(scope);
