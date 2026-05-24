@@ -27,6 +27,21 @@ html{
   scrollbar-width:none;
 }
 html,body{height:100%}
+body,
+button,
+.card,
+.field,
+.goalMap,
+.chartWrap{
+  user-select:none;
+  -webkit-user-select:none;
+}
+input,
+textarea,
+[contenteditable="true"]{
+  user-select:text;
+  -webkit-user-select:text;
+}
 body{
   margin:0;
   min-height:100%;
@@ -503,6 +518,25 @@ button.unitSwitch{
   grid-column:span var(--tile-span,4);
   min-width:0;
   min-height:120px;
+  cursor:grab;
+}
+.tileManaged:active{cursor:grabbing}
+.tileManaged button,
+.tileManaged input,
+.tileManaged select,
+.tileManaged textarea,
+.tileManaged canvas,
+.tileManaged .chartWrap,
+.tileManaged .field,
+.tileManaged .goalMap,
+.tileManaged .timeline,
+.tileManaged .tableWrap,
+.tileManaged .note,
+.tileManaged #boostBars,
+.tileManaged .boostLegend,
+.tileManaged .shootLegend,
+.tileManaged .positioningLegend{
+  cursor:auto;
 }
 .tileManaged.dragging{
   opacity:.48;
@@ -511,23 +545,33 @@ button.unitSwitch{
 .tileManaged.tileDropBefore{box-shadow:-6px 0 0 var(--spark-yellow)}
 .tileManaged.tileDropAfter{box-shadow:6px 0 0 var(--spark-yellow)}
 .tileManaged > h2{
-  cursor:grab;
   user-select:none;
   padding-right:42px;
 }
-.tileManaged > h2:active{cursor:grabbing}
 .tileResizeHandle{
   position:absolute;
-  right:7px;
-  bottom:7px;
+  right:0;
+  bottom:0;
+  width:56px;
+  height:56px;
+  border-radius:0 0 8px 0;
+  cursor:nwse-resize;
+  opacity:.34;
+  z-index:8;
+}
+.tileResizeHandle::after{
+  content:"";
+  position:absolute;
+  right:8px;
+  bottom:8px;
   width:18px;
   height:18px;
-  border-right:2px solid rgba(255,208,0,.82);
-  border-bottom:2px solid rgba(255,208,0,.82);
+  border-right:2px solid rgba(255,208,0,.92);
+  border-bottom:2px solid rgba(255,208,0,.92);
   border-radius:3px;
-  cursor:nwse-resize;
-  opacity:.42;
-  z-index:8;
+}
+.tileResizeHandle:hover{
+  background:linear-gradient(135deg,transparent 45%,rgba(255,208,0,.12));
 }
 .tileManaged:hover .tileResizeHandle{opacity:.9}
 .tileManaged .chartWrap{height:var(--tile-chart-height,clamp(240px,24vh,330px))}
@@ -888,17 +932,20 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
   background:var(--padColor, #d8d8d8);
   box-shadow:0 0 calc(10px + (18px * var(--b))) var(--padGlow, rgba(255,144,0,.55));
   font-size:clamp(9px,.62vw,12px);
+  cursor:default;
+  user-select:none;
+  -webkit-user-select:none;
 }
 .boostPad.small{
-  width:clamp(9px,.7vw,14px);
-  height:clamp(9px,.7vw,14px);
+  width:clamp(10.35px,.805vw,16.1px);
+  height:clamp(10.35px,.805vw,16.1px);
   font-size:0;
   border-width:1px;
 }
 .boostPad.small:hover{
-  width:clamp(15px,1.19vw,24px);
-  height:clamp(15px,1.19vw,24px);
-  font-size:clamp(8px,.52vw,11px);
+  width:clamp(17.25px,1.37vw,27.6px);
+  height:clamp(17.25px,1.37vw,27.6px);
+  font-size:clamp(9.2px,.6vw,12.65px);
 }
 .boostPad.large{
   width:clamp(20px,1.55vw,30px);
@@ -3658,6 +3705,50 @@ function beginTileResize(event, tile){
   window.addEventListener("pointerup", onUp, {once:true});
 }
 
+function tileDragBlockedTarget(target){
+  return !!target?.closest?.([
+    "button",
+    "input",
+    "select",
+    "textarea",
+    "a",
+    "label",
+    "canvas",
+    "[contenteditable='true']",
+    ".tileResizeHandle",
+    ".chartWrap",
+    ".field",
+    ".goalMap",
+    ".timeline",
+    ".tableWrap",
+    ".note",
+    "#boostBars",
+    ".boostLegend",
+    ".shootLegend",
+    ".positioningLegend",
+    ".tileMenu",
+    ".tileMenuPanel"
+  ].join(","));
+}
+
+function beginTileDrag(event, tile){
+  if(tileDragBlockedTarget(event.target)){
+    event.preventDefault();
+    return;
+  }
+  draggedTile = tile;
+  tile.classList.add("dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", tile.dataset.tileId);
+}
+
+function finishTileDrag(tile){
+  tile.classList.remove("dragging");
+  clearTileDropMarkers();
+  saveCurrentTileOrder();
+  draggedTile = null;
+}
+
 function initializeManagedTiles(){
   if(managedTilesReady) return;
   managedTilesReady = true;
@@ -3668,23 +3759,10 @@ function initializeManagedTiles(){
   managedTileElements().forEach(tile=>{
     if(tile.dataset.tileId === "gameOverview") return;
     tile.classList.add("tileManaged");
+    tile.draggable = true;
     tile.style.setProperty("--tile-span", Number(tile.dataset.tileSpan) || 4);
-    const title = tile.querySelector("h2");
-    if(title){
-      title.draggable = true;
-      title.addEventListener("dragstart", event=>{
-        draggedTile = tile;
-        tile.classList.add("dragging");
-        event.dataTransfer.effectAllowed = "move";
-        event.dataTransfer.setData("text/plain", tile.dataset.tileId);
-      });
-      title.addEventListener("dragend", ()=>{
-        tile.classList.remove("dragging");
-        clearTileDropMarkers();
-        saveCurrentTileOrder();
-        draggedTile = null;
-      });
-    }
+    tile.addEventListener("dragstart", event=>beginTileDrag(event, tile));
+    tile.addEventListener("dragend", ()=>finishTileDrag(tile));
     const handle = document.createElement("span");
     handle.className = "tileResizeHandle";
     handle.title = "Resize tile";
