@@ -6247,8 +6247,8 @@ function render(){
 
 
 
-const POSITIONING_HEAT_BASE_SCALE = 3.05;
-const POSITIONING_HEAT_SCALE_MAX = 12;
+const POSITIONING_HEAT_BASE_SCALE = 2.85;
+const POSITIONING_HEAT_SCALE_MAX = 8.8;
 
 function renderPositioningHeatmap(a){
   const map = $("positioningMap");
@@ -6352,7 +6352,7 @@ function renderPositioningHeatmap(a){
     samplesByPlayer.get(key).push(sample);
   });
 
-  const routeSpreadBlend = .48;
+  const routeSpreadBlend = .38;
   const sampleWeight = 1;
   const bridgeWeight = .135;
 
@@ -6387,7 +6387,7 @@ function renderPositioningHeatmap(a){
       let neighborTotal = 0;
       let neighborWeight = 0;
       const radius = routeSpreadBlend > .55 ? 3 : 4;
-      const sigma = 2.15 - routeSpreadBlend * .55;
+      const sigma = 1.82 - routeSpreadBlend * .45;
       const twoSigmaSquared = 2 * sigma * sigma;
       for(let oy=-radius; oy<=radius; oy++){
         for(let ox=-radius; ox<=radius; ox++){
@@ -6418,17 +6418,19 @@ function renderPositioningHeatmap(a){
   }
   const coverageRatio = positiveTrends.length / Math.max(1, gridW * gridH);
   const coverageBlend = clampValue((coverageRatio - .50) / .18, 0, 1);
-  const repeatScale = Math.max(POSITIONING_HEAT_BASE_SCALE, trendPercentile(.965) * .95, trendPercentile(.99) * .68);
-  const heatScale = clampValue(repeatScale * (1 + coverageBlend * .48), POSITIONING_HEAT_BASE_SCALE, POSITIONING_HEAT_SCALE_MAX);
-  const heatCurvePower = 1.05 + coverageBlend * .20;
+  const repeatScale = Math.max(POSITIONING_HEAT_BASE_SCALE, trendPercentile(.93) * .92, trendPercentile(.982) * .58);
+  const activityDampener = 1 + coverageBlend * .14;
+  const heatScale = clampValue(repeatScale * activityDampener, POSITIONING_HEAT_BASE_SCALE, POSITIONING_HEAT_SCALE_MAX);
+  const heatCurvePower = .88 + coverageBlend * .16;
+  const activityNoiseFloor = trendPercentile(.16) * coverageBlend * .78;
 
   function colourFor(v){
     if(v <= 0) return null;
-    const alpha = (.70 + Math.min(1, v) * .25).toFixed(2);
-    if(v < .40) return `rgba(80,130,230,${alpha})`;
-    if(v < .63) return `rgba(65,210,135,${alpha})`;
-    if(v < .82) return `rgba(255,208,0,${alpha})`;
-    if(v < .95) return `rgba(240,150,28,${alpha})`;
+    const alpha = (.42 + Math.min(1, v) * .50).toFixed(2);
+    if(v < .24) return `rgba(65,108,198,${alpha})`;
+    if(v < .52) return `rgba(65,210,135,${alpha})`;
+    if(v < .76) return `rgba(255,208,0,${alpha})`;
+    if(v < .92) return `rgba(240,150,28,${alpha})`;
     return `rgba(255,56,56,${alpha})`;
   }
 
@@ -6455,7 +6457,7 @@ function renderPositioningHeatmap(a){
 
   const cellW = canvas.width / gridW;
   const cellH = canvas.height / gridH;
-  const pad = Math.max(.65, Math.min(cellW, cellH) * .08);
+  const pad = Math.max(.9, Math.min(cellW, cellH) * .14);
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   for(let gy=0; gy<gridH; gy++){
@@ -6466,7 +6468,10 @@ function renderPositioningHeatmap(a){
       const py = (gy / Math.max(1, gridH - 1)) * 100;
       if(!pointInField({x:px,y:py})) continue;
       const trend = trendDensity[gy * gridW + gx] || raw;
-      const v = Math.min(1, Math.pow(trend / heatScale, heatCurvePower));
+      const effectiveTrend = trend - activityNoiseFloor;
+      if(effectiveTrend <= 0) continue;
+      const effectiveScale = Math.max(1, heatScale - activityNoiseFloor);
+      const v = Math.min(1, Math.pow(effectiveTrend / effectiveScale, heatCurvePower));
       const color = colourFor(v);
       if(!color) continue;
       ctx.fillStyle = color;
