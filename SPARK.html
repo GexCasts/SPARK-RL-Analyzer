@@ -2661,7 +2661,7 @@ body.obsOverlayMode #obsOverlayRoot{
     <div class="card">
       <div class="drop" id="drop">
         <b>Drop replay file</b>
-        <div class="help">Click or drag a .replay file here. Replay title, player names, and team assignment are extracted from replay metadata where available.</div>
+        <div class="help">Click or drag a .replay file here.</div>
         <input id="file" type="file" accept=".replay,.json"/>
         <div class="liveApiControls">
           <button id="liveApiBtn" type="button">Start Live API Feed</button>
@@ -2684,7 +2684,7 @@ body.obsOverlayMode #obsOverlayRoot{
     </div>
     <div class="card">
       <h2 id="replayTitle">Replay: Sample replay</h2>
-      <div class="help">Switch between individual players only. Full-team aggregate views are hidden for now so coaching data is clearly tied to the player it belongs to.</div>
+      <div class="help">Choose a player, team, or overlay view.</div>
       <div class="tabs modeTabs">
         <button id="analysisViewBtn" type="button" onclick="selectMainView('analysis')">Replay Analysis</button>
         <button id="overlayViewBtn" type="button" onclick="selectMainView('overlay')">Live Overlay Control</button>
@@ -2713,7 +2713,7 @@ body.obsOverlayMode #obsOverlayRoot{
   <section class="dashboard" id="overlayControlView" style="display:none">
     <div class="card full" id="overlayControlCard">
       <h2>Live Overlay Control</h2>
-      <div class="help">Controls saved here are read by the OBS browser source. Open the analyzer from <b>http://127.0.0.1:8765/SPARK.html</b> for live sync with the overlay source.</div>
+      <div class="help">Set teams, logos, series score, and overlay preview.</div>
       <div class="overlayControlPanel" id="overlayControlPanel"></div>
     </div>
   </section>
@@ -2754,27 +2754,27 @@ body.obsOverlayMode #obsOverlayRoot{
         <div class="overviewStatGrid" id="overviewStats"></div>
         <div class="overviewSpotlights" id="overviewSpotlights"></div>
         <div class="tableWrap"><table class="playerOverviewTable" id="overviewPlayerStats"></table></div>
-        <div class="overviewNote">Team overview uses the same replay-derived totals as the player panels. Tile bars compare each stat only against its opposite team value.</div>
+        <div class="overviewNote">Team stats compare blue directly against orange.</div>
       </div>
     </div>
 
     <div class="card span2" data-tile-id="impact" data-tile-title="Impact on Play" data-tile-span="16">
       <h2>Impact on Play</h2>
-      <div class="help">Shows 2-second game-time windows. Possession and pressure use replay car and ball positions when available and are smoothed for trend readability. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Hover a vertical line to see who made the play.</div>
+      <div class="help">Touches, possession, and pressure over game time. Solid lines mark goals; dotted lines mark saves.</div>
       <div class="chartWrap tall"><canvas id="trendChart"></canvas></div>
       <div class="note" id="trendNote"></div>
     </div>
 
     <div class="card" data-tile-id="boostManagement" data-tile-title="Boost Management" data-tile-span="8">
       <h2>Boost Management</h2>
-      <div class="help">Boost efficiency is not “use less boost”; it means spending boost where it creates speed, pressure, recovery, or safety.</div>
+      <div class="help">Boost pickups, steals, efficiency, and wasted boost.</div>
       <div id="boostBars"></div>
       <div class="note" id="boostNote"></div>
     </div>
 
     <div class="card" id="positioningMapCard" data-tile-id="positioning" data-tile-title="Positioning Heatmap" data-tile-span="12">
       <h2>Positioning Heatmap</h2>
-      <div class="help">Shows selected-player field positioning. Repeated positioning gets hotter, moving from dim grey to yellow, orange, and red. The map uses the same top-down field orientation as the boost pickup map.</div>
+      <div class="help">Selected-player field positioning. Hotter tiles mean repeated routes or holds.</div>
       <div class="field" id="positioningMap"></div>
       <div class="positioningLegend">
         <span><i style="background:rgba(90,145,255,.58)"></i>Low presence</span>
@@ -2787,10 +2787,10 @@ body.obsOverlayMode #obsOverlayRoot{
 
     <div class="card" data-tile-id="boostMap" data-tile-title="Boost Pickup Map" data-tile-span="12">
       <h2>Boost Pickup Map</h2>
-      <div class="help">Uses the standard 34-pad Soccar layout, aligned to the supplied top-down map with blue net on the left and orange net on the right. Pads shift from light grey to orange as pickups increase.</div>
+      <div class="help">Boost pickups by pad. Blue net left, orange net right.</div>
       <div class="field" id="boostMap"></div>
       <div class="boostLegend">
-        <span class="largeIcon" style="--c:#ff9000">Large boost pad</span>
+        <span class="largeIcon" style="--c:#ff9000">Full boost pad</span>
         <span class="smallIcon" style="--c:#ffd000">Small boost pad</span>
         <span>Large numbers = pickups; small numbers appear on hover</span>
       </div>
@@ -2799,34 +2799,34 @@ body.obsOverlayMode #obsOverlayRoot{
 
     <div class="card" id="teamComparisonCard" data-tile-id="comparison" data-tile-title="Player / Team Comparison" data-tile-span="8">
       <h2>Player / Team Comparison</h2>
-      <div class="help">Compare contribution across the lobby. In team view, compare overall contribution distribution across players on the selected team.</div>
+      <div class="help">Compare player and team contribution.</div>
       <div class="chartWrap"><canvas id="compareChart"></canvas></div>
     </div>
 
     <div class="card" id="physicalComparisonCard" data-tile-id="physical" data-tile-title="Demos / Bumps" data-tile-span="8">
       <h2>Demos / Bumps</h2>
-      <div class="help">Compare physical pressure from confirmed demos and bumps. Team tabs show players on that team; player tabs show the selected player only.</div>
+      <div class="help">Demos and confirmed bumps.</div>
       <div class="chartWrap"><canvas id="physicalChart"></canvas></div>
       <div class="note" id="physicalNote"></div>
     </div>
 
     <div class="card" id="distanceCard" data-tile-id="distance" data-tile-title="Distance to Ball" data-tile-span="8">
       <h2>Distance to Ball</h2>
-      <div class="help">Shows car-to-ball distance for the selected player or team average. Distances follow the app unit switch with sensible small-distance units. Goal bars and save lines are team-aware: solid bars = goals, lighter dotted lines = saves, gold = selected player event. Lower values usually mean closer pressure; consistently too low can indicate overcommitting or ball-chasing.</div>
+      <div class="help">Car-to-ball distance over game time. Lower usually means closer pressure.</div>
       <div class="chartWrap"><canvas id="distanceChart"></canvas></div>
       <div class="note" id="distanceNote"></div>
     </div>
 
     <div class="card" data-tile-id="shotQuality" data-tile-title="Shot Quality & Near Misses" data-tile-span="8">
       <h2>Shot Quality & Near Misses</h2>
-      <div class="help">Shot conversion alone can lie. Near misses and forced saves show whether attempts are dangerous even when they do not score.</div>
+      <div class="help">Goals, saves, near misses, wide misses, and shot quality.</div>
       <div class="chartWrap"><canvas id="shotChart"></canvas></div>
       <div class="note" id="shotNote"></div>
     </div>
 
     <div class="card" data-tile-id="shootingMap" data-tile-title="Shooting Heatmap" data-tile-span="8">
       <h2>Shooting Heatmap</h2>
-      <div class="help">Shows shot placement, defender distance, and shooter touch distance from replay ball and car positions. Saved shots use projected goal-entry placement when the incoming ball path is determinable.</div>
+      <div class="help">Shot placement, defender distance, and shooter touch distance.</div>
       <div class="goalMap" id="shootingHeatmap">
         <div class="goalLabel">GOAL FACE</div>
         <div class="postZone left"></div>
@@ -2847,20 +2847,20 @@ body.obsOverlayMode #obsOverlayRoot{
 
     <div class="card" id="teamRadarCard" data-tile-id="teamRadar" data-tile-title="Teamplay Radar" data-tile-span="8">
       <h2>Teamplay Radar</h2>
-      <div class="help">Shows team playstyle from replay-derived pressure, possession, positioning, boost control, physical play, and defensive coverage. Values are fixed 0-100 style intensities so different teams and replays are easier to compare.</div>
+      <div class="help">Team playstyle across pressure, possession, boost control, physical play, and cover.</div>
       <div class="chartWrap"><canvas id="radarChart"></canvas></div>
       <div class="note" id="radarNote"></div>
     </div>
 
     <div class="card span2" id="playerTableCard" data-tile-id="playerTable" data-tile-title="Detailed Player Table" data-tile-span="16">
       <h2>Detailed Player Table</h2>
-      <div class="help">Use this to find who needs what coaching. “Meaning” explains the stat in gameplay terms.</div>
+      <div class="help">Detailed player stats.</div>
       <div class="tableWrap"><table id="playerTable"></table></div>
     </div>
 
     <div class="card" data-tile-id="keyEvents" data-tile-title="Key Events" data-tile-span="8">
       <h2>Key Events</h2>
-      <div class="help">Displays coaching-relevant moments determined by the app. These highlight review points such as pressure swings, boost decisions, shot outcomes, recoveries, and spacing issues.</div>
+      <div class="help">Important moments to review.</div>
       <div class="timeline" id="timeline"></div>
     </div>
 
@@ -2934,7 +2934,7 @@ const nameDisplayPreferenceKey = "oneReplayAnalyzer.useCensoredNames.v1";
 let useCensoredNames = localStorage.getItem(nameDisplayPreferenceKey) === "1";
 const unitSystemPreferenceKey = "spark.unitSystem.v1";
 let useImperialUnits = localStorage.getItem(unitSystemPreferenceKey) === "imperial";
-let physicsAnalysisState={status:"idle",progress:0,message:"Upload a replay to start parser analysis.",frames:0,carSamples:0,ballSamples:0,shotSamples:0,tokens:{},warnings:[]};
+let physicsAnalysisState={status:"idle",progress:0,message:"Upload a replay to start analysis.",frames:0,carSamples:0,ballSamples:0,shotSamples:0,tokens:{},warnings:[]};
 let physicsWorker=null;
 let liveApiSocket=null;
 let liveApiReconnectTimer=null;
@@ -5641,8 +5641,8 @@ function renderBoostManagement(a, isTeamView){
   const largeStolen = largeBoostSteals(a);
   const supersonicUsed = Math.round(supersonicBoostUsed(a));
   $("boostNote").textContent = liveApiDashboardActive()
-    ? `${a.label}: live boost management uses current boost, boost use, speed, and supersonic flags from the API. Exact small/full pad pickups and stolen-pad locations require replay parsing.`
-    : `${a.label}: ${totals.small.toLocaleString()} small pad pickup${totals.small===1?"":"s"}, ${totals.large.toLocaleString()} large pad pickup${totals.large===1?"":"s"}, ${largeStolen.toLocaleString()} large boost steal${largeStolen===1?"":"s"}, ${supersonicUsed.toLocaleString()} boost used while already supersonic, ${a.boostEff || 0}% boost efficiency, and ${a.recovery || 0}% low-boost recovery.`;
+    ? `${a.label}: live boost, speed, and supersonic use.`
+    : `${a.label}: ${totals.small.toLocaleString()} small pads, ${totals.large.toLocaleString()} full boosts, ${largeStolen.toLocaleString()} full boost steal${largeStolen===1?"":"s"}, ${supersonicUsed.toLocaleString()} boost used supersonic.`;
 }
 
 
@@ -5658,11 +5658,11 @@ function renderBoostPickupMap(a){
     const unavailable = document.createElement("div");
     unavailable.className = "heatmapUnavailable";
     unavailable.innerHTML = `
-      <b>Boost pickup map unavailable from Live API</b><br>
-      The live feed exposes current boost amounts, but not which pad was collected. Upload a replay to calculate per-pad pickups.
+      <b>Boost pickup map unavailable in Live API mode</b><br>
+      Upload a replay to view pad pickups.
     `;
     map.appendChild(unavailable);
-    $("boostPickupNote").textContent = `${a.label}: live boost amount and boost usage can be tracked, but exact pad locations require replay parsing.`;
+    $("boostPickupNote").textContent = `${a.label}: upload a replay to view pad locations.`;
     return;
   }
 
@@ -5691,7 +5691,7 @@ function renderBoostPickupMap(a){
   const largeShare = total ? Math.round((largeTotal / total) * 100) : 0;
 
   $("boostPickupNote").textContent = total
-    ? `${a.label}: large pads ${largeTotal}, small pads ${smallTotal}, large-pad share ${largeShare}%.`
+    ? `${a.label}: ${largeTotal} full boosts, ${smallTotal} small pads, ${largeShare}% full-boost share.`
     : "";
 }
 
@@ -6125,7 +6125,7 @@ function renderShootingHeatmap(a){
     unavailable.className = "heatmapUnavailable";
     unavailable.innerHTML = `
       <b>Live shooting summary</b><br>
-      Live API mode does not provide reliable shot placement or defender-distance data, so SPARK shows basic shooting totals instead of plotting guessed locations.
+      Upload a replay to view shot placement.
       <div class="heatmapStats">
         <span><strong>${shots}</strong>shots</span>
         <span><strong>${goals}</strong>goals</span>
@@ -6135,7 +6135,7 @@ function renderShootingHeatmap(a){
     `;
     el.appendChild(unavailable);
     $("shootingHeatmapNote").textContent =
-      `${a.label}: live shooting is limited to API scoreboard/statfeed totals; upload a replay for placement and defender-distance analysis.`;
+      `${a.label}: live shooting totals only.`;
     return;
   }
 
@@ -6148,7 +6148,7 @@ function renderShootingHeatmap(a){
     unavailable.className = "heatmapUnavailable";
     unavailable.innerHTML = `
       <b>Shot map unavailable</b><br>
-      This replay view currently has scoreboard shooting totals only, so placement and defender-distance details are not available.
+      Shot placement is not available for this view.
       <div class="heatmapStats">
         <span><strong>${shots}</strong>shots</span>
         <span><strong>${goals}</strong>goals</span>
@@ -6158,7 +6158,7 @@ function renderShootingHeatmap(a){
     `;
     el.appendChild(unavailable);
     $("shootingHeatmapNote").textContent =
-      `${a.label}: shot placement data is not available for this view.`;
+      `${a.label}: shot placement unavailable.`;
     return;
   }
 
@@ -6255,7 +6255,6 @@ function renderShootingHeatmap(a){
           ${s.result === "save"
             ? `<span class="muted">Defender: ${s.defender ? escapeHtml(s.defender) : "Unknown"}</span><br>`
             : `<span class="muted">Nearest defender: ${optionalDistanceText(s.nearestOpponentDistance)}${s.defender ? ` (${escapeHtml(s.defender)})` : ""}</span><br>`}
-          ${s.result === "save" && s.placementProjectionSource ? `<span class="muted">Placement: projected goal entry</span><br>` : ""}
           <span class="muted">Last touch distance from net: ${optionalDistanceText(s.lastTouchDistanceToNet)}</span><br>
           <span class="muted">Target: ${s.target}</span>
         `;
@@ -6279,7 +6278,7 @@ function renderShootingHeatmap(a){
   const misses = samples.filter(s=>s.result==="miss").length;
 
   $("shootingHeatmapNote").textContent =
-    `${a.label}: ${samples.length} frame-accurate shot attempt${samples.length===1?"":"s"} displayed - ${goals} goal${goals===1?"":"s"}, ${saves} saved shot${saves===1?"":"s"}, ${posts} post/crossbar hit${posts===1?"":"s"}, ${misses} miss${misses===1?"":"es"}.`;
+    `${a.label}: ${samples.length} shot attempt${samples.length===1?"":"s"} - ${goals} goal${goals===1?"":"s"}, ${saves} saved shot${saves===1?"":"s"}, ${posts} post/crossbar hit${posts===1?"":"s"}, ${misses} miss${misses===1?"":"es"}.`;
 }
 function inferGamePhase(a){
   const attack = Math.min(100, Math.round(a.pressure + (a.stolen/12) + a.goals*8));
@@ -6878,7 +6877,7 @@ function render(){
   chart("trendChart",{
     type:"line",
     data:{labels:impactLabels,datasets:[
-      {label:"Exact ball touches per 5s window",data:touchClock,borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.18)",fill:true,tension:.24,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9},
+      {label:"Ball touches",data:touchClock,borderColor:"#ffd000",backgroundColor:"rgba(255,208,0,.18)",fill:true,tension:.24,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9},
       {label:"Possession rating /20",data:possClock,borderColor:"#f2f2f2",backgroundColor:"rgba(242,242,242,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true},
       {label:"Pressure rating /20",data:pressureClock,borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.12)",fill:true,tension:.36,pointRadius:2.25,pointHoverRadius:3.75,pointHitRadius:9,spanGaps:true}
     ]},
@@ -6893,17 +6892,17 @@ function render(){
   });
 
   $("trendNote").textContent = impactResult.parsed
-    ? `${a.label}: exact ball touches are counted from decoded ball-hit events; possession and pressure ratings are benchmarked from 0-20 and calculated from ${impactResult.sampleCount.toLocaleString()} replay position snapshots. ${impactAdvice(a, impactChartValues, followupSpeed)}`
+    ? `${a.label}: ${impactResult.sampleCount.toLocaleString()} position snapshots. ${impactAdvice(a, impactChartValues, followupSpeed)}`
     : impactResult.live
-      ? `${a.label}: live impact is updating from API events as they happen. Touches are live ball-hit events, possession is touch share in each window, and pressure is event-based from touches, shots, goals, saves, demos, and bumps.`
+      ? `${a.label}: live touches, possession, and pressure.`
     : (a.touches > 260
-      ? "Team-level view: ball touches are distributed from replay stat totals because decoded touch events were unavailable."
+      ? "Team touch distribution."
       : a.touches > 110 ? "Player view: high touch volume."
       : "Lower involvement.");
 
   const phase = inferGamePhase(a);
   renderBoostManagement(a, isTeamView);
-  if(!liveMode) $("boostNote").textContent += ` Inferred game phase from boost use, pressure, saves, and recovery: attack ${phase.attack}%, defence ${phase.defence}%, neutral ${phase.neutral}%.`;
+  if(!liveMode) $("boostNote").textContent += ` Phase read: attack ${phase.attack}%, defence ${phase.defence}%, neutral ${phase.neutral}%.`;
   renderBoostPickupMap(a);
   if(!isTeamView) renderPositioningHeatmap(a);
 
@@ -6939,11 +6938,11 @@ function render(){
     chart("distanceChart",{
       type:"line",
       data:{labels:clockLabels,datasets:[
-        {label:"Distance to ball unavailable from Live API",data:clockLabels.map(()=>null),borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.08)",fill:true,spanGaps:true}
+        {label:"Distance to ball",data:clockLabels.map(()=>null),borderColor:"#f0a020",backgroundColor:"rgba(240,160,32,.08)",fill:true,spanGaps:true}
       ]},
       options:{maintainAspectRatio:false,plugins:{legend},scales:{x:{...axis,ticks:{...axis.ticks,maxRotation:0,autoSkip:true,maxTicksLimit:11}},y:{...axis,beginAtZero:true}}}
     });
-    $("distanceNote").textContent = `${a.label}: Distance to Ball needs synchronized car and ball positions. The Live API feed does not provide enough positional data for this panel, so SPARK leaves it blank while connected.`;
+    $("distanceNote").textContent = `${a.label}: upload a replay to view distance to ball.`;
   }else{
     const distanceResult = distanceToBallSeries(a, durationSeconds, distanceStepSeconds);
     const distanceSeries = distanceResult.values;
@@ -6977,10 +6976,10 @@ function render(){
     if(validDistanceValues.length){
       const avgDistance = Math.round(validDistanceValues.reduce((sum,value)=>sum + value,0)/validDistanceValues.length);
       $("distanceNote").textContent = distanceResult.parsed
-        ? `${a.label}: average distance to ball is ${formatDistanceFromUU(avgDistance)}, based on ${distanceResult.sampleCount.toLocaleString()} replay position samples and binned into ${distanceStepSeconds}-second game-time windows.`
+        ? `${a.label}: average distance to ball ${formatDistanceFromUU(avgDistance)} across ${distanceResult.sampleCount.toLocaleString()} samples.`
         : `${a.label}: average distance to ball is approximately ${formatDistanceFromUU(avgDistance)}.`;
     }else{
-      $("distanceNote").textContent = `${a.label}: distance-to-ball data is not available for this view.`;
+      $("distanceNote").textContent = `${a.label}: distance to ball unavailable.`;
     }
   }
 
@@ -6991,10 +6990,10 @@ function render(){
     options:{maintainAspectRatio:false,plugins:{legend},scales:{x:axis,y:{...axis,beginAtZero:true,max:replayChartMax("shotQuality", isTeamView, durationSeconds)}}}
   });
   $("shotNote").textContent = shotQuality.hasSamples
-    ? `${a.label}: shot quality uses ${shotQuality.samples.length.toLocaleString()} replay shot sample${shotQuality.samples.length===1?"":"s"}. ${shootingAdvice(a)}`
+    ? `${a.label}: ${shotQuality.samples.length.toLocaleString()} shot sample${shotQuality.samples.length===1?"":"s"}. ${shootingAdvice(a)}`
     : liveMode
-      ? `${a.label}: live shot quality uses API scoreboard/statfeed totals as they arrive. Placement-specific categories stay empty until replay parsing is available. ${shootingAdvice(a)}`
-    : `${a.label}: using scoreboard shooting totals for this view. ${shootingAdvice(a)}`;
+      ? `${a.label}: live shooting totals. ${shootingAdvice(a)}`
+    : `${a.label}: scoreboard shooting totals. ${shootingAdvice(a)}`;
   renderShootingHeatmap(a);
 
   const radarMetrics = teamplayRadarMetrics(a, impactChartValues, followupSpeed, durationSeconds);
@@ -7043,11 +7042,11 @@ function renderPositioningHeatmap(a){
     const unavailable = document.createElement("div");
     unavailable.className = "heatmapUnavailable";
     unavailable.innerHTML = `
-      <b>Positioning heatmap unavailable from Live API</b><br>
-      This panel needs car-position samples. SPARK will render it again when a replay file is uploaded and parsed.
+      <b>Positioning heatmap unavailable in Live API mode</b><br>
+      Upload a replay to view positioning.
     `;
     map.appendChild(unavailable);
-    note.textContent = `${a.label}: player positioning requires replay positional data, so it is disabled while connected to the live feed.`;
+    note.textContent = `${a.label}: upload a replay to view positioning.`;
     return;
   }
 
@@ -7071,7 +7070,7 @@ function renderPositioningHeatmap(a){
   map.appendChild(canvas);
 
   if(!samples.length){
-    note.textContent = `${a.label}: positioning data is not available for this view.`;
+    note.textContent = `${a.label}: positioning unavailable.`;
     return;
   }
 
@@ -7260,7 +7259,7 @@ function renderPositioningHeatmap(a){
     }
   }
 
-  note.textContent = `${a.label}: rendered from ${samples.length.toLocaleString()} replay position samples. ${positioningAdvice(a)}`;
+  note.textContent = `${a.label}: ${samples.length.toLocaleString()} position samples. ${positioningAdvice(a)}`;
 }
 
 
@@ -7305,35 +7304,35 @@ function averageDistanceForAdvice(a, durationSeconds=replayObservedDurationSecon
 function positioningAdvice(a){
   const samples = scopePlayersForAdvice(a).flatMap(player=>Array.isArray(player.positionSamples) ? player.positionSamples : []);
   const avgDistance = averageDistanceForAdvice(a);
-  if((a.spacing || 0) < 58) return "Positioning advice: prioritize spacing. The current profile points to same-lane support or stacking, so review second-man distance and avoid following the play through the same boost path.";
-  if((a.recovery || 0) < 58) return "Positioning advice: recovery is the limiter. Review landings, half-flips, and routes back through pads before judging challenge timing.";
-  if(Number.isFinite(avgDistance) && avgDistance > 4500) return `Positioning advice: average distance to ball is ${formatDistanceFromUU(avgDistance)}, so look for phases where support drifted too far from playable pressure.`;
-  if(samples.length) return "Positioning advice: pathing looks usable. Review repeated hot zones for whether they create passing support, back-post coverage, or a faster next challenge.";
-  return "Positioning advice: positional samples are not available for this upload, so use rotation, spacing, and recovery scores as the review anchor.";
+  if((a.spacing || 0) < 58) return "Positioning: improve spacing. Check second-man distance and avoid same-lane rotations.";
+  if((a.recovery || 0) < 58) return "Positioning: recovery is the main issue. Check landings, half-flips, and pad routes back.";
+  if(Number.isFinite(avgDistance) && avgDistance > 4500) return `Positioning: average distance to ball is ${formatDistanceFromUU(avgDistance)}. Check slow support and late follow-ups.`;
+  if(samples.length) return "Positioning: pathing looks usable. Check hot zones for back-post cover, passing support, and faster next challenges.";
+  return "Positioning: no position samples for this view.";
 }
 
 function shootingAdvice(a){
   const breakdown = shotQualityBreakdown(a);
   const [goals, shots, nearMisses, wideMisses, savedShots, openNets, accurateShots] = breakdown.values;
   const conversion = shots ? goals / shots : 0;
-  if(!shots) return "Shooting advice: no shot volume is showing. Review possessions where the player could turn pressure into a shot, pass, or forced save.";
-  if(wideMisses > Math.max(goals, nearMisses)) return "Shooting advice: wide misses are the clearest issue. Review approach angle and first-touch setup before adding more power.";
-  if(savedShots >= Math.max(2, goals + nearMisses)) return "Shooting advice: shots are reaching defenders. Review placement variety, delayed shots, and whether rebound support was available.";
-  if(nearMisses >= Math.max(2, goals)) return "Shooting advice: chance creation is there. Train final placement and contact timing around posts and crossbar-height misses.";
-  if(openNets > 0 && conversion < .45) return "Shooting advice: open-net chances appeared, but conversion can still improve. Review composure touches and net-facing car control.";
-  if(accurateShots > 0) return "Shooting advice: accurate contested shots are showing. Keep building defender-aware placement, especially low corners and backboard rebounds.";
-  return "Shooting advice: shot profile is stable. Look for better shot selection and rebounds rather than simply increasing attempts.";
+  if(!shots) return "Shooting: low shot volume. Look for moments to turn pressure into a shot, pass, or forced save.";
+  if(wideMisses > Math.max(goals, nearMisses)) return "Shooting: wide misses are the main issue. Check approach angle and first touch.";
+  if(savedShots >= Math.max(2, goals + nearMisses)) return "Shooting: shots are too readable. Mix placement, timing, and low shots.";
+  if(nearMisses >= Math.max(2, goals)) return "Shooting: chances are close. Work on contact timing near posts and crossbar height.";
+  if(openNets > 0 && conversion < .45) return "Shooting: open-net conversion can improve. Check composure and net-facing car control.";
+  if(accurateShots > 0) return "Shooting: contested placement is working. Keep using low corners and backboard options.";
+  return "Shooting: shot profile is stable. Improve selection and follow-up support.";
 }
 
 function impactAdvice(a, impactChartValues=null, followupSpeed=null){
   const possessionAvg = averageFinite(impactChartValues?.possessionClock || []);
   const pressureAvg = averageFinite(impactChartValues?.pressureClock || []);
   const followup = followupSpeed || followupSpeedFromTeammateTouches(a);
-  if(Number.isFinite(pressureAvg) && pressureAvg < 6) return "Team impact advice: pressure is low. Use closer support, midfield pad control, and earlier second challenges to keep opponents awkward.";
-  if(Number.isFinite(possessionAvg) && possessionAvg < 4 && (a.touches || 0) > 70) return "Team impact advice: touches are not turning into possession. Review first touches that hand the ball away or force immediate recovery.";
-  if(followup.count > 0 && followup.score < 55) return "Team impact advice: follow-up speed is dragging down attacks. Review teammate touch gaps and whether the next player was already moving into the play.";
-  if((a.defense || 0) < 60) return "Team impact advice: defensive value is the risk. Review back-post coverage, shadow spacing, and who protects the clear.";
-  return "Team impact advice: pressure and involvement are usable. Focus on converting strong phases into a shot, boost steal, or forced clear instead of resetting pressure early.";
+  if(Number.isFinite(pressureAvg) && pressureAvg < 6) return "Team Impact: pressure is low. Improve midfield holds, boost steals, and second challenges.";
+  if(Number.isFinite(possessionAvg) && possessionAvg < 4 && (a.touches || 0) > 70) return "Team Impact: touches are not becoming possession. Check loose first touches.";
+  if(followup.count > 0 && followup.score < 55) return "Team Impact: follow-ups are slow. Check second-man readiness.";
+  if((a.defense || 0) < 60) return "Team Impact: defense needs work. Check back-post cover, shadow defense, and clear support.";
+  return "Team Impact: pressure is usable. Turn strong phases into shots, boost steals, or forced clears.";
 }
 
 function primaryFocusAdvice(a, impactChartValues=null){
@@ -7342,17 +7341,17 @@ function primaryFocusAdvice(a, impactChartValues=null){
   const avgDistance = averageDistanceForAdvice(a);
   const [goals, shots, nearMisses, wideMisses, savedShots] = shot.values;
   const candidates = [
-    {score:supersonicUsed > 20 ? supersonicUsed + 25 : 0, warning:true, text:`Primary focus: reduce boost used while already supersonic. ${Math.round(supersonicUsed).toLocaleString()} boost was spent after reaching max-speed territory, which is usually pure waste.`},
-    {score:(a.boostWaste || 0) > 28 ? (a.boostWaste || 0) + 15 : 0, warning:true, text:"Primary focus: clean up boost decisions before chasing more speed. Wasteful boost use is likely costing recovery and pressure."},
-    {score:(a.spacing || 0) < 58 ? 100 - (a.spacing || 0) : 0, warning:true, text:"Primary focus: fix spacing. The strongest review point is avoiding stacked lanes and giving the play a useful second option."},
-    {score:shots > 0 && wideMisses > Math.max(goals, nearMisses) ? wideMisses * 18 : 0, warning:true, text:"Primary focus: shooting accuracy. Wide misses are more actionable than shot volume right now."},
-    {score:shots > 0 && savedShots > goals + nearMisses ? savedShots * 14 : 0, warning:false, text:"Primary focus: shot selection. Too many attempts are reaching defenders cleanly, so look for better placement or delayed releases."},
-    {score:Number.isFinite(avgDistance) && avgDistance > 4800 ? 45 : 0, warning:true, text:`Primary focus: stay closer to useful pressure. Average distance to ball is ${formatDistanceFromUU(avgDistance)}, which can make follow-ups late.`},
-    {score:(a.pressure || 0) < 45 ? 55 - (a.pressure || 0) : 0, warning:true, text:"Primary focus: create more pressure from possessions. Look for midfield holds, boost steals, and faster second touches."}
+    {score:supersonicUsed > 20 ? supersonicUsed + 25 : 0, warning:true, text:`Primary Focus: reduce boost used while supersonic. ${Math.round(supersonicUsed).toLocaleString()} boost spent at max-speed territory.`},
+    {score:(a.boostWaste || 0) > 28 ? (a.boostWaste || 0) + 15 : 0, warning:true, text:"Primary Focus: clean up boost use. Save boost for speed, recovery, pressure, and safety."},
+    {score:(a.spacing || 0) < 58 ? 100 - (a.spacing || 0) : 0, warning:true, text:"Primary Focus: fix spacing. Avoid same-lane support and stacked rotations."},
+    {score:shots > 0 && wideMisses > Math.max(goals, nearMisses) ? wideMisses * 18 : 0, warning:true, text:"Primary Focus: shooting accuracy. Wide misses are the clearest issue."},
+    {score:shots > 0 && savedShots > goals + nearMisses ? savedShots * 14 : 0, warning:false, text:"Primary Focus: shot selection. Add placement variety and delayed shots."},
+    {score:Number.isFinite(avgDistance) && avgDistance > 4800 ? 45 : 0, warning:true, text:`Primary Focus: stay closer to useful pressure. Average distance to ball is ${formatDistanceFromUU(avgDistance)}.`},
+    {score:(a.pressure || 0) < 45 ? 55 - (a.pressure || 0) : 0, warning:true, text:"Primary Focus: create more pressure. Look for midfield holds, boost steals, and faster second touches."}
   ].sort((left,right)=>right.score - left.score);
   return candidates[0]?.score > 0
     ? candidates[0]
-    : {warning:false, text:"Primary focus: sharpen conversion from solid habits into game-changing plays. Look for one extra controlled touch, boost steal, or faster follow-up each possession."};
+    : {warning:false, text:"Primary Focus: add one useful play per possession: controlled touch, boost steal, shot, or faster follow-up."};
 }
 
 
@@ -7512,8 +7511,8 @@ function renderTimeline(a){
       cls:stolenLarge ? "saveEvent" : "goalEvent",
       priority,
       text:stolenLarge
-        ? `${displayName} stole an opponent large boost in a review-worthy context: ${reasons.join(", ") || "unusual field context"}. Check whether this created pressure or pulled them too far from structure.`
-        : `${displayName} made a concerning recovery pickup: ${reasons.join(", ") || "low-boost large-pad route"}. Review whether the route was efficient and covered the next defensive job.`
+        ? `${displayName} stole an opponent full boost. Check whether it created pressure or broke rotation.`
+        : `${displayName} took a low-boost recovery pad. Check the route back into defense.`
     };
   }
 
@@ -7527,14 +7526,14 @@ function renderTimeline(a){
       const elapsed = scoreboardElapsedFromSample(shot) ?? Number(shot.elapsedSeconds ?? shot.elapsed ?? shot.timeSeconds);
       if(!Number.isFinite(elapsed)) return;
       if(result === "goal"){
-        addEvent(candidates, elapsed, displayName, "Goal", "saveEvent", `${displayName} scored ${shot.target ? `toward ${shot.target}` : "from a decoded shot sample"}. Review the setup touch, defender spacing, and whether the chance came from pressure or transition.`, 95);
+        addEvent(candidates, elapsed, displayName, "Goal", "saveEvent", `${displayName} scored${shot.target ? ` toward ${shot.target}` : ""}. Check the setup touch and defender spacing.`, 95);
       }else if(result === "save"){
         const defender = cleanReplayName(shot.defender || shot.saver || shot.nearestOpponent || "");
-        addEvent(candidates, elapsed, displayName, "Saved shot", "shotEvent", `${displayName}'s shot was saved${defender ? ` by ${defender}` : ""}. Review whether placement, timing, or rebound support made the save too comfortable.`, 72);
+        addEvent(candidates, elapsed, displayName, "Saved shot", "shotEvent", `${displayName}'s shot was saved${defender ? ` by ${defender}` : ""}. Check placement, timing, and follow-up support.`, 72);
       }else if(isNearMissSample({...shot, ...normalizeShotFaceForDisplay(shot, result)})){
-        addEvent(candidates, elapsed, displayName, "Near miss", "shotEvent", `${displayName} had a near miss around the frame. Review contact timing and whether a lower-percentage angle forced the miss.`, 68);
+        addEvent(candidates, elapsed, displayName, "Near miss", "shotEvent", `${displayName} missed close to the frame. Check contact timing and angle.`, 68);
       }else if(result === "miss"){
-        addEvent(candidates, elapsed, displayName, "Wide miss", "goalEvent", `${displayName} missed away from the dangerous frame area. Review approach angle and first-touch setup.`, 58);
+        addEvent(candidates, elapsed, displayName, "Wide miss", "goalEvent", `${displayName} missed wide. Check approach angle and first touch.`, 58);
       }
     });
 
@@ -7573,7 +7572,7 @@ function renderTimeline(a){
       if(!farthest || distance > farthest.distance) farthest = {distance, elapsed};
     });
     if(farthest && farthest.distance > 6500){
-      addEvent(candidates, farthest.elapsed, displayName, "Detached from play", "goalEvent", `${displayName} reached ${formatDistanceFromUU(farthest.distance)} from the ball. Review whether that was smart third-man depth or a missed support window.`, 60);
+      addEvent(candidates, farthest.elapsed, displayName, "Detached from play", "goalEvent", `${displayName} reached ${formatDistanceFromUU(farthest.distance)} from the ball. Check third-man depth and support timing.`, 60);
     }
 
     if((p.boostWaste || 0) > 26){
@@ -7582,7 +7581,7 @@ function renderTimeline(a){
         displayName,
         "Boost decision",
         "shotEvent",
-        `${displayName} shows high boost waste. Review whether boost was spent while already supersonic, during panic recoveries, or on wide rotations.`,
+        `${displayName} shows high boost waste. Check supersonic boost, recoveries, and wide rotations.`,
         45
       ));
     }
@@ -7593,7 +7592,7 @@ function renderTimeline(a){
         displayName,
         "Near miss",
         "shotEvent",
-        `${displayName} created a dangerous chance that did not convert. Review shot approach, placement, and rebound support.`,
+        `${displayName} created a dangerous chance that did not convert. Check shot approach and follow-up support.`,
         38
       ));
     }
@@ -7604,7 +7603,7 @@ function renderTimeline(a){
         displayName,
         "Physical play",
         "saveEvent",
-        `${displayName} had notable bumps/demos. Check whether physical pressure opened space or pulled them out of rotation.`,
+        `${displayName} had notable bumps/demos. Check whether they opened space or broke rotation.`,
         35
       ));
     }
@@ -7615,7 +7614,7 @@ function renderTimeline(a){
         displayName,
         "Recovery issue",
         "goalEvent",
-        `${displayName} has a recovery weakness. Review landing direction, boost path back, and whether they were late to defensive structure.`,
+        `${displayName} has a recovery issue. Check landings, pad path, and return timing.`,
         42
       ));
     }
@@ -7626,7 +7625,7 @@ function renderTimeline(a){
         displayName,
         "Spacing issue",
         "goalEvent",
-        `${displayName} may be too close to teammates or rotating into the same lane. Look for same-side stacking and weak second-man spacing.`,
+        `${displayName} may be too close to teammates. Check same-side stacking and second-man spacing.`,
         44
       ));
     }
@@ -7637,7 +7636,7 @@ function renderTimeline(a){
         displayName,
         "Pressure swing",
         "saveEvent",
-        `${displayName} generated strong pressure. Review how this was created: boost steal, fast second touch, forced clear, bump, or midfield hold.`,
+        `${displayName} generated strong pressure. Check boost steals, second touches, forced clears, bumps, and midfield holds.`,
         40
       ));
     }
@@ -7650,7 +7649,7 @@ function renderTimeline(a){
         a.label,
         "Boost control",
         "saveEvent",
-        `${a.label} created a boost-control swing. Review whether stolen boost translated into sustained pressure or a faster follow-up.`,
+        `${a.label} created a boost-control swing. Check whether stolen boost became pressure.`,
         42
       ));
     }
@@ -7661,7 +7660,7 @@ function renderTimeline(a){
         a.label,
         "Rotation review",
         "goalEvent",
-        `${a.label} rotation score is low. Review third-man distance, challenge order, and who covered behind the play.`,
+        `${a.label} rotation score is low. Check third-man distance, challenge order, and cover.`,
         46
       ));
     }
@@ -7672,7 +7671,7 @@ function renderTimeline(a){
         a.label,
         "Defensive structure",
         "goalEvent",
-        `${a.label} defensive structure needs review. Look for slow back-post coverage, missed shadowing, or poor clear support.`,
+        `${a.label} defensive structure needs review. Check back-post cover, shadow defense, and clear support.`,
         46
       ));
     }
@@ -7700,7 +7699,7 @@ function renderTimeline(a){
         player:a.label,
         type:"Review point",
         cls:"shotEvent",
-        text:"No major generated key-event flags were detected. Review neutral phases for boost pathing, spacing, and controlled first touches."
+        text:"No major review points detected. Check neutral plays for boost pathing, spacing, and first touches."
       }
     ];
   }
@@ -7733,7 +7732,7 @@ function renderCoach(a, impactChartValues=null, followupSpeed=null){
   dock.onmouseenter=()=>dock.classList.add("peek");
   dock.onmouseleave=()=>dock.classList.remove("peek");
 }
-function resetPhysicsAnalysis(message="Upload a replay to start parser analysis."){
+function resetPhysicsAnalysis(message="Upload a replay to start analysis."){
   if(physicsWorker){
     physicsWorker.terminate();
     physicsWorker = null;
@@ -7776,7 +7775,7 @@ function renderPhysicsCanvas(){
     ctx.fillStyle = "rgba(255,255,255,.62)";
     ctx.font = "700 15px system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Awaiting decoded car/ball frames", w/2, h/2 - 8);
+    ctx.fillText("Waiting for replay data", w/2, h/2 - 8);
     ctx.fillStyle = "rgba(255,204,0,.78)";
     ctx.font = "700 12px system-ui, sans-serif";
     ctx.fillText(physicsAnalysisState.status === "running" ? "Scanning replay in background..." : "Network physics decoder not yet complete", w/2, h/2 + 16);
@@ -7808,11 +7807,11 @@ function renderPhysicsAnalysis(){
 
   const warningText = Array.isArray(state.warnings) && state.warnings.length ? ` ${state.warnings.join(" ")}` : "";
   if(decodedTotal > 0){
-    note.textContent = `Decoded samples were calculated from the currently uploaded replay only; SPARK does not store replay-specific parser results.${warningText}`;
+    note.textContent = `Analysis uses the current upload only.${warningText}`;
   }else{
     note.textContent = state.status === "idle"
       ? "Waiting for a replay file."
-      : `No decoded positional samples are available for this upload.${warningText}`;
+      : `No position samples for this upload.${warningText}`;
   }
 
   renderPhysicsCanvas();
@@ -9263,7 +9262,7 @@ async function loadFile(file){
         distanceSamples: parsedJson.players.reduce((s,p)=>s+(p.distanceToBallSamples?.length||0),0),
         addedPlayers:0
       };
-      physicsAnalysisState={status:"done",progress:100,message:"Structured JSON loaded. Using supplied frame samples when present.",frames:0,carSamples:parsedCounts.positionSamples,ballSamples:parsedJson.players.reduce((s,p)=>s+(p.ballSamples?.length||0),0),shotSamples:parsedCounts.shotSamples,tokens:{},warnings:[]};
+      physicsAnalysisState={status:"done",progress:100,message:"Replay data loaded.",frames:0,carSamples:parsedCounts.positionSamples,ballSamples:parsedJson.players.reduce((s,p)=>s+(p.ballSamples?.length||0),0),shotSamples:parsedCounts.shotSamples,tokens:{},warnings:[]};
     }catch(err){
       console.warn("Could not parse structured replay JSON:", err);
       $("fileStatus").innerHTML = `Could not parse <b>${file.name}</b> as replay JSON. ${err.message || err}`;
@@ -9275,7 +9274,7 @@ async function loadFile(file){
       replayMeta = extractReplayPlayers(buffer);
       replayTitle = extractReplayTitle(buffer, replayTitle);
       matchDurationSeconds = extractReplayDurationSeconds(buffer, file.name);
-      $("fileStatus").innerHTML = `Loaded metadata from <b>${file.name}</b>. Running SPARK's backend replay analysis for boost pickups, car positions, ball distance, and shooting...`;
+      $("fileStatus").innerHTML = `Loading <b>${file.name}</b>...`;
       parsedReplay = await requestReplayParse(file);
       if(!parsedReplay?.error){
         const parsedDuration = normalizeReplayDurationSeconds(parsedReplay.durationSeconds);
@@ -9307,9 +9306,7 @@ async function loadFile(file){
     physicsAnalysisState={
       status:"done",
       progress:100,
-      message:parsedReplay.processingMode === "backend-analysis"
-        ? "Backend replay analysis decoded this uploaded file in SPARK. No replay-specific cached data was used."
-        : "Replay parser decoded this uploaded file in SPARK. No replay-specific cached data was used.",
+      message:"Replay analysis complete.",
       frames:parsedReplay.frameCount || 0,
       carSamples:parsedReplay.totalPositionSamples || parsedCounts.positionSamples || 0,
       ballSamples:parsedReplay.totalBallSamples || parsedReplay.frameCount || 0,
@@ -9325,13 +9322,13 @@ async function loadFile(file){
     physicsAnalysisState={
       status:"error",
       progress:100,
-      message:`Replay parser unavailable: ${parsedReplay.error}`,
+      message:`Replay analysis unavailable: ${parsedReplay.error}`,
       frames:0,
       carSamples:0,
       ballSamples:0,
       shotSamples:0,
       tokens:{},
-      warnings:["Position-based screens stay blank when the parser cannot decode the uploaded replay. SPARK does not use saved replay-specific fallback data."]
+      warnings:["Some position-based screens may be blank for this replay."]
     };
     renderPhysicsAnalysis();
   }
@@ -9340,43 +9337,9 @@ async function loadFile(file){
   const spectatorList = replayMeta.spectators.length ? `<br>Excluded spectator(s): ${replayMeta.spectators.join(", ")}` : "";
   const extractedCount = replayMeta.players.length;
   const expectedText = replayMeta.expectedPlayers ? `${replayMeta.expectedPlayers} expected from TeamSize ${replayMeta.teamSize}` : "unknown expected lobby size";
-  const shotSampleText = parsedJson
-    ? `<br><span style='color:#26e68a'>Parsed shot samples:</span> ${parsedJson.shotSampleCount} frame-accurate shot event${parsedJson.shotSampleCount===1?"":"s"} supplied by JSON.`
-    : parsedReplay?.error
-      ? `<br><span style='color:#ff6b6b'>Replay parser unavailable:</span> ${parsedReplay.error}`
-      : parsedCounts.shotSamples
-        ? `<br><span style='color:#26e68a'>Exact shooting samples:</span> ${parsedCounts.shotSamples} frame-accurate shot event${parsedCounts.shotSamples===1?"":"s"} calculated from this upload.`
-        : "";
-  const distanceSampleText = parsedCounts.distanceSamples
-    ? `<br><span style='color:#26e68a'>Distance samples:</span> ${Number(parsedCounts.distanceSamples).toLocaleString()} decoded car-to-ball sample${parsedCounts.distanceSamples===1?"":"s"} calculated from this upload.`
+  const analysisStatus = parsedReplay?.error
+    ? `<br><span style='color:#ff6b6b'>Some position-based views may be unavailable.</span>`
     : "";
-  const positionSampleText = parsedCounts.positionSamples
-    ? `<br><span style='color:#26e68a'>Position samples:</span> ${Number(parsedCounts.positionSamples).toLocaleString()} decoded car-position sample${parsedCounts.positionSamples===1?"":"s"} calculated from this upload.`
-    : "";
-  const exactParserPieces = [
-    parsedCounts.boostPickups ? "boost pickups" : "",
-    parsedCounts.shotSamples ? "shooting samples" : "",
-    parsedCounts.positionSamples ? "position samples" : "",
-    parsedCounts.distanceSamples ? "distance-to-ball samples" : ""
-  ].filter(Boolean);
-  const exactParserSummary = exactParserPieces.length
-    ? `Exact ${exactParserPieces.join(" and ")} were decoded locally with rrrocket.`
-    : "";
-  const boostPickupText = parsedReplay?.error
-    ? ""
-    : parsedCounts.boostPickups
-      ? `<br><span style='color:#26e68a'>Exact boost pickups:</span> ${parsedCounts.boostPickups} player pickup event${parsedCounts.boostPickups===1?"":"s"} calculated from this upload and mapped to individual boost pads.`
-      : "";
-  const addedPlayerText = parsedCounts.addedPlayers
-    ? `<br><span style='color:#ffd000'>Parser player merge:</span> ${parsedCounts.addedPlayers} active player${parsedCounts.addedPlayers===1?"":"s"} came from decoded replay data because metadata names did not line up exactly.`
-    : "";
-  const parserNote = parsedJson
-    ? `Structured replay JSON loaded. Heatmap markers use supplied frame-accurate shot samples when present.`
-    : exactParserSummary
-      ? exactParserSummary
-      : parsedReplay?.error
-        ? `Replay loaded from metadata only because the parser could not run. Position-based screens are intentionally blank rather than using saved or guessed replay data.`
-        : `Replay loaded. The parser ran, but did not decode positional samples from this replay; position-based screens are intentionally blank rather than using saved or guessed replay data.`;
   const statusClockStart = safeScoreboardStartSeconds(data.scoreboardClockStartSeconds);
   const statusClockFinal = safeScoreboardFinalSeconds(data.scoreboardClockFinalSeconds, data.hasOvertime, data.durationSeconds);
   const scoreboardClockLine = Number.isFinite(statusClockStart) && Number.isFinite(statusClockFinal)
@@ -9387,7 +9350,7 @@ async function loadFile(file){
     `Loaded <b>${file.name}</b> (${(file.size/1024/1024).toFixed(2)} MB).<br>` +
     `Replay title: <b>${data.match}</b><br>` +
     scoreboardClockLine +
-    `<span style='color:#ffd000'>Note:</span> ${parserNote}${shotSampleText}${distanceSampleText}${positionSampleText}${boostPickupText}${addedPlayerText}<br>` +
+    `${analysisStatus}<br>` +
     (extractedCount
       ? `Showing <b>${extractedCount}</b> active player${extractedCount===1?"":"s"} (${expectedText}).${spectatorList}<br>` +
         `${playerList}`
