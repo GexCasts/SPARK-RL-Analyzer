@@ -5882,6 +5882,69 @@ function targetFromGoalFacePosition(x, y, result){
   return x < 35 ? "middle left" : x > 65 ? "middle right" : "centre";
 }
 
+function missIsInsideScoringFrame(result, x, y){
+  return result === "miss"
+    && Number.isFinite(x)
+    && Number.isFinite(y)
+    && x >= 0
+    && x <= 100
+    && y >= 0
+    && y <= 100;
+}
+
+function correctedMissGoalFacePosition(x, y, shot={}){
+  const target = String(shot.target || "").toLowerCase();
+  const margin = 14;
+  let nextX = x;
+  let nextY = y;
+
+  if(target.includes("left")){
+    nextX = -margin;
+  }else if(target.includes("right")){
+    nextX = 100 + margin;
+  }else if(target.includes("high") || target.includes("crossbar")){
+    nextY = -margin;
+  }else if(target.includes("low")){
+    nextY = 100 + margin;
+  }else{
+    const edges = [
+      {edge:"left", distance:x},
+      {edge:"right", distance:100 - x},
+      {edge:"top", distance:y},
+      {edge:"bottom", distance:100 - y}
+    ].sort((a, b)=>a.distance - b.distance);
+    const nearest = edges[0]?.edge || "bottom";
+    if(nearest === "left") nextX = -margin;
+    if(nearest === "right") nextX = 100 + margin;
+    if(nearest === "top") nextY = -margin;
+    if(nearest === "bottom") nextY = 100 + margin;
+  }
+
+  return {x:nextX, y:nextY, corrected:nextX !== x || nextY !== y};
+}
+
+function normalizeShotFaceForDisplay(shot, result, x, y){
+  const shotResult = result || normalizeShotResult(shot?.result ?? shot?.outcome);
+  let nextX = Number(x ?? shot?.xPercent ?? shot?.goalFaceX ?? shot?.x);
+  let nextY = Number(y ?? shot?.yPercent ?? shot?.goalFaceY ?? shot?.y);
+  let placementCorrected = false;
+
+  if(missIsInsideScoringFrame(shotResult, nextX, nextY)){
+    const corrected = correctedMissGoalFacePosition(nextX, nextY, shot);
+    nextX = corrected.x;
+    nextY = corrected.y;
+    placementCorrected = corrected.corrected;
+  }
+
+  return {
+    result: shotResult,
+    x: nextX,
+    y: nextY,
+    target: shot?.target || targetFromGoalFacePosition(nextX, nextY, shotResult),
+    placementCorrected
+  };
+}
+
 const goalFaceViewport = {xMin:-10, xMax:110, yMin:-8, yMax:112};
 function goalFaceToViewportPercent(x, y){
   const rangeX = goalFaceViewport.xMax - goalFaceViewport.xMin;
@@ -5913,6 +5976,7 @@ function getFrameAccurateShootingSamples(a){
       if(!Number.isFinite(x) || !Number.isFinite(y)) return;
 
       const result = normalizeShotResult(shot.result ?? shot.outcome);
+      const face = normalizeShotFaceForDisplay(shot, result, x, y);
       const elapsed = Number(shot.elapsed ?? shot.elapsedSeconds ?? shot.timeSeconds ?? 0);
       const nearestOpponentDistance = Number(shot.nearestOpponentDistanceUU ?? shot.nearestOpponentDistance ?? NaN);
       const lastTouchDistanceToNet = Number(shot.lastTouchDistanceToNetUU ?? shot.lastTouchDistanceToNet ?? NaN);
@@ -5925,10 +5989,10 @@ function getFrameAccurateShootingSamples(a){
         player: playerDisplayName(player),
         playerId: player.id,
         team: player.team,
-        x: Math.max(-30, Math.min(130, x)),
-        y: Math.max(-25, Math.min(125, y)),
+        x: Math.max(-30, Math.min(130, face.x)),
+        y: Math.max(-25, Math.min(125, face.y)),
         result,
-        target: shot.target || targetFromGoalFacePosition(x, y, result),
+        target: face.target,
         elapsed: Number.isFinite(scoreboardElapsed) ? scoreboardElapsed : elapsed,
         replayElapsed: elapsed,
         scoreboardSecondsRemaining: Number(shot.scoreboardSecondsRemaining ?? NaN),
@@ -5939,6 +6003,7 @@ function getFrameAccurateShootingSamples(a){
         lastTouchDistanceToNet: Number.isFinite(lastTouchDistanceToNet) ? lastTouchDistanceToNet : null,
         placementSource: shot.placementSource || null,
         placementProjectionSource: shot.placementProjectionSource || null,
+        placementCorrected: face.placementCorrected,
         frameAccurate: true,
         index: i
       });
@@ -7466,7 +7531,7 @@ function renderTimeline(a){
       }else if(result === "save"){
         const defender = cleanReplayName(shot.defender || shot.saver || shot.nearestOpponent || "");
         addEvent(candidates, elapsed, displayName, "Saved shot", "shotEvent", `${displayName}'s shot was saved${defender ? ` by ${defender}` : ""}. Review whether placement, timing, or rebound support made the save too comfortable.`, 72);
-      }else if(isNearMissSample({...shot, result, x:Number(shot.xPercent ?? shot.x), y:Number(shot.yPercent ?? shot.y)})){
+      }else if(isNearMissSample({...shot, ...normalizeShotFaceForDisplay(shot, result)})){
         addEvent(candidates, elapsed, displayName, "Near miss", "shotEvent", `${displayName} had a near miss around the frame. Review contact timing and whether a lower-percentage angle forced the miss.`, 68);
       }else if(result === "miss"){
         addEvent(candidates, elapsed, displayName, "Wide miss", "goalEvent", `${displayName} missed away from the dangerous frame area. Review approach angle and first-touch setup.`, 58);
