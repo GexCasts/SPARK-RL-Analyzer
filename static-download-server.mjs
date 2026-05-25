@@ -14,6 +14,7 @@ const appFileName = "SPARK.html";
 const overlayFileName = path.join("overlay", "SPARK_Overlay.html");
 const logoPath = path.join(here, "assets", "Spark Logo.png");
 const oneNeLogoPath = path.join(here, "assets", "1NE_Vector_edited.png");
+const tileLayoutPath = path.join(here, "SPARK-layout.json");
 const rrrocketVersion = "0.11.1";
 const rrrocketCandidates = [
   process.env.SPARK_RRROCKET_PATH,
@@ -2587,6 +2588,46 @@ async function handleLivePacketRate(req, res){
   res.end(JSON.stringify({ok:true, path:liveApiStatsConfigPath, packetSendRate:rate, changed:next !== current}));
 }
 
+async function handleTileLayout(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+
+  if(req.method === "GET"){
+    try{
+      const text = await fs.readFile(tileLayoutPath, "utf8");
+      const parsed = JSON.parse(text || "{}");
+      res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+      res.end(JSON.stringify({ok:true, fileName:path.basename(tileLayoutPath), ...parsed}));
+    }catch(err){
+      if(err?.code !== "ENOENT") throw err;
+      res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+      res.end(JSON.stringify({ok:false, exists:false, fileName:path.basename(tileLayoutPath)}));
+    }
+    return;
+  }
+
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use GET or POST.");
+    return;
+  }
+
+  const body = await readRequestBody(req, 1024 * 1024);
+  let message = {};
+  try{
+    message = JSON.parse(body.toString("utf8") || "{}");
+  }catch{
+    throw new Error("Invalid layout JSON.");
+  }
+  if(!message || typeof message !== "object") throw new Error("Invalid layout data.");
+  await fs.writeFile(tileLayoutPath, JSON.stringify(message, null, 2), "utf8");
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify({ok:true, fileName:path.basename(tileLayoutPath)}));
+}
+
 function runPowerShell(script){
   return new Promise((resolve, reject)=>{
     execFile("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {windowsHide:true}, (error, stdout, stderr)=>{
@@ -2707,6 +2748,10 @@ server = http.createServer(async (req,res)=>{
     }
     if(url.pathname === "/api/live-packet-rate"){
       await handleLivePacketRate(req, res);
+      return;
+    }
+    if(url.pathname === "/api/tile-layout"){
+      await handleTileLayout(req, res);
       return;
     }
     if(url.pathname === "/api/window-control"){

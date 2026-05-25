@@ -581,22 +581,11 @@ button.unitSwitch{
   padding-top:8px;
   border-top:1px solid rgba(255,255,255,.12);
 }
-.tileMenuPanel button,
-.tileLayoutFileButton{
+.tileMenuPanel button{
   width:100%;
   justify-content:center;
   text-align:center;
 }
-.tileLayoutFileButton{
-  display:block;
-  padding:8px 12px;
-  border:1px solid rgba(255,255,255,.22);
-  border-radius:8px;
-  background:linear-gradient(180deg,#282a2c,#111315);
-  color:#f2f2f2;
-  cursor:pointer;
-}
-.tileLayoutFileButton input{display:none}
 .tileManaged{
   position:relative;
   grid-column:span var(--tile-span,8);
@@ -3742,7 +3731,8 @@ function aggregate(scope){
 
 
 function chart(id,cfg){ if(charts[id])charts[id].destroy(); charts[id]=new Chart($(id),cfg); }
-const tileLayoutStorageKey = "spark.tileLayout.v2";
+const tileLayoutStorageKey = "spark.tileLayout.v3";
+const tileLayoutServerEndpoint = "/api/tile-layout";
 const coachDockStorageKey = "spark.coachDockCollapsed.v1";
 const playerDefaultTileIds = new Set(["boostManagement","positioning","boostMap","shootingMap","keyEvents"]);
 let tileLayoutState = {};
@@ -3764,46 +3754,90 @@ function saveTileLayoutState(){
   localStorage.setItem(tileLayoutStorageKey, JSON.stringify(tileLayoutState));
 }
 
-function tileLayoutExportPayload(scopeKind=currentTileScopeKind()){
+function normalizeTileScopeLayout(layout){
+  const nextLayout = {};
+  if(Array.isArray(layout?.order)) nextLayout.order = layout.order.filter(Boolean);
+  if(Array.isArray(layout?.hidden)) nextLayout.hidden = layout.hidden.filter(Boolean);
+  if(layout?.sizes && typeof layout.sizes === "object") nextLayout.sizes = layout.sizes;
+  return nextLayout;
+}
+
+function normalizeTileLayoutPayload(payload){
+  const source = payload?.layouts || payload?.layoutState || payload;
+  const next = {};
+  if(payload?.scope && payload?.layout){
+    next[payload.scope] = normalizeTileScopeLayout(payload.layout);
+    return next;
+  }
+  if(source && typeof source === "object"){
+    ["overview","player","team"].forEach(scope=>{
+      if(source[scope]) next[scope] = normalizeTileScopeLayout(source[scope]);
+    });
+  }
+  return next;
+}
+
+function tileLayoutExportPayload(){
   return {
     app:"SPARK",
-    type:"spark-tile-layout",
-    version:2,
-    exportedAt:new Date().toISOString(),
-    scope:scopeKind,
-    layout:tileScopeState(scopeKind)
+    type:"spark-tile-layouts",
+    version:3,
+    savedAt:new Date().toISOString(),
+    layouts:tileLayoutState
   };
 }
 
-function downloadCurrentTileLayout(scopeKind=currentTileScopeKind()){
-  const payload = JSON.stringify(tileLayoutExportPayload(scopeKind), null, 2);
-  const blob = new Blob([payload], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `SPARK-${scopeKind}-layout.spark-layout`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(()=>URL.revokeObjectURL(url), 1200);
+async function loadTileLayoutFromServer(){
+  try{
+    const response = await fetch(tileLayoutServerEndpoint, {cache:"no-store"});
+    if(!response.ok) return;
+    const payload = await response.json();
+    if(payload?.ok === false && !payload.layouts && !payload.layout) return;
+    const loaded = normalizeTileLayoutPayload(payload);
+    if(!Object.keys(loaded).length) return;
+    tileLayoutState = loaded;
+    saveTileLayoutState();
+    if(managedTilesReady){
+      applyManagedTiles();
+      resizeVisibleCharts();
+    }
+  }catch{
+    // Local file layouts are available only when SPARK is running from the launcher server.
+  }
 }
 
-async function loadTileLayoutFile(file, scopeKind=currentTileScopeKind()){
-  if(!file) return;
-  const parsed = JSON.parse(await file.text());
-  const layout = parsed?.layout || parsed;
-  if(!layout || typeof layout !== "object") throw new Error("Invalid layout file");
-  const nextLayout = {};
-  if(Array.isArray(layout.order)) nextLayout.order = layout.order.filter(Boolean);
-  if(Array.isArray(layout.hidden)) nextLayout.hidden = layout.hidden.filter(Boolean);
-  if(layout.sizes && typeof layout.sizes === "object") nextLayout.sizes = layout.sizes;
-  tileLayoutState[scopeKind] = nextLayout;
-  saveTileLayoutState();
-  applyManagedTiles();
-  resizeVisibleCharts();
+async function saveCurrentTileLayoutFile(){
+  saveCurrentTileOrder();
+  const response = await fetch(tileLayoutServerEndpoint, {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(tileLayoutExportPayload())
+  });
+  if(!response.ok) throw new Error(await response.text() || "Layout save failed");
+  return response.json();
+}
+
+function defaultTileOrderForScope(scopeKind){
+  if(scopeKind === "player"){
+    return ["positioning","boostMap","boostManagement","shootingMap","keyEvents","impact","shotQuality","physical","distance","comparison","teamRadar","playerTable"];
+  }
+  if(scopeKind === "team"){
+    return ["impact","boostManagement","boostMap","comparison","physical","shotQuality","shootingMap","teamRadar","playerTable","keyEvents","positioning","distance"];
+  }
+  return defaultTileOrder;
+}
+
+function defaultTileSize(tileId, scopeKind){
+  if(tileId === "positioning" || tileId === "boostMap") return {span:12, chartHeight:360};
+  if(tileId === "shootingMap") return {span:12, chartHeight:340};
+  if(tileId === "keyEvents") return {span:8, chartHeight:360};
+  if(tileId === "impact") return {span:16, chartHeight:360};
+  if(tileId === "boostManagement") return {span:8, chartHeight:null};
+  return null;
 }
 
 loadTileLayoutState();
+loadTileLayoutFromServer();
 
 function currentTileScopeKind(){
   if(selected === "overview") return "overview";
@@ -4116,7 +4150,7 @@ function defaultHiddenTileSet(scopeKind){
 function applyTileOrder(scope){
   const dashboard = $("analysisDashboard");
   if(!dashboard) return;
-  const order = Array.isArray(scope.order) ? scope.order : defaultTileOrder;
+  const order = Array.isArray(scope.order) ? scope.order : defaultTileOrderForScope(currentTileScopeKind());
   const byId = new Map(managedTileElements().map(tile=>[tile.dataset.tileId, tile]));
   let anchor = $("gameOverviewCard");
   order.forEach(id=>{
@@ -4133,8 +4167,9 @@ function applyTileOrder(scope){
 
 function applyTileSizes(scope){
   const sizes = scope.sizes || {};
+  const scopeKind = currentTileScopeKind();
   managedTileElements().forEach(tile=>{
-    const size = sizes[tile.dataset.tileId];
+    const size = sizes[tile.dataset.tileId] || defaultTileSize(tile.dataset.tileId, scopeKind);
     const span = Number(size?.span ?? tile.dataset.tileSpan ?? 8);
     tile.style.setProperty("--tile-span", clampValue(span, 4, 24));
     if(Number.isFinite(Number(size?.chartHeight))){
@@ -4158,11 +4193,10 @@ function renderTileMenu(scopeKind, hiddenSet){
         : `<div class="tileAddEmpty">All panels are currently shown.</div>`}
     </div>
     <div class="tileLayoutActions">
-      <button type="button" id="tileSaveLayoutButton">Save layout file</button>
-      <label class="tileLayoutFileButton">Load layout file<input type="file" id="tileLoadLayoutInput" accept=".spark-layout,.json,application/json"></label>
+      <button type="button" id="tileSaveLayoutButton">Save layout</button>
       <button type="button" id="tileResetButton">Reset ${scopeKind} layout</button>
     </div>
-    <div class="tileMenuHint">Close panels from their top-right corner. Add hidden panels here.</div>`;
+    <div class="tileMenuHint">Layouts load automatically from SPARK-layout.json. Saving overwrites that file.</div>`;
 
   panel.querySelectorAll("[data-tile-add]").forEach(button=>{
     button.addEventListener("click", event=>{
@@ -4185,21 +4219,14 @@ function renderTileMenu(scopeKind, hiddenSet){
   }
   const saveLayout = $("tileSaveLayoutButton");
   if(saveLayout){
-    saveLayout.addEventListener("click", event=>{
-      event.stopPropagation();
-      downloadCurrentTileLayout(scopeKind);
-    });
-  }
-  const loadLayout = $("tileLoadLayoutInput");
-  if(loadLayout){
-    loadLayout.addEventListener("change", async event=>{
+    saveLayout.addEventListener("click", async event=>{
       event.stopPropagation();
       try{
-        await loadTileLayoutFile(event.target.files?.[0], scopeKind);
+        await saveCurrentTileLayoutFile();
+        saveLayout.textContent = "Saved";
+        setTimeout(()=>{ if(saveLayout.isConnected) saveLayout.textContent = "Save layout"; }, 1200);
       }catch(error){
-        alert(`Could not load that SPARK layout file: ${error?.message || error}`);
-      }finally{
-        event.target.value = "";
+        alert(`Could not save SPARK-layout.json: ${error?.message || error}`);
       }
     });
   }
