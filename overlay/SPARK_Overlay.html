@@ -51,18 +51,37 @@ html,body{
   letter-spacing:.04em;
   text-transform:uppercase;
   text-shadow:0 2px 0 rgba(0,0,0,.18);
+  gap:14px;
+  overflow:hidden;
 }
 .wing.left{
   left:0;
   justify-content:flex-end;
+  padding-left:24px;
   padding-right:118px;
   clip-path:polygon(0 0,100% 0,84% 100%,0 100%);
 }
 .wing.right{
   right:0;
   justify-content:flex-start;
+  padding-right:24px;
   padding-left:118px;
   clip-path:polygon(0 0,100% 0,100% 100%,16% 100%);
+}
+.teamLogo{
+  width:68px;
+  height:42px;
+  flex:0 0 68px;
+  object-fit:contain;
+  object-position:center;
+  filter:drop-shadow(0 3px 5px rgba(0,0,0,.55));
+}
+.teamLabel{
+  min-width:0;
+  flex:0 1 auto;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 .center{
   position:absolute;
@@ -88,8 +107,14 @@ html,body{
   font-size:42px;
   font-weight:900;
 }
-.score.blue{background:var(--blue)}
-.score.orange{background:var(--orange)}
+.score.blue{
+  background:var(--blue);
+  padding-left:12px;
+}
+.score.orange{
+  background:var(--orange);
+  padding-right:12px;
+}
 .clock{
   grid-column:2;
   font-size:36px;
@@ -208,8 +233,8 @@ html,body{
 <body>
 <div class="stage" id="stage">
   <div class="scorebug">
-    <div class="wing left" id="blueName">Blue</div>
-    <div class="wing right" id="orangeName">Orange</div>
+    <div class="wing left"><img class="teamLogo" id="blueLogo" alt=""><span class="teamLabel" id="blueName">Blue</span></div>
+    <div class="wing right"><span class="teamLabel" id="orangeName">Orange</span><img class="teamLogo" id="orangeLogo" alt=""></div>
     <div class="series left" id="blueSeries"></div>
     <div class="series right" id="orangeSeries"></div>
     <div class="center">
@@ -294,6 +319,10 @@ function renderDots(side, config){
   const maxWins = Math.ceil((Number(config.seriesBestOf) || 5) / 2);
   const score = Math.max(0, Math.min(maxWins, Number(side === "Blue" ? config.blueSeriesScore : config.orangeSeriesScore) || 0));
   return Array.from({length:maxWins}, (_, index)=>`<span class="dot ${side.toLowerCase()} ${index < score ? "filled" : ""}"></span>`).join("");
+}
+function teamLogoFor(side, config){
+  const manual = String(side === "Blue" ? config.blueLogoUrl || "" : config.orangeLogoUrl || "").trim();
+  return manual || "/__1ne_logo.png";
 }
 function extractPlayers(payload){
   const players = valueByKey(payload,["players","Players"]);
@@ -380,6 +409,8 @@ function render(){
   stage.classList.toggle("replayActive", !!state.replay);
   $("blueName").textContent = config.blueTeamName || state.teams.Blue.name || "Blue";
   $("orangeName").textContent = config.orangeTeamName || state.teams.Orange.name || "Orange";
+  $("blueLogo").src = teamLogoFor("Blue", config);
+  $("orangeLogo").src = teamLogoFor("Orange", config);
   $("blueScore").textContent = state.teams.Blue.score || 0;
   $("orangeScore").textContent = state.teams.Orange.score || 0;
   $("clock").textContent = formatClock(state.clock);
