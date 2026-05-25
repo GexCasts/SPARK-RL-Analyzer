@@ -473,9 +473,10 @@ button.unitSwitch{
 .full{grid-column:1 / -1;grid-row:span var(--tile-rows,20)}
 .tileAddTile{
   position:relative;
-  grid-column:span 4;
+  grid-column:1 / -1;
   grid-row:span var(--tile-rows,14);
-  min-height:118px;
+  order:9999;
+  min-height:92px;
   display:grid;
   place-items:center;
   padding:12px;
@@ -3779,7 +3780,7 @@ function updateTileRowSpans(){
     if(tile.hidden || tile.style.display === "none") return;
     tile.style.gridRow = "auto";
     const height = tile.scrollHeight;
-    const minRows = tile.id === "tileAddTile" ? 8 : 14;
+    const minRows = tile.id === "tileAddTile" ? 6 : 14;
     const rows = Math.max(minRows, Math.ceil((height + rowGap) / (rowHeight + rowGap)));
     tile.style.setProperty("--tile-rows", rows);
     tile.style.gridRow = `span ${rows}`;
@@ -4013,14 +4014,17 @@ function applyTileOrder(scope){
   if(!dashboard) return;
   const order = Array.isArray(scope.order) ? scope.order : defaultTileOrder;
   const byId = new Map(managedTileElements().map(tile=>[tile.dataset.tileId, tile]));
-  let anchor = $("tileAddTile") || $("gameOverviewCard");
+  let anchor = $("gameOverviewCard");
   order.forEach(id=>{
     const tile = byId.get(id);
     if(tile && tile !== anchor){
-      anchor.after(tile);
+      if(anchor) anchor.after(tile);
+      else dashboard.appendChild(tile);
       anchor = tile;
     }
   });
+  const addTile = $("tileAddTile");
+  if(addTile) dashboard.appendChild(addTile);
 }
 
 function applyTileSizes(scope){
