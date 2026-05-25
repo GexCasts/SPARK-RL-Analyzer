@@ -687,6 +687,28 @@ button.unitSwitch{
 .tileManaged .goalMap{
   max-height:none;
 }
+.mapTile{
+  display:flex;
+  flex-direction:column;
+}
+.mapTile .help{
+  min-height:18px;
+}
+.mapTile .field{
+  flex:0 0 auto;
+}
+.mapTile .boostLegend,
+.mapTile .positioningLegend{
+  min-height:18px;
+  margin-top:8px;
+  align-items:center;
+  line-height:18px;
+}
+.mapTile .note{
+  min-height:42px;
+  display:flex;
+  align-items:center;
+}
 .chartWrap{height:clamp(240px,24vh,330px);position:relative;overflow:hidden;border-radius:6px}
 .chartWrap.tall{height:clamp(280px,30vh,420px)}
 .chartWrap::before{
@@ -1085,6 +1107,61 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
   opacity:1;
 }
 
+.mapDrawCanvas{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  z-index:28;
+  pointer-events:none;
+}
+.mapDrawingActive .mapDrawCanvas{
+  pointer-events:auto;
+  cursor:crosshair;
+}
+.mapDrawControls{
+  position:absolute;
+  top:8px;
+  left:8px;
+  z-index:32;
+  display:flex;
+  gap:6px;
+  pointer-events:auto;
+}
+.mapDrawButton{
+  width:30px;
+  height:30px;
+  min-width:0;
+  padding:0;
+  border-radius:8px;
+  display:grid;
+  place-items:center;
+  color:#f8fafc;
+  background:linear-gradient(180deg,rgba(28,30,34,.94),rgba(5,6,8,.96));
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:0 6px 16px rgba(0,0,0,.36);
+}
+.mapDrawButton svg{
+  width:16px;
+  height:16px;
+  display:block;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:2.3;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.mapDrawButton.active{
+  color:#070707;
+  border-color:var(--spark-yellow);
+  background:linear-gradient(90deg,var(--spark-yellow),#f4f4f4);
+}
+.mapDrawClear{
+  display:none;
+}
+.mapDrawingActive .mapDrawClear{
+  display:grid;
+}
 
 
 .goalMap{
@@ -2826,7 +2903,7 @@ body.obsOverlayMode #obsOverlayRoot{
       <div class="note" id="boostNote"></div>
     </div>
 
-    <div class="card" id="positioningMapCard" data-tile-id="positioning" data-tile-title="Positioning Heatmap" data-tile-span="12">
+    <div class="card mapTile" id="positioningMapCard" data-tile-id="positioning" data-tile-title="Positioning Heatmap" data-tile-span="12">
       <h2>Positioning Heatmap</h2>
       <div class="help">Selected-player field positioning. Hotter tiles mean repeated routes or holds.</div>
       <div class="field" id="positioningMap"></div>
@@ -2839,7 +2916,7 @@ body.obsOverlayMode #obsOverlayRoot{
       <div class="note" id="positioningMapNote"></div>
     </div>
 
-    <div class="card" data-tile-id="boostMap" data-tile-title="Boost Pickup Map" data-tile-span="12">
+    <div class="card mapTile" id="boostMapCard" data-tile-id="boostMap" data-tile-title="Boost Pickup Map" data-tile-span="12">
       <h2>Boost Pickup Map</h2>
       <div class="help">Boost pickups by pad. Blue net left, orange net right.</div>
       <div class="field" id="boostMap"></div>
@@ -3861,6 +3938,7 @@ function resizeVisibleCharts(){
     });
     window.dispatchEvent(new Event("resize"));
     updateTileRowSpans();
+    document.querySelectorAll(".field,.goalMap").forEach(redrawMapDrawing);
   });
 }
 
@@ -3884,6 +3962,15 @@ function updateTileRowSpans(){
     tile.style.setProperty("--tile-rows", rows);
     tile.style.gridRow = `span ${rows}`;
   });
+  const mapTiles = [$("positioningMapCard"), $("boostMapCard")]
+    .filter(tile=>tile && !tile.hidden && tile.style.display !== "none");
+  if(mapTiles.length === 2){
+    const syncedRows = Math.max(...mapTiles.map(tile=>Number(tile.style.getPropertyValue("--tile-rows")) || 14));
+    mapTiles.forEach(tile=>{
+      tile.style.setProperty("--tile-rows", syncedRows);
+      tile.style.gridRow = `span ${syncedRows}`;
+    });
+  }
 }
 
 function clearTileDropMarkers(){
@@ -5785,6 +5872,7 @@ function renderBoostPickupMap(a){
 
   map.querySelectorAll(".boostPad,.heatmapUnavailable").forEach(e=>e.remove());
   ensureSparkMapWatermark(map);
+  ensureMapDrawingTools(map);
 
   if(liveApiDashboardActive()){
     const unavailable = document.createElement("div");
@@ -5896,6 +5984,165 @@ function ensureSparkMapWatermark(container){
     container.insertBefore(mark, surface ? surface.nextSibling : container.firstChild);
   }
   return mark;
+}
+
+const mapDrawingStates = new WeakMap();
+
+function mapPenIcon(){
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16v4z"></path><path d="M13.5 6.5l4 4"></path></svg>`;
+}
+
+function mapClearIcon(){
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14"></path><path d="M8 6V4h8v2"></path><path d="M7 6l1 14h8l1-14"></path><path d="M10 11v5"></path><path d="M14 11v5"></path></svg>`;
+}
+
+function mapDrawState(container){
+  let state = mapDrawingStates.get(container);
+  if(!state){
+    state = {active:false,strokes:[],current:null,observer:null};
+    mapDrawingStates.set(container, state);
+  }
+  return state;
+}
+
+function mapDrawPoint(container, event){
+  const rect = container.getBoundingClientRect();
+  return {
+    x: clampValue((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1),
+    y: clampValue((event.clientY - rect.top) / Math.max(1, rect.height), 0, 1)
+  };
+}
+
+function redrawMapDrawing(container){
+  const canvas = container?.querySelector?.(":scope > .mapDrawCanvas");
+  if(!canvas) return;
+  const rect = container.getBoundingClientRect();
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
+  const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  const pixelWidth = Math.round(width * dpr);
+  const pixelHeight = Math.round(height * dpr);
+  if(canvas.width !== pixelWidth || canvas.height !== pixelHeight){
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,width,height);
+  const state = mapDrawState(container);
+  const lineWidth = clampValue(Math.round(Math.min(width, height) * 0.013), 7, 13);
+  state.strokes.forEach(stroke=>{
+    if(!stroke || stroke.length < 2) return;
+    ctx.beginPath();
+    stroke.forEach((point, index)=>{
+      const x = point.x * width;
+      const y = point.y * height;
+      if(index === 0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    });
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.globalAlpha = 1;
+    ctx.shadowColor = "rgba(255,255,255,.72)";
+    ctx.shadowBlur = 4;
+    ctx.strokeStyle = "rgba(255,255,255,.82)";
+    ctx.lineWidth = lineWidth + 3;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+  });
+}
+
+function setMapDrawingActive(container, active){
+  const state = mapDrawState(container);
+  state.active = !!active;
+  container.classList.toggle("mapDrawingActive", state.active);
+  const pen = container.querySelector(":scope > .mapDrawControls .mapDrawPen");
+  if(pen){
+    pen.classList.toggle("active", state.active);
+    pen.setAttribute("aria-pressed", String(state.active));
+  }
+}
+
+function ensureMapDrawingTools(container){
+  if(!container) return;
+  const state = mapDrawState(container);
+  let canvas = container.querySelector(":scope > .mapDrawCanvas");
+  if(!canvas){
+    canvas = document.createElement("canvas");
+    canvas.className = "mapDrawCanvas";
+    container.appendChild(canvas);
+  }
+
+  let controls = container.querySelector(":scope > .mapDrawControls");
+  if(!controls){
+    controls = document.createElement("div");
+    controls.className = "mapDrawControls";
+    controls.innerHTML = `
+      <button type="button" class="mapDrawButton mapDrawPen" aria-label="Toggle map drawing" aria-pressed="false">${mapPenIcon()}</button>
+      <button type="button" class="mapDrawButton mapDrawClear" aria-label="Clear map drawing">${mapClearIcon()}</button>
+    `;
+    container.appendChild(controls);
+    controls.querySelector(".mapDrawPen")?.addEventListener("click", event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      setMapDrawingActive(container, !mapDrawState(container).active);
+    });
+    controls.querySelector(".mapDrawClear")?.addEventListener("click", event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      const drawState = mapDrawState(container);
+      drawState.strokes = [];
+      drawState.current = null;
+      redrawMapDrawing(container);
+    });
+  }
+
+  if(state.boundCanvas !== canvas){
+    state.boundCanvas = canvas;
+    canvas.addEventListener("pointerdown", event=>{
+      const drawState = mapDrawState(container);
+      if(!drawState.active || event.button !== 0) return;
+      event.preventDefault();
+      canvas.setPointerCapture?.(event.pointerId);
+      const stroke = [mapDrawPoint(container, event)];
+      drawState.current = stroke;
+      drawState.strokes.push(stroke);
+      redrawMapDrawing(container);
+    });
+    canvas.addEventListener("pointermove", event=>{
+      const drawState = mapDrawState(container);
+      if(!drawState.active || !drawState.current) return;
+      event.preventDefault();
+      const point = mapDrawPoint(container, event);
+      const last = drawState.current[drawState.current.length - 1];
+      const dx = point.x - last.x;
+      const dy = point.y - last.y;
+      if((dx*dx + dy*dy) < 0.000004) return;
+      drawState.current.push(point);
+      redrawMapDrawing(container);
+    });
+    const finishStroke = event=>{
+      const drawState = mapDrawState(container);
+      if(drawState.current){
+        event.preventDefault();
+        drawState.current = null;
+        redrawMapDrawing(container);
+      }
+    };
+    canvas.addEventListener("pointerup", finishStroke);
+    canvas.addEventListener("pointercancel", finishStroke);
+    canvas.addEventListener("pointerleave", finishStroke);
+  }
+
+  if(!state.observer && "ResizeObserver" in window){
+    state.observer = new ResizeObserver(()=>redrawMapDrawing(container));
+    state.observer.observe(container);
+  }
+  setMapDrawingActive(container, state.active);
+  redrawMapDrawing(container);
 }
 
 
@@ -6245,6 +6492,7 @@ function renderShootingHeatmap(a){
     <div class="goalZoneLabel" style="right:11%;top:10%">RIGHT POST</div>
     <div class="goalZoneLabel" style="left:46%;top:10%">CROSSBAR</div>
   `;
+  ensureMapDrawingTools(el);
 
   const samples = makeShootingSamples(a);
 
@@ -7169,6 +7417,7 @@ function renderPositioningHeatmap(a){
 
   map.querySelectorAll(".positioningGridCanvas,.heatmapUnavailable").forEach(e=>e.remove());
   ensureSparkMapWatermark(map);
+  ensureMapDrawingTools(map);
 
   if(liveApiDashboardActive()){
     const unavailable = document.createElement("div");
