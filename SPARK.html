@@ -507,7 +507,13 @@ button.unitSwitch{
   box-shadow:0 14px 34px rgba(0,0,0,.42),0 0 24px rgba(255,208,0,.34);
 }
 .tileMenu{position:relative}
-.tileAddTile .tileMenu{position:static}
+.tileAddTile .tileMenu{
+  position:static;
+  display:grid;
+  justify-items:center;
+  gap:12px;
+  width:100%;
+}
 .tileMenu > button{min-width:118px}
 .tileAddTile .tileMenu > button{min-width:0}
 .tileMenuPanel{
@@ -526,8 +532,13 @@ button.unitSwitch{
   box-shadow:0 18px 36px rgba(0,0,0,.42);
 }
 .tileAddTile .tileMenuPanel{
-  right:10px;
-  top:calc(100% + 8px);
+  position:static;
+  width:min(100%,760px);
+  min-width:0;
+  max-height:none;
+  overflow:visible;
+  box-shadow:inset 0 1px rgba(255,255,255,.05),0 10px 26px rgba(0,0,0,.24);
+  cursor:auto;
 }
 .tileMenu.open .tileMenuPanel{display:grid;gap:8px}
 .tileMenuPanel label{
@@ -540,6 +551,29 @@ button.unitSwitch{
 }
 .tileMenuPanel input{accent-color:var(--spark-yellow)}
 .tileMenuHint{color:var(--muted);font-size:11px;line-height:1.35;margin-top:4px}
+.tileAddGrid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:8px;
+}
+.tileAddOption{
+  width:100%;
+  justify-content:center;
+  min-height:38px;
+  border-color:rgba(255,208,0,.5);
+  background:linear-gradient(180deg,#303236,#141517);
+}
+.tileAddOption:hover{
+  border-color:rgba(255,208,0,.9);
+  color:var(--spark-yellow);
+  box-shadow:0 0 18px rgba(255,208,0,.16);
+}
+.tileAddEmpty{
+  color:var(--muted);
+  font-size:12px;
+  text-align:center;
+  padding:8px;
+}
 .tileLayoutActions{
   display:grid;
   gap:8px;
@@ -599,6 +633,37 @@ button.unitSwitch{
 .tileManaged > h2{
   user-select:none;
   padding-right:42px;
+}
+.tileCloseButton{
+  position:absolute;
+  top:8px;
+  right:8px;
+  z-index:12;
+  width:28px;
+  height:28px;
+  min-width:0;
+  padding:0;
+  border-radius:8px;
+  display:grid;
+  place-items:center;
+  font-size:16px;
+  line-height:1;
+  opacity:0;
+  pointer-events:none;
+  cursor:pointer;
+  transform:translateY(-2px);
+  transition:opacity .16s ease,transform .16s ease,border-color .16s ease;
+}
+.tileManaged:hover .tileCloseButton,
+.tileCloseButton:focus-visible{
+  opacity:.9;
+  pointer-events:auto;
+  transform:translateY(0);
+}
+.tileCloseButton:hover{
+  opacity:1;
+  border-color:rgba(255,208,0,.92);
+  color:var(--spark-yellow);
 }
 .tileResizeHandle{
   position:absolute;
@@ -3848,6 +3913,32 @@ function saveTileSize(tile){
   saveTileLayoutState();
 }
 
+function hideTileInCurrentScope(tile){
+  const id = tile?.dataset?.tileId;
+  if(!id || id === "gameOverview") return;
+  const scopeKind = currentTileScopeKind();
+  const scope = tileScopeState(scopeKind);
+  const hidden = new Set(scope.hidden || [...defaultHiddenTileSet(scopeKind)]);
+  hidden.add(id);
+  scope.hidden = [...hidden];
+  saveTileLayoutState();
+  applyManagedTiles();
+}
+
+function showTileInScope(tileId, scopeKind=currentTileScopeKind()){
+  if(!tileId) return;
+  const scope = tileScopeState(scopeKind);
+  const hidden = new Set(scope.hidden || [...defaultHiddenTileSet(scopeKind)]);
+  hidden.delete(tileId);
+  scope.hidden = [...hidden];
+  saveTileLayoutState();
+  applyManagedTiles();
+  requestAnimationFrame(()=>{
+    const tile = managedTileElements().find(candidate=>candidate.dataset.tileId === tileId);
+    tile?.scrollIntoView?.({block:"nearest",inline:"nearest",behavior:"smooth"});
+  });
+}
+
 function beginTileResize(event, tile){
   event.preventDefault();
   event.stopPropagation();
@@ -3938,6 +4029,17 @@ function initializeManagedTiles(){
     tile.style.setProperty("--tile-span", Number(tile.dataset.tileSpan) || 8);
     tile.addEventListener("dragstart", event=>beginTileDrag(event, tile));
     tile.addEventListener("dragend", ()=>finishTileDrag(tile));
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "tileCloseButton";
+    closeButton.setAttribute("aria-label", `Close ${tile.dataset.tileTitle || "panel"}`);
+    closeButton.textContent = "x";
+    closeButton.addEventListener("click", event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      hideTileInCurrentScope(tile);
+    });
+    tile.appendChild(closeButton);
     const handle = document.createElement("span");
     handle.className = "tileResizeHandle";
     handle.title = "Resize tile";
@@ -3976,6 +4078,7 @@ function initializeManagedTiles(){
     const toggleMenu = event=>{
       event.stopPropagation();
       menu.classList.toggle("open");
+      requestAnimationFrame(updateTileRowSpans);
     };
     button.addEventListener("click", toggleMenu);
     if(addTile){
@@ -3991,6 +4094,7 @@ function initializeManagedTiles(){
     }
     document.addEventListener("click", event=>{
       if(!menu.contains(event.target)) menu.classList.remove("open");
+      requestAnimationFrame(updateTileRowSpans);
     });
   }
 }
@@ -4046,27 +4150,28 @@ function renderTileMenu(scopeKind, hiddenSet){
   if(!panel) return;
   const availableTiles = managedTileElements()
     .filter(tile=>tile.dataset.tileId !== "gameOverview" && tileIsAvailableInScope(tile, scopeKind));
-  panel.innerHTML = availableTiles.map(tile=>{
-    const id = tile.dataset.tileId;
-    const checked = !hiddenSet.has(id);
-    return `<label><input type="checkbox" data-tile-toggle="${id}" ${checked ? "checked" : ""}>${tile.dataset.tileTitle || id}</label>`;
-  }).join("") + `
+  const hiddenTiles = availableTiles.filter(tile=>hiddenSet.has(tile.dataset.tileId));
+  panel.innerHTML = `
+    <div class="tileAddGrid">
+      ${hiddenTiles.length
+        ? hiddenTiles.map(tile=>`<button type="button" class="tileAddOption" data-tile-add="${tile.dataset.tileId}">+ ${tile.dataset.tileTitle || tile.dataset.tileId}</button>`).join("")
+        : `<div class="tileAddEmpty">All panels are currently shown.</div>`}
+    </div>
     <div class="tileLayoutActions">
       <button type="button" id="tileSaveLayoutButton">Save layout file</button>
       <label class="tileLayoutFileButton">Load layout file<input type="file" id="tileLoadLayoutInput" accept=".spark-layout,.json,application/json"></label>
       <button type="button" id="tileResetButton">Reset ${scopeKind} layout</button>
     </div>
-    <div class="tileMenuHint">Use the checkboxes to add or remove tiles. Layout files store this ${scopeKind} view's tile order, hidden tiles, and sizes.</div>`;
+    <div class="tileMenuHint">Close panels from their top-right corner. Add hidden panels here.</div>`;
 
-  panel.querySelectorAll("[data-tile-toggle]").forEach(input=>{
-    input.addEventListener("change", ()=>{
-      const scope = tileScopeState(scopeKind);
-      const nextHidden = new Set(scope.hidden || [...defaultHiddenTileSet(scopeKind)]);
-      if(input.checked) nextHidden.delete(input.dataset.tileToggle);
-      else nextHidden.add(input.dataset.tileToggle);
-      scope.hidden = [...nextHidden];
-      saveTileLayoutState();
-      applyManagedTiles();
+  panel.querySelectorAll("[data-tile-add]").forEach(button=>{
+    button.addEventListener("click", event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      showTileInScope(button.dataset.tileAdd, scopeKind);
+      const menu = $("tileMenu");
+      if(menu) menu.classList.remove("open");
+      requestAnimationFrame(updateTileRowSpans);
     });
   });
   const reset = $("tileResetButton");
