@@ -5218,7 +5218,9 @@ function replayObservedDurationSeconds(){
       player?.ballDistanceSamples,
       player?.positionSamples,
       player?.carSamples,
-      player?.shotSamples
+      player?.shotSamples,
+      player?.touchEvents,
+      player?.ballSamples
     ].forEach(samples=>{
       if(Array.isArray(samples)) samples.forEach(addElapsed);
     });
@@ -5324,14 +5326,36 @@ function allReplayTouchEvents(){
   return events.sort((left,right)=>left.elapsed - right.elapsed);
 }
 
+function allReplayBallSamples(){
+  const samples = [];
+  (data?.players || []).forEach(player=>{
+    (Array.isArray(player?.ballSamples) ? player.ballSamples : []).forEach(sample=>{
+      if(!isGameplayDataSample(sample)) return;
+      const elapsed = sampleElapsedSeconds(sample);
+      if(!Number.isFinite(elapsed)) return;
+      const ballLocation = sampleBallLocation(sample) || vectorFromApi(sample?.location ?? sample?.position);
+      if(!ballLocation || !Number.isFinite(ballLocation.x) || !Number.isFinite(ballLocation.y)) return;
+      samples.push({
+        elapsed,
+        player,
+        playerId:player.id,
+        playerName:playerDisplayName(player),
+        team:player.team || "",
+        ballLocation
+      });
+    });
+  });
+  return samples.sort((left,right)=>left.elapsed - right.elapsed);
+}
+
 function allReplayPositionFrames(){
   const frames = [];
   (data?.players || []).forEach(player=>{
-    const samples = Array.isArray(player?.distanceToBallSamples)
-      ? player.distanceToBallSamples
-      : Array.isArray(player?.ballDistanceSamples)
-        ? player.ballDistanceSamples
-        : [];
+    const samples = [
+      ...(Array.isArray(player?.positionSamples) ? player.positionSamples : []),
+      ...(Array.isArray(player?.distanceToBallSamples) ? player.distanceToBallSamples : []),
+      ...(Array.isArray(player?.ballDistanceSamples) ? player.ballDistanceSamples : [])
+    ];
     samples.forEach(sample=>{
       if(!isGameplayDataSample(sample)) return;
       const elapsed = sampleElapsedSeconds(sample);
@@ -5350,7 +5374,7 @@ function allReplayPositionFrames(){
       });
     });
   });
-  return frames.sort((left,right)=>left.elapsed - right.elapsed);
+  return [...frames, ...allReplayBallSamples()].sort((left,right)=>left.elapsed - right.elapsed);
 }
 
 function ballLocationAtElapsed(frames, elapsed, tolerance=0.75){
@@ -5424,6 +5448,52 @@ function nearestPlayerToLocation(frames, location, team=null){
   return best;
 }
 
+function replayGoalElapsedSamples(){
+  const goals = [];
+  (data?.players || []).forEach(player=>{
+    (Array.isArray(player?.shotSamples) ? player.shotSamples : []).forEach(shot=>{
+      const result = normalizeShotResult(shot.result ?? shot.outcome);
+      if(result !== "goal") return;
+      const elapsed = Number(shot.elapsedSeconds ?? shot.elapsed ?? shot.timeSeconds ?? NaN);
+      const fallbackElapsed = scoreboardElapsedFromSample(shot);
+      const safeElapsed = Number.isFinite(elapsed) ? elapsed : fallbackElapsed;
+      if(!Number.isFinite(safeElapsed)) return;
+      goals.push({
+        elapsed:safeElapsed,
+        player,
+        playerId:player.id,
+        playerName:playerDisplayName(player),
+        team:player.team || ""
+      });
+    });
+  });
+  return goals.sort((left,right)=>left.elapsed - right.elapsed);
+}
+
+function kickoffStartCandidates(touches){
+  const duration = replayObservedDurationSeconds();
+  const starts = [0];
+  replayGoalElapsedSamples().forEach(goal=>{
+    const nextTouch = touches.find(touch=>touch.elapsed > goal.elapsed + 1 && touch.elapsed < goal.elapsed + 14);
+    if(nextTouch) starts.push(nextTouch.elapsed);
+  });
+  return starts
+    .filter(elapsed=>Number.isFinite(elapsed) && elapsed >= 0 && elapsed <= duration + 1)
+    .sort((left,right)=>left - right);
+}
+
+function firstTouchNearElapsed(touches, elapsed, before=0.75, after=9){
+  return touches.find(touch=>touch.elapsed >= elapsed - before && touch.elapsed <= elapsed + after) || null;
+}
+
+function nextTouchBallLocation(touches, elapsed, maxDelta=2.6){
+  const next = touches.find(touch=>{
+    if(touch.elapsed <= elapsed + 0.15 || touch.elapsed > elapsed + maxDelta) return false;
+    return vectorFromApi(touch.ballLocation || touch.location || touch.position);
+  });
+  return next ? vectorFromApi(next.ballLocation || next.location || next.position) : null;
+}
+
 function buildKickoffOutcomes(scope){
   if(liveApiDashboardActive()){
     return {available:false, reason:"Kickoff outcome analysis is available after uploading a replay."};
@@ -5431,39 +5501,63 @@ function buildKickoffOutcomes(scope){
 
   const touches = allReplayTouchEvents();
   const frames = allReplayPositionFrames();
-  if(!touches.length || !frames.length){
-    return {available:false, reason:"Kickoff outcomes are available after loading a replay with touch and position data."};
+  if(!touches.length){
+    return {available:false, reason:"Kickoff outcomes need decoded touch data from the uploaded replay."};
   }
 
   const selectedPlayers = new Set((scope?.ps || []).map(player=>player.id));
   const selectedTeams = new Set((scope?.ps || []).map(player=>player.team).filter(Boolean));
   const scopeIsTeam = !!scope?.isTeam;
   const centerTouches = [];
-  touches.forEach(touch=>{
-    const location = vectorFromApi(touch.ballLocation || touch.location || touch.position);
-    const nearCenter = location
-      ? Math.hypot(Number(location.x) || 0, Number(location.y) || 0) <= 1450
-      : true;
-    if(!nearCenter) return;
+  kickoffStartCandidates(touches).forEach(startElapsed=>{
+    const firstTouch = firstTouchNearElapsed(touches, startElapsed);
+    if(!firstTouch) return;
     const previous = centerTouches[centerTouches.length - 1];
-    if(previous && touch.elapsed - previous.elapsed < 7.5) return;
-    centerTouches.push({...touch, kickoffBallLocation:location || ballLocationAtElapsed(frames, touch.elapsed, 0.6)});
+    if(previous && Math.abs(firstTouch.elapsed - previous.elapsed) < 7.5) return;
+    const location = vectorFromApi(firstTouch.ballLocation || firstTouch.location || firstTouch.position);
+    const frameLocation = ballLocationAtElapsed(frames, firstTouch.elapsed, 0.9);
+    centerTouches.push({
+      ...firstTouch,
+      kickoffBallLocation:location || frameLocation || {x:0,y:0,z:0},
+      kickoffBallFromData:!!(location || frameLocation)
+    });
   });
 
-  const outcomes = centerTouches.map((touch, index)=>{
+  touches.forEach(touch=>{
+    const location = vectorFromApi(touch.ballLocation || touch.location || touch.position);
+    if(!location) return;
+    const nearCenter = location
+      ? Math.hypot(Number(location.x) || 0, Number(location.y) || 0) <= 1450
+      : false;
+    if(!nearCenter) return;
+    const previous = centerTouches[centerTouches.length - 1];
+    if(previous && Math.abs(touch.elapsed - previous.elapsed) < 7.5) return;
+    const frameLocation = ballLocationAtElapsed(frames, touch.elapsed, 0.6);
+    centerTouches.push({...touch, kickoffBallLocation:location || frameLocation, kickoffBallFromData:!!(location || frameLocation)});
+  });
+  centerTouches.sort((left,right)=>left.elapsed - right.elapsed);
+  const dedupedCenterTouches = centerTouches.filter((touch, index, all)=>
+    index === 0 || touch.elapsed - all[index - 1].elapsed >= 7.5
+  );
+
+  const outcomes = dedupedCenterTouches.map((touch, index)=>{
     const elapsed = touch.elapsed;
     const startBall = touch.kickoffBallLocation || ballLocationAtElapsed(frames, elapsed, 0.6) || {x:0,y:0,z:0};
-    const afterBall =
+    const afterBallFromData =
       ballLocationAtElapsed(frames, elapsed + 1.15, 0.45) ||
       ballLocationAtElapsed(frames, elapsed + 1.65, 0.6) ||
       ballLocationAtElapsed(frames, elapsed + 2.1, 0.75) ||
-      startBall;
+      nextTouchBallLocation(touches, elapsed, 3.2);
+    const afterBall = afterBallFromData || startBall;
+    const hasBallPath = !!touch.kickoffBallFromData && !!afterBallFromData;
     const displacement = {
       x:(afterBall.x || 0) - (startBall.x || 0),
       y:(afterBall.y || 0) - (startBall.y || 0),
       z:(afterBall.z || 0) - (startBall.z || 0)
     };
-    const direction = kickoffDirectionFromDisplacement(displacement);
+    const direction = hasBallPath
+      ? kickoffDirectionFromDisplacement(displacement)
+      : {label:"from center touch", half:null, lane:"unknown", dead:false};
     const movedUU = Math.hypot(displacement.x, displacement.y);
     const nearbyAtTouch = playerFramesAtElapsed(frames, elapsed, 0.65)
       .map(frame=>({...frame, distanceToBall:Math.hypot(frame.carLocation.x - startBall.x, frame.carLocation.y - startBall.y)}))
@@ -5491,7 +5585,7 @@ function buildKickoffOutcomes(scope){
       targetTeam &&
       targetTeam !== touch.team &&
       movedUU > 900;
-    const deadBall = direction.dead || (movedUU < 650 && Math.hypot(afterBall.x || 0, afterBall.y || 0) < 1000);
+    const deadBall = hasBallPath && (direction.dead || (movedUU < 650 && Math.hypot(afterBall.x || 0, afterBall.y || 0) < 1000));
     const scopeFocus = scopeIsTeam
       ? selectedTeams.has(touch.team) || (targetTeam && selectedTeams.has(targetTeam))
       : selectedPlayers.has(touch.playerId) || challengers.some(frame=>selectedPlayers.has(frame.playerId)) || (targetPlayer && selectedPlayers.has(targetPlayer.playerId));
@@ -5503,6 +5597,7 @@ function buildKickoffOutcomes(scope){
       firstTouch:touch,
       direction,
       movedUU,
+      hasBallPath,
       targetPlayer,
       receiverInDirection,
       likelyBackCorner,
@@ -5539,13 +5634,16 @@ function renderKickoffOutcomes(scope, isTeamView){
     if(outcome.likelyBackCorner) badges.push(`<span class="kickoffBadge good">back-corner possession</span>`);
     if(outcome.fakeLook) badges.push(`<span class="kickoffBadge warn">fake look</span>`);
     if(outcome.pinch) badges.push(`<span class="kickoffBadge warn">pinch / dual challenge</span>`);
+    if(!outcome.hasBallPath) badges.push(`<span class="kickoffBadge">touch read</span>`);
     if(outcome.focus) badges.push(`<span class="kickoffBadge">selected scope</span>`);
     const receiver = outcome.targetPlayer
       ? `Receiver read: ${escapeHtml(outcome.targetPlayer.playerName)} (${formatDistanceFromUU(outcome.targetPlayer.distance)} away).`
-      : "No clear receiver in that direction.";
+      : outcome.hasBallPath ? "No clear receiver in that direction." : "Ball path not available in decoded samples.";
     const title = outcome.deadBall
       ? `${escapeHtml(outcome.firstTouch.playerName)} created a dead ball`
-      : `${escapeHtml(outcome.firstTouch.playerName)} sent it ${escapeHtml(outcome.direction.label)}`;
+      : outcome.hasBallPath
+        ? `${escapeHtml(outcome.firstTouch.playerName)} sent it ${escapeHtml(outcome.direction.label)}`
+        : `${escapeHtml(outcome.firstTouch.playerName)} logged first kickoff touch`;
     return `
       <div class="kickoffItem ${outcome.focus ? "focus" : ""}">
         <div class="kickoffTop">
@@ -5553,7 +5651,7 @@ function renderKickoffOutcomes(scope, isTeamView){
           <span class="kickoffTag">${escapeHtml(outcome.firstTouch.team || "Team")}</span>
         </div>
         <div class="kickoffTitle">${title}</div>
-        <div class="kickoffMeta">Ball moved ${formatDistanceFromUU(outcome.movedUU)} after first contact. ${receiver}</div>
+        <div class="kickoffMeta">${outcome.hasBallPath ? `Ball moved ${formatDistanceFromUU(outcome.movedUU)} after first contact.` : "First-touch timing detected from replay touches."} ${receiver}</div>
         <div class="kickoffBadges">${badges.join("") || `<span class="kickoffBadge">standard kickoff</span>`}</div>
       </div>`;
   }).join("");
@@ -9075,6 +9173,9 @@ function applyParsedShotSamplesToData(parsed){
     }
     if(player && Array.isArray(parsedPlayer.positionSamples)){
       player.positionSamples = parsedPlayer.positionSamples;
+    }
+    if(player && Array.isArray(parsedPlayer.ballSamples)){
+      player.ballSamples = parsedPlayer.ballSamples;
     }
     if(player && Array.isArray(parsedPlayer.distanceToBallSamples)){
       player.distanceToBallSamples = parsedPlayer.distanceToBallSamples;
