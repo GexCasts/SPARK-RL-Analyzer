@@ -1440,6 +1440,7 @@ tbody tr:hover td,
   border-radius:50%;
   pointer-events:none;
   mix-blend-mode:plus-lighter;
+  opacity:.7;
   z-index:2;
   box-shadow:0 0 18px currentColor;
 }
@@ -1519,7 +1520,7 @@ tbody tr:hover td,
 .shotPoint.outside.post{color:oklch(86% .16 86);background:transparent}
 .shotPoint.outside::after{content:""}
 .shotPoint.expanded{
-  width:270px;
+  width:min(270px, calc(100% - 20px));
   min-height:122px;
   height:auto;
   padding:12px 14px;
@@ -1554,6 +1555,7 @@ tbody tr:hover td,
   line-height:1.5;
   text-align:left;
   white-space:normal;
+  overflow-wrap:anywhere;
   transition:opacity .12s ease .06s;
 }
 .shotInfo b{
@@ -1576,7 +1578,7 @@ tbody tr:hover td,
 }
 .shotPoint.post.expanded,
 .shotPoint.outside.expanded{
-  width:270px;
+  width:min(270px, calc(100% - 20px));
   min-height:122px;
   height:auto;
 }
@@ -7038,6 +7040,35 @@ function optionalDistanceText(uu){
   return Number.isFinite(uu) ? formatDistanceFromUU(uu) : "Unavailable";
 }
 
+function positionShotPopupInBounds(dot, map){
+  if(!dot || !map) return;
+
+  const mapRect = map.getBoundingClientRect();
+  if(!mapRect.width || !mapRect.height) return;
+
+  const margin = 10;
+  const gap = 14;
+  const markerX = (Number(dot.dataset.markerX) / 100) * mapRect.width;
+  const markerY = (Number(dot.dataset.markerY) / 100) * mapRect.height;
+  if(!Number.isFinite(markerX) || !Number.isFinite(markerY)) return;
+
+  const boxW = Math.min(dot.offsetWidth || 270, Math.max(140, mapRect.width - margin * 2));
+  const boxH = Math.min(dot.offsetHeight || 122, Math.max(96, mapRect.height - margin * 2));
+  const preferLeft = markerX > mapRect.width * .58;
+  let left = preferLeft ? markerX - boxW - gap : markerX + gap;
+  let top = markerY - boxH / 2;
+
+  if(left < margin || left + boxW > mapRect.width - margin){
+    left = markerX - boxW / 2;
+  }
+
+  left = Math.max(margin, Math.min(left, mapRect.width - boxW - margin));
+  top = Math.max(margin, Math.min(top, mapRect.height - boxH - margin));
+
+  dot.style.setProperty("--expandX", `${Math.round(left - markerX)}px`);
+  dot.style.setProperty("--expandY", `${Math.round(top - markerY)}px`);
+}
+
 function getFrameAccurateShootingSamples(a){
   const players = Array.isArray(a?.ps) ? a.ps : (a ? [a] : []);
   const samples = [];
@@ -7299,6 +7330,8 @@ function renderShootingHeatmap(a){
     dot.className = `shotPoint ${s.result}${outside ? " outside" : ""}`;
     dot.style.left = markerX + "%";
     dot.style.top = markerY + "%";
+    dot.dataset.markerX = markerX;
+    dot.dataset.markerY = markerY;
     dot.style.setProperty("--expandX", markerX > 72 ? "-92%" : markerX < 28 ? "-8%" : "-50%");
     dot.style.setProperty("--expandY", markerY > 72 ? "-92%" : markerY < 28 ? "-8%" : "-50%");
     if(outside){
@@ -7338,6 +7371,7 @@ function renderShootingHeatmap(a){
 
     dot.addEventListener("mouseenter", ()=>{
       dot.classList.add("expanded");
+      positionShotPopupInBounds(dot, el);
     });
 
     dot.addEventListener("mouseleave", ()=>{
