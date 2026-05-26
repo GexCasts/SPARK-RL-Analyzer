@@ -17,6 +17,7 @@
   --spark-graphite:#3f3f3f; --spark-steel:#8f8f8f; --spark-chrome:#f2f2f2;
   --spark-watermark:url("assets/SPARK%20app%20logo%20transparent.png");
   --spark-window-top-frame:48px;
+  --spark-header-height:78px;
   --spark-window-side-frame:2px;
   --spark-window-inner-radius:18px;
   --spark-focus:0 0 0 2px rgba(255,208,0,.88),0 0 0 5px rgba(255,208,0,.16);
@@ -220,28 +221,45 @@ body::after{
   background:linear-gradient(180deg,#ff6555,#8f1515);
 }
 header{
-  min-height:82px;
-  padding:12px 24px;
-  border-bottom:1px solid rgba(255,208,0,.34);
+  position:fixed;
+  left:var(--spark-window-side-frame);
+  right:var(--spark-window-side-frame);
+  top:var(--spark-window-top-frame);
+  z-index:90000;
+  height:var(--spark-header-height);
+  padding:10px 24px;
+  border-bottom:1px solid oklch(84% .15 86 / .34);
   background:
-    linear-gradient(90deg,rgba(255,208,0,.15),transparent 28%,rgba(255,255,255,.07) 52%,transparent 78%),
-    rgba(12,12,12,.96);
-  position:sticky;top:var(--spark-window-top-frame);z-index:20;backdrop-filter:blur(10px);
-  box-shadow:0 8px 28px rgba(0,0,0,.34);
+    linear-gradient(90deg,oklch(65% .16 244 / .16),transparent 28%,transparent 72%,oklch(72% .18 35 / .15)),
+    radial-gradient(circle at 18% 40%,oklch(86% .16 86 / .16),transparent 32%),
+    linear-gradient(180deg,oklch(18% .016 250 / .98),oklch(10% .012 250 / .98));
+  backdrop-filter:blur(12px);
+  box-shadow:0 10px 28px oklch(0% 0 0 / .38), inset 0 1px 0 oklch(100% .006 80 / .08);
   border-radius:var(--spark-window-inner-radius) var(--spark-window-inner-radius) 0 0;
   overflow:hidden;
 }
+header::before{
+  content:"";
+  position:absolute;
+  inset:auto 24px 0;
+  height:2px;
+  background:linear-gradient(90deg,oklch(76% .14 230 / .5),oklch(88% .16 86 / .85),oklch(72% .18 35 / .55));
+  opacity:.82;
+}
 
 .headerBrand{
+  position:relative;
+  z-index:1;
+  height:100%;
   display:flex;
   align-items:center;
-  gap:14px;
+  gap:16px;
 }
 .logoSlot{
-  --logo-size:clamp(210px,16vw,300px);
-  --logo-offset:clamp(47px,3.6vw,68px);
+  --logo-size:clamp(126px,9vw,168px);
+  --logo-offset:clamp(26px,2vw,38px);
   width:var(--logo-size);
-  height:clamp(106px,8.1vw,154px);
+  height:58px;
   flex:0 0 var(--logo-size);
   position:relative;
   overflow:visible;
@@ -263,13 +281,13 @@ header{
   filter:drop-shadow(0 8px 14px rgba(0,0,0,.42));
   display:block;
 }
-h1{margin:0;font-size:clamp(20px,1.4vw,28px);letter-spacing:.06em;color:var(--spark-chrome);text-shadow:0 0 18px rgba(255,208,0,.25)}
+h1{margin:0;font-size:clamp(18px,1.15vw,24px);letter-spacing:.06em;color:oklch(95% .008 240);text-shadow:0 0 18px oklch(86% .16 86 / .18)}
 
-.sub{margin-top:4px;color:var(--muted);font-size:clamp(11px,.72vw,13px)}
+.sub{margin-top:3px;color:oklch(78% .024 240);font-size:clamp(11px,.68vw,12px);max-width:92ch}
 .app{
   width:min(100%,2560px);
   margin:0 auto;
-  padding:34px 14px 14px;
+  padding:calc(var(--spark-header-height) + 18px) 14px 14px;
   display:grid;
   gap:14px;
 }
@@ -2172,11 +2190,24 @@ tbody tr:hover td,
   position:absolute;
   right:12px;
   top:7px;
-  min-height:24px;
-  padding:2px 8px;
-  border-radius:999px;
-  font-size:11px;
+  width:30px;
+  height:30px;
+  min-width:0;
+  min-height:0;
+  padding:0;
+  border-radius:9px;
   z-index:2;
+  display:grid;
+  place-items:center;
+}
+.coachDockToggle svg{
+  width:16px;
+  height:16px;
+  stroke:currentColor;
+  stroke-width:2.4;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  fill:none;
 }
 .coachTile{
   min-height:100%;
@@ -3127,7 +3158,8 @@ body.obsOverlayMode #obsOverlayRoot{
   .kpis{grid-template-columns:repeat(3,1fr)}
 }
 @media (max-width:900px){
-  header{height:auto}.topbar{grid-template-columns:1fr}
+  :root{--spark-header-height:92px}
+  .topbar{grid-template-columns:1fr}
   .replayDropTop,.replayNavTop,.replayNavControls{grid-template-columns:1fr;display:grid}
   .replayDropPanel .liveApiControls{grid-template-columns:1fr}
   .replayDropPanel .liveRateControl{justify-self:stretch}
@@ -3147,10 +3179,11 @@ body.obsOverlayMode #obsOverlayRoot{
   .overviewStatGrid{grid-template-columns:1fr}
 }
 @media (max-width:640px){
-  .app{padding:28px 8px 220px}
+  :root{--spark-header-height:96px}
+  .app{padding:calc(var(--spark-header-height) + 14px) 8px 220px}
   header{padding:10px 14px}
   .headerBrand{align-items:flex-start}
-  .logoSlot{--logo-size:clamp(120px,34vw,180px);height:74px}
+  .logoSlot{--logo-size:clamp(94px,28vw,128px);height:48px}
   .sparkWindowFrame{padding:0 8px 0 12px;grid-template-columns:minmax(0,1fr) auto}
   .sparkWindowTitle small{display:none}
   .sparkWindowControl{width:34px;height:28px}
@@ -4779,6 +4812,13 @@ window.toggleCoachDock = forceState => {
   localStorage.setItem(coachDockStorageKey, coachDockCollapsed ? "1" : "0");
   const dock = $("coachCards");
   if(dock) dock.classList.toggle("collapsed", coachDockCollapsed);
+  const toggle = document.querySelector(".coachDockToggle");
+  if(toggle){
+    const label = coachDockCollapsed ? "Unlock coaching advice" : "Lock coaching advice";
+    toggle.setAttribute("aria-label", label);
+    toggle.setAttribute("title", label);
+    toggle.innerHTML = coachDockLockIcon();
+  }
 };
 const axis={grid:{color:"rgba(255,208,0,.14)"},ticks:{color:"#d5d5d5"}};
 const legend={labels:{color:"#f2f2f2",boxWidth:14,font:{size:11}}};
@@ -8846,11 +8886,17 @@ function renderCoach(a, impactChartValues=null, followupSpeed=null){
     ["Team Impact",(a.pressure>70 && a.defense>=60)?"":"warning",impactAdvice(a, impactChartValues, followupSpeed)]
   ];
   const dock = $("coachCards");
-  dock.innerHTML=`<button type="button" class="coachDockToggle" onclick="toggleCoachDock()">${coachDockCollapsed ? "Show advice" : "Minimize"}</button>` +
+  const lockLabel = coachDockCollapsed ? "Unlock coaching advice" : "Lock coaching advice";
+  dock.innerHTML=`<button type="button" class="coachDockToggle" onclick="toggleCoachDock()" aria-label="${lockLabel}" title="${lockLabel}">${coachDockLockIcon()}</button>` +
     cards.map(c=>`<div class="card coachTile"><div class="priority ${c[1]}">${c[0]}</div><div class="help">${c[2]}</div></div>`).join("");
   dock.classList.toggle("collapsed", coachDockCollapsed);
   dock.onmouseenter=()=>dock.classList.add("peek");
   dock.onmouseleave=()=>dock.classList.remove("peek");
+}
+function coachDockLockIcon(){
+  return coachDockCollapsed
+    ? `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M9 10V7a3 3 0 0 1 5.7-1.3"></path></svg>`
+    : `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>`;
 }
 function resetPhysicsAnalysis(message="Upload a replay to start analysis."){
   if(physicsWorker){
