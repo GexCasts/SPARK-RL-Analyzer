@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.05.26.1243",
-    "generatedUtc":  "2026-05-26T12:43:43.3263786Z",
+    "appVersion":  "2026.05.26.1723",
+    "generatedUtc":  "2026-05-26T17:23:30.4920782Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -78,7 +78,7 @@
                       "version":  "605e9047a563",
                       "sha256":  "605e9047a563c5c8396ffb18232aa4304ec56586aee537c45064c6fb425e44ad",
                       "size":  35129,
-                      "modifiedUtc":  "2026-05-22T02:10:37.0325923Z"
+                      "modifiedUtc":  "2026-05-11T15:02:57.9645842Z"
                   },
                   {
                       "path":  "overlay/README.md",
@@ -113,7 +113,7 @@
                       "version":  "e220b207d610",
                       "sha256":  "e220b207d610557be00218185b001f5c009afbd8dc39ba4bf42cba99031d5e3b",
                       "size":  1945,
-                      "modifiedUtc":  "2026-05-22T02:10:37.3649029Z"
+                      "modifiedUtc":  "2026-05-19T13:16:06.9675675Z"
                   },
                   {
                       "path":  "rocket-league-stats-api-bridge.mjs",
@@ -159,10 +159,10 @@
                   },
                   {
                       "path":  "SPARK.html",
-                      "version":  "da4ce7e4c9c8",
-                      "sha256":  "da4ce7e4c9c84756ae32a8a0a8aaf11f96690012e08b2967b808eee7a0daf6ad",
-                      "size":  3493929,
-                      "modifiedUtc":  "2026-05-26T12:40:09.5074016Z"
+                      "version":  "ef1363944c6e",
+                      "sha256":  "ef1363944c6e5e93d344746b642b2ccce3c3a46f6621d8f99d51c54b4aa95bcc",
+                      "size":  3497990,
+                      "modifiedUtc":  "2026-05-26T17:22:42.7766177Z"
                   },
                   {
                       "path":  "SPARK-Launcher.cs",

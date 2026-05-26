@@ -19,11 +19,17 @@
   --spark-window-top-frame:48px;
   --spark-window-side-frame:2px;
   --spark-window-inner-radius:18px;
+  --spark-focus:0 0 0 2px rgba(255,208,0,.88),0 0 0 5px rgba(255,208,0,.16);
+  --spark-control-bg:#101113;
+  --spark-control-border:#5b5d63;
+  --spark-panel-border:rgba(255,255,255,.12);
+  --spark-ease:cubic-bezier(.16,1,.3,1);
 }
 *{box-sizing:border-box}
 html{
   min-height:100%;
   background:#050505;
+  overflow-x:hidden;
   scrollbar-width:none;
 }
 html,body{height:100%}
@@ -261,9 +267,9 @@ h1{margin:0;font-size:clamp(20px,1.4vw,28px);letter-spacing:.06em;color:var(--sp
 
 .sub{margin-top:4px;color:var(--muted);font-size:clamp(11px,.72vw,13px)}
 .app{
-  width:min(100vw,2560px);
+  width:min(100%,2560px);
   margin:0 auto;
-  padding:14px;
+  padding:34px 14px 14px;
   display:grid;
   gap:14px;
 }
@@ -276,6 +282,10 @@ h1{margin:0;font-size:clamp(20px,1.4vw,28px);letter-spacing:.06em;color:var(--sp
   padding:clamp(12px,.9vw,18px);
   box-shadow:0 8px 28px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.06);
   min-width:0;
+}
+.card:focus-within{
+  border-color:rgba(255,208,0,.36);
+  box-shadow:0 8px 28px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.06),0 0 0 1px rgba(255,208,0,.12);
 }
 .card h2{font-size:clamp(14px,1vw,18px);margin:0 0 4px}
 .help{color:var(--muted);font-size:clamp(11px,.72vw,13px);line-height:1.45;margin-bottom:10px}
@@ -337,10 +347,11 @@ h1{margin:0;font-size:clamp(20px,1.4vw,28px);letter-spacing:.06em;color:var(--sp
   align-items:flex-start;
   justify-content:space-between;
   gap:16px;
+  padding-top:2px;
 }
 .replayNavTop .help{margin-bottom:0}
 .replayNavPanel .modeTabs{
-  margin:0;
+  margin:2px 0 0;
   justify-content:flex-end;
 }
 .replayNavControls{
@@ -400,6 +411,13 @@ h1{margin:0;font-size:clamp(20px,1.4vw,28px);letter-spacing:.06em;color:var(--sp
 input{display:none}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.teamTab{border-width:2px}
 .tabs button{min-height:36px}
+.tabs button:focus-visible,
+.tileAddTile:focus-visible,
+.overlayCategory summary:focus-visible,
+.mapDrawButton:focus-visible{
+  outline:0;
+  box-shadow:var(--spark-focus);
+}
 .modeTabs{margin:12px 0 2px}
 .modeTabs button{border-color:var(--spark-yellow)}
 .modeTabs button:not(.active){background:#191919;color:#ececec}
@@ -466,13 +484,13 @@ input{display:none}
 .unitSwitch:not(.imperial) span:first-child,
 .unitSwitch.imperial span:nth-child(2){color:#090909}
 .unitSwitch:focus-visible{
-  outline:2px solid var(--spark-yellow);
-  outline-offset:3px;
+  outline:0;
+  box-shadow:var(--spark-focus);
 }
 button{
   background:linear-gradient(180deg,#2b2b2b,#171717);color:#f3f4f6;border:1px solid #6b6b6b;border-radius:999px;
   padding:8px 12px;cursor:pointer;font-weight:700;font-size:12px;
-  transition:border-color .16s ease,color .16s ease,background .16s ease,box-shadow .16s ease,transform .16s ease;
+  transition:border-color .16s var(--spark-ease),color .16s var(--spark-ease),background .16s var(--spark-ease),box-shadow .16s var(--spark-ease),transform .16s var(--spark-ease),opacity .16s var(--spark-ease);
 }
 button:hover{
   border-color:rgba(255,208,0,.78);
@@ -481,8 +499,8 @@ button:hover{
 }
 button:active{transform:translateY(1px)}
 button:focus-visible{
-  outline:2px solid var(--spark-yellow);
-  outline-offset:3px;
+  outline:0;
+  box-shadow:var(--spark-focus);
 }
 button:disabled,
 button[disabled]{
@@ -526,12 +544,16 @@ button.unitSwitch{
   padding:4px 6px;
   border:1px solid rgba(255,255,255,.20);
   border-radius:6px;
-  background:#090d12;
+  background:var(--spark-control-bg);
   color:#f4f6fb;
   font-weight:850;
   font-size:12px;
 }
-.liveRateControl input:focus{outline:1px solid var(--spark-yellow);border-color:var(--spark-yellow)}
+.liveRateControl input:focus{
+  outline:0;
+  border-color:var(--spark-yellow);
+  box-shadow:var(--spark-focus);
+}
 .liveRateStatus{min-width:34px;font-size:10px;color:var(--muted);text-align:left}
 .liveRateStatus.saved{color:#26e68a}
 .liveRateStatus.error{color:#ef4444}
@@ -573,6 +595,12 @@ button.unitSwitch{
   background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(0,0,0,.22));
   cursor:pointer;
   user-select:none;
+  transition:border-color .16s var(--spark-ease),background .16s var(--spark-ease),box-shadow .16s var(--spark-ease);
+}
+.tileAddTile:hover{
+  border-color:rgba(255,208,0,.78);
+  background:linear-gradient(180deg,rgba(255,208,0,.07),rgba(0,0,0,.22));
+  box-shadow:inset 0 1px rgba(255,255,255,.05),0 10px 26px rgba(0,0,0,.24);
 }
 .tileAddTile[hidden]{display:none}
 .tileAddButton{
@@ -618,6 +646,10 @@ button.unitSwitch{
   border-radius:8px;
   background:linear-gradient(180deg,#2d2d2d,#101112);
   box-shadow:0 18px 36px rgba(0,0,0,.42);
+}
+.tileMenuPanel:focus-within{
+  border-color:rgba(255,208,0,.78);
+  box-shadow:0 18px 36px rgba(0,0,0,.42),0 0 0 1px rgba(255,208,0,.18);
 }
 .tileAddTile .tileMenuPanel{
   position:static;
@@ -682,6 +714,10 @@ button.unitSwitch{
   min-height:120px;
   cursor:grab;
   overflow:hidden;
+  transition:border-color .16s var(--spark-ease),box-shadow .16s var(--spark-ease),opacity .16s var(--spark-ease);
+}
+.tileManaged:hover{
+  border-color:rgba(255,208,0,.34);
 }
 .tileManaged:active{cursor:grabbing}
 .tileManaged button,
@@ -729,7 +765,7 @@ button.unitSwitch{
   pointer-events:none;
   cursor:pointer;
   transform:translateY(-2px);
-  transition:opacity .16s ease,transform .16s ease,border-color .16s ease;
+  transition:opacity .16s var(--spark-ease),transform .16s var(--spark-ease),border-color .16s var(--spark-ease),box-shadow .16s var(--spark-ease);
 }
 .tileManaged:hover .tileCloseButton,
 .tileCloseButton:focus-visible{
@@ -798,6 +834,14 @@ button.unitSwitch{
   align-items:center;
 }
 .chartWrap{height:clamp(240px,24vh,330px);position:relative;overflow:hidden;border-radius:6px}
+.chartWrap,
+.field,
+.goalMap,
+.timeline,
+.tableWrap{
+  border:1px solid rgba(255,255,255,.08);
+  background-color:rgba(7,9,12,.28);
+}
 .chartWrap.tall{height:clamp(280px,30vh,420px)}
 .chartWrap::before{
   content:"";
@@ -815,7 +859,7 @@ button.unitSwitch{
 canvas{width:100%!important;height:100%!important}
 .chartWrap canvas{position:relative;z-index:1}
 .note{
-  margin-top:10px;padding:10px;border:1px solid #555;background:linear-gradient(180deg,#242424,#171717);border-radius:8px;
+  margin-top:10px;padding:10px;border:1px solid var(--spark-panel-border);background:linear-gradient(180deg,#242424,#171717);border-radius:8px;
   color:#e6e6e6;line-height:1.45;font-size:clamp(11px,.72vw,13px)
 }
 .overlayControlPanel{
@@ -896,10 +940,14 @@ canvas{width:100%!important;height:100%!important}
 .overlayQuickActions button,
 .overlayQuickTeam button{border-radius:8px}
 .overlayCategory{
-  border:1px solid #55575d;
+  border:1px solid var(--spark-control-border);
   border-radius:10px;
   background:linear-gradient(180deg,#17191d,#0d0e11);
   overflow:hidden;
+}
+.overlayCategory[open]{
+  border-color:rgba(255,208,0,.46);
+  box-shadow:0 10px 24px rgba(0,0,0,.22),inset 0 1px rgba(255,255,255,.05);
 }
 .overlayCategory summary{
   cursor:pointer;
@@ -910,6 +958,11 @@ canvas{width:100%!important;height:100%!important}
   text-transform:uppercase;
   letter-spacing:.05em;
   background:rgba(255,255,255,.035);
+  transition:background .16s var(--spark-ease),color .16s var(--spark-ease);
+}
+.overlayCategory summary:hover{
+  background:rgba(255,208,0,.08);
+  color:var(--spark-yellow);
 }
 .overlayCategoryBody{
   display:grid;
@@ -936,17 +989,22 @@ canvas{width:100%!important;height:100%!important}
   display:block;
   width:100%;
   min-height:38px;
-  background:#101113;
+  background:var(--spark-control-bg);
   color:#f3f4f6;
-  border:1px solid #5b5d63;
+  border:1px solid var(--spark-control-border);
   border-radius:8px;
   padding:8px 10px;
   font:inherit;
   font-size:13px;
   text-transform:none;
+  transition:border-color .16s var(--spark-ease),box-shadow .16s var(--spark-ease),background .16s var(--spark-ease);
 }
 .overlayInput:focus,
-.overlaySelect:focus{outline:2px solid rgba(255,208,0,.45);border-color:var(--spark-yellow)}
+.overlaySelect:focus{
+  outline:0;
+  border-color:var(--spark-yellow);
+  box-shadow:var(--spark-focus);
+}
 .overlaySeriesControls{
   display:grid;
   grid-template-columns:repeat(3,1fr);
@@ -957,10 +1015,14 @@ canvas{width:100%!important;height:100%!important}
   grid-template-columns:36px 1fr 36px;
   align-items:center;
   gap:8px;
-  background:#101113;
-  border:1px solid #4e5056;
+  background:var(--spark-control-bg);
+  border:1px solid var(--spark-control-border);
   border-radius:8px;
   padding:8px;
+}
+.overlayStepper:focus-within{
+  border-color:rgba(255,208,0,.62);
+  box-shadow:0 0 0 1px rgba(255,208,0,.12);
 }
 .overlayStepper strong{text-align:center;font-size:24px;color:var(--spark-yellow)}
 .overlayPreviewStrip{
@@ -986,6 +1048,10 @@ canvas{width:100%!important;height:100%!important}
   .overlayStudioLayout{grid-template-columns:1fr}
   .overlayQuickControls{grid-template-columns:1fr}
   .overlayQuickActions{grid-template-columns:1fr}
+  .overlayControlGrid{grid-template-columns:1fr}
+  .overlaySeriesControls{grid-template-columns:1fr}
+  .overlayTestTools{align-items:flex-start;flex-direction:column}
+  .overlayTestToggle{width:100%;min-width:0}
 }
 .overlayPreviewTeam{
   display:flex;
@@ -1011,7 +1077,7 @@ canvas{width:100%!important;height:100%!important}
   gap:12px;
   padding:12px;
   background:linear-gradient(180deg,#15161a,#0c0d10);
-  border:1px solid #55575d;
+  border:1px solid var(--spark-control-border);
   border-radius:10px;
 }
 .overlayTestTools strong{
@@ -1045,13 +1111,37 @@ canvas{width:100%!important;height:100%!important}
 .track{height:16px;background:#2a2c31;border-radius:999px;overflow:hidden}
 .fill{height:100%;background:linear-gradient(90deg,var(--spark-yellow),var(--spark-chrome));border-radius:999px}
 .fill.warningFill{background:linear-gradient(90deg,#f0a020,#ef4444)}
-.tableWrap{overflow:auto;max-height:clamp(220px,26vh,360px)}
+.tableWrap{
+  overflow:auto;
+  max-height:clamp(220px,26vh,360px);
+  border-radius:8px;
+}
 table{width:100%;border-collapse:collapse;font-size:clamp(11px,.72vw,13px);min-width:760px}
-td,th{border-bottom:1px solid #1e3354;padding:8px;text-align:left;vertical-align:top}
-th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
+td,th{border-bottom:1px solid rgba(255,255,255,.08);padding:8px;text-align:left;vertical-align:top}
+th{
+  color:var(--muted);
+  font-weight:800;
+  position:sticky;
+  top:0;
+  background:#17191d;
+  z-index:2;
+}
+tbody tr:hover td,
+.playerOverviewTable tr:hover td{
+  background:rgba(255,208,0,.045);
+}
 .playerName{font-weight:850}
 .teamBlue{color:var(--spark-yellow)} .teamOrange{color:var(--spark-amber)}
-.badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#26282d;border:1px solid #5b5d63;font-size:11px}
+.badge{
+  display:inline-block;
+  padding:3px 8px;
+  border-radius:999px;
+  background:#26282d;
+  border:1px solid var(--spark-control-border);
+  color:#f3f4f6;
+  font-size:11px;
+  font-weight:800;
+}
 .field{
   position:relative;
   width:100%;
@@ -1838,7 +1928,13 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
 }
 .event{
   display:grid;grid-template-columns:70px 110px 1fr 160px;gap:10px;align-items:center;
-  background:#1d1f24;border:1px solid #4e5056;border-radius:10px;padding:9px;font-size:clamp(11px,.72vw,13px)
+  background:#1d1f24;border:1px solid #4e5056;border-radius:10px;padding:9px;font-size:clamp(11px,.72vw,13px);
+  transition:border-color .16s var(--spark-ease),background .16s var(--spark-ease),box-shadow .16s var(--spark-ease);
+}
+.event:hover{
+  border-color:rgba(255,208,0,.38);
+  background:#22252a;
+  box-shadow:0 8px 22px rgba(0,0,0,.20);
 }
 .time{color:var(--gold);font-weight:850}.tag{text-align:right;color:#c9d7eb}
 .kickoffList{
@@ -1856,6 +1952,11 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
   border-radius:8px;
   background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(0,0,0,.18));
   box-shadow:inset 0 1px rgba(255,255,255,.04);
+  transition:border-color .16s var(--spark-ease),box-shadow .16s var(--spark-ease),background .16s var(--spark-ease);
+}
+.kickoffItem:hover{
+  border-color:rgba(255,208,0,.34);
+  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(0,0,0,.18));
 }
 .kickoffItem.focus{
   border-color:rgba(255,208,0,.72);
@@ -1926,7 +2027,10 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
   background:linear-gradient(180deg,rgba(34,34,34,.98),rgba(8,8,8,.96));
   box-shadow:0 -12px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.08);
   transform:translateY(0);
-  transition:transform .22s ease, opacity .22s ease;
+  transition:transform .22s var(--spark-ease), opacity .22s var(--spark-ease), border-color .16s var(--spark-ease);
+}
+.coach:focus-within{
+  border-color:rgba(255,208,0,.78);
 }
 .coach::before{
   content:"";
@@ -1959,7 +2063,10 @@ th{color:var(--muted);font-weight:700;position:sticky;top:0;background:#17191d}
   font-size:11px;
   z-index:2;
 }
-.coachTile{min-height:100%}
+.coachTile{
+  min-height:100%;
+  border-color:rgba(255,255,255,.14);
+}
 .app{padding-bottom:210px}
 .priority{font-size:12px;color:var(--green);font-weight:800;margin-bottom:5px}.warning{color:var(--orange)}.bad{color:var(--red)}
 body.obsOverlayMode{
@@ -2898,7 +3005,7 @@ body.obsOverlayMode #obsOverlayRoot{
   font-size:15px;
 }
 @media (min-width:1920px){
-  .app{padding:18px 18px 230px;gap:16px}
+  .app{padding:38px 18px 230px;gap:16px}
   .dashboard{gap:16px}
 }
 @media (max-width:1500px){
@@ -2923,6 +3030,25 @@ body.obsOverlayMode #obsOverlayRoot{
   .overviewTeamCard.orange .overviewTeamName{text-align:left}
   .overviewTeamCard.orange .overviewTeamRecord{justify-content:flex-start}
   .overviewStatGrid{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  .app{padding:28px 8px 220px}
+  header{padding:10px 14px}
+  .headerBrand{align-items:flex-start}
+  .logoSlot{--logo-size:clamp(120px,34vw,180px);height:74px}
+  .sparkWindowFrame{padding:0 8px 0 12px;grid-template-columns:minmax(0,1fr) auto}
+  .sparkWindowTitle small{display:none}
+  .sparkWindowControl{width:34px;height:28px}
+  .card{padding:12px}
+  .kpis{grid-template-columns:1fr}
+  .tabs button,
+  button{min-height:42px}
+  .liveApiControls{grid-template-columns:1fr}
+  .overlayPreviewStrip{grid-template-columns:1fr;text-align:center}
+  .overlayPreviewTeam,
+  .overlayPreviewTeam.right{justify-content:center}
+  .timeline{height:auto;max-height:70vh}
+  .tableWrap{max-height:60vh}
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{
