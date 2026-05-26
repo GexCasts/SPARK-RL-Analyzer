@@ -1346,62 +1346,76 @@ tbody tr:hover td,
   position:relative;
   width:100%;
   aspect-ratio:16 / 8.6;
-  border-radius:16px;
+  isolation:isolate;
+  border-radius:8px;
   overflow:hidden;
-  border:1px solid #55585f;
+  border:1px solid oklch(73% .045 86 / .44);
   background:
-    radial-gradient(ellipse at 50% 60%, rgba(255,208,0,.16), transparent 36%),
-    radial-gradient(ellipse at 50% 18%, rgba(201,201,201,.14), transparent 42%),
-    linear-gradient(180deg, rgba(255,255,255,.07), rgba(0,0,0,.22)),
-    #101215;
+    linear-gradient(90deg, oklch(60% .16 244 / .12), transparent 20%, transparent 80%, oklch(66% .17 35 / .13)),
+    radial-gradient(ellipse at 50% 50%, oklch(75% .16 86 / .14), transparent 42%),
+    linear-gradient(180deg, oklch(27% .018 250), oklch(15% .014 250) 52%, oklch(10% .011 250));
+  box-shadow:
+    inset 0 1px 0 oklch(100% .006 80 / .12),
+    inset 0 -28px 48px oklch(0% 0 0 / .22),
+    0 16px 36px oklch(0% 0 0 / .28);
 }
 .goalMap:before{
   content:"";
   position:absolute;
-  left:8.33%;
-  right:8.33%;
-  top:6.67%;
-  bottom:10%;
-  border:5px solid rgba(232,232,220,.88);
-  border-top-color:rgba(255,224,80,.82);
-  border-bottom-width:8px;
-  border-radius:12px 12px 4px 4px;
+  left:8.2%;
+  right:8.2%;
+  top:8%;
+  bottom:10.6%;
+  border:3px solid oklch(86% .09 84 / .82);
+  border-bottom-width:6px;
+  border-radius:7px 7px 4px 4px;
   box-shadow:
-    0 0 0 5px rgba(255,208,0,.18),
-    0 0 24px rgba(255,204,0,.22),
-    inset 0 0 26px rgba(255,255,255,.08);
-  z-index:3;
+    0 0 0 1px oklch(100% .006 80 / .15),
+    0 0 30px oklch(78% .16 84 / .26),
+    inset 0 0 0 1px oklch(0% 0 0 / .42),
+    inset 0 0 30px oklch(75% .08 86 / .08);
+  z-index:4;
+  pointer-events:none;
 }
 .goalMap:after{
   content:"";
   position:absolute;
-  left:8.33%;
-  right:8.33%;
-  top:6.67%;
-  bottom:10%;
+  left:8.2%;
+  right:8.2%;
+  top:8%;
+  bottom:10.6%;
   background:
-    linear-gradient(90deg, transparent 0 12%, rgba(255,255,255,.12) 12.1% 12.4%, transparent 12.5% 24.8%, rgba(255,255,255,.20) 24.8% 25.2%, transparent 25.3% 37.3%, rgba(255,255,255,.12) 37.4% 37.7%, transparent 37.8% 49.8%, rgba(255,255,255,.24) 49.8% 50.2%, transparent 50.3% 62.3%, rgba(255,255,255,.12) 62.4% 62.7%, transparent 62.8% 74.8%, rgba(255,255,255,.20) 74.8% 75.2%, transparent 75.3% 87.5%, rgba(255,255,255,.12) 87.6% 87.9%, transparent 88%),
-    linear-gradient(180deg, transparent 0 16.4%, rgba(255,255,255,.12) 16.5% 16.8%, transparent 16.9% 33.1%, rgba(255,255,255,.20) 33.2% 33.6%, transparent 33.7% 49.8%, rgba(255,255,255,.22) 49.8% 50.2%, transparent 50.3% 66.4%, rgba(255,255,255,.20) 66.5% 66.9%, transparent 67% 83.1%, rgba(255,255,255,.12) 83.2% 83.5%, transparent 83.6%),
-    repeating-linear-gradient(45deg, rgba(255,255,255,.055) 0 1px, transparent 1px 17px),
-    repeating-linear-gradient(-45deg, rgba(255,255,255,.045) 0 1px, transparent 1px 17px);
+    linear-gradient(90deg, transparent calc(16.666% - 1px), oklch(100% .006 82 / .18) calc(16.666% - 1px) calc(16.666% + 1px), transparent calc(16.666% + 1px), transparent calc(33.333% - 1px), oklch(100% .006 82 / .22) calc(33.333% - 1px) calc(33.333% + 1px), transparent calc(33.333% + 1px), transparent calc(50% - 1px), oklch(88% .12 85 / .42) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px), transparent calc(66.666% - 1px), oklch(100% .006 82 / .22) calc(66.666% - 1px) calc(66.666% + 1px), transparent calc(66.666% + 1px), transparent calc(83.333% - 1px), oklch(100% .006 82 / .18) calc(83.333% - 1px) calc(83.333% + 1px), transparent calc(83.333% + 1px)),
+    linear-gradient(180deg, transparent calc(25% - 1px), oklch(100% .006 82 / .18) calc(25% - 1px) calc(25% + 1px), transparent calc(25% + 1px), transparent calc(50% - 1px), oklch(88% .12 85 / .38) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px), transparent calc(75% - 1px), oklch(100% .006 82 / .18) calc(75% - 1px) calc(75% + 1px), transparent calc(75% + 1px)),
+    repeating-linear-gradient(0deg, oklch(100% .006 82 / .05) 0 1px, transparent 1px 18px),
+    repeating-linear-gradient(90deg, oklch(100% .006 82 / .045) 0 1px, transparent 1px 18px);
+  opacity:.92;
   z-index:1;
+  pointer-events:none;
 }
 .goalLabel{
   position:absolute;
-  top:12px;
-  left:14px;
-  color:rgba(255,255,255,.5);
-  font-size:12px;
+  top:10px;
+  left:12px;
+  color:oklch(88% .08 86 / .78);
+  font-size:11px;
   font-weight:900;
-  letter-spacing:.08em;
+  letter-spacing:.06em;
+  padding:5px 8px;
+  border:1px solid oklch(82% .11 86 / .24);
+  border-radius:999px;
+  background:oklch(10% .014 250 / .72);
+  box-shadow:0 10px 26px oklch(0% 0 0 / .24);
   z-index:6;
 }
 .goalZoneLabel{
   position:absolute;
-  color:rgba(255,255,255,.34);
+  color:oklch(86% .034 240 / .46);
   font-size:10px;
-  font-weight:800;
-  z-index:5;
+  font-weight:900;
+  letter-spacing:.05em;
+  text-shadow:0 1px 8px oklch(0% 0 0 / .55);
+  z-index:6;
   pointer-events:none;
 }
 .goalFrame{
@@ -1409,49 +1423,65 @@ tbody tr:hover td,
 }
 .postZone{
   position:absolute;
-  z-index:4;
-  background:rgba(255,204,0,.14);
-  border:1px solid rgba(255,204,0,.34);
-  box-shadow:inset 0 0 18px rgba(255,204,0,.18),0 0 14px rgba(255,204,0,.14);
+  z-index:3;
+  background:linear-gradient(180deg, oklch(80% .15 85 / .16), oklch(68% .13 84 / .07));
+  border:1px solid oklch(82% .13 86 / .38);
+  box-shadow:
+    inset 0 0 16px oklch(79% .16 86 / .16),
+    0 0 18px oklch(78% .15 85 / .12);
+  pointer-events:none;
 }
-.postZone.left{left:7.38%;top:6%;width:2.5%;height:84.8%;}
-.postZone.right{right:7.38%;top:6%;width:2.5%;height:84.8%;}
-.postZone.top{left:8.33%;top:5.72%;width:83.33%;height:3.2%;}
+.postZone.left{left:7.52%;top:7.4%;width:2.15%;height:83.6%;border-radius:4px 0 0 4px;}
+.postZone.right{right:7.52%;top:7.4%;width:2.15%;height:83.6%;border-radius:0 4px 4px 0;}
+.postZone.top{left:8.2%;top:6.85%;width:83.6%;height:3.15%;border-radius:5px 5px 2px 2px;}
 .shotBlob{
   position:absolute;
   transform:translate(-50%,-50%);
   border-radius:50%;
   pointer-events:none;
-  mix-blend-mode:screen;
-  z-index:4;
+  mix-blend-mode:plus-lighter;
+  z-index:2;
+  box-shadow:0 0 18px currentColor;
 }
 .shotPoint{
   position:absolute;
   transform:translate(-50%,-50%);
-  width:16px;
-  height:16px;
+  width:18px;
+  height:18px;
   border-radius:50%;
-  border:1px solid rgba(255,255,255,.78);
+  border:2px solid oklch(96% .01 88 / .9);
   z-index:7;
   cursor:pointer;
   display:flex;
   align-items:center;
   justify-content:center;
   overflow:visible;
+  outline:1px solid oklch(0% 0 0 / .46);
+  outline-offset:2px;
+  box-shadow:
+    0 0 0 4px var(--shotAura, oklch(100% .006 80 / .08)),
+    0 8px 18px oklch(0% 0 0 / .34);
   transition:
-    width .18s ease,
-    min-height .18s ease,
-    border-radius .18s ease,
-    padding .18s ease,
-    background-color .18s ease,
-    box-shadow .18s ease;
+    width .18s var(--spark-ease),
+    min-height .18s var(--spark-ease),
+    border-radius .18s var(--spark-ease),
+    padding .18s var(--spark-ease),
+    background-color .18s var(--spark-ease),
+    box-shadow .18s var(--spark-ease),
+    transform .18s var(--spark-ease);
 }
-.shotPoint.goal{background:#22c55e}
+.shotPoint:not(.outside):hover{
+  transform:translate(-50%,-50%) scale(1.12);
+}
+.shotPoint.goal{
+  --shotAura:oklch(72% .18 148 / .22);
+  background:oklch(72% .18 148);
+}
 
 .shotPoint.save{
-  background:#38bdf8;
-  border-color:rgba(255,255,255,.9);
-  box-shadow:0 0 14px rgba(56,189,248,.85);
+  --shotAura:oklch(76% .14 230 / .28);
+  background:oklch(76% .14 230);
+  border-color:oklch(98% .012 230 / .92);
 }
 .shotPoint.save::after{
   content:"S";
@@ -1459,41 +1489,50 @@ tbody tr:hover td,
   left:50%;
   top:50%;
   transform:translate(-50%,-50%);
-  color:#061018;
+  color:oklch(14% .03 242);
   font-size:9px;
   font-weight:900;
   transition:opacity .1s ease;
 }
 
-.shotPoint.save{background:#38bdf8}
-.shotPoint.miss{background:#ef4444}
+.shotPoint.miss{
+  --shotAura:oklch(64% .22 28 / .24);
+  background:oklch(64% .22 28);
+}
 .shotPoint.outside{
   width:0;
   height:0;
   border-radius:0;
-  border-left:10px solid transparent;
-  border-right:10px solid transparent;
-  border-bottom:18px solid currentColor;
+  border-left:11px solid transparent;
+  border-right:11px solid transparent;
+  border-bottom:20px solid currentColor;
   border-top:0;
   background:transparent;
-  color:#ef4444;
+  color:oklch(64% .22 28);
+  outline:0;
+  box-shadow:none;
   transform:translate(-50%,-50%) rotate(var(--arrowAngle, 0deg));
-  filter:drop-shadow(0 0 10px currentColor);
+  filter:drop-shadow(0 0 8px currentColor) drop-shadow(0 5px 10px oklch(0% 0 0 / .36));
 }
-.shotPoint.outside.goal{color:#22c55e;background:transparent}
-.shotPoint.outside.save{color:#38bdf8;background:transparent}
-.shotPoint.outside.post{color:var(--spark-yellow);background:transparent}
+.shotPoint.outside.goal{color:oklch(72% .18 148);background:transparent}
+.shotPoint.outside.save{color:oklch(76% .14 230);background:transparent}
+.shotPoint.outside.post{color:oklch(86% .16 86);background:transparent}
 .shotPoint.outside::after{content:""}
 .shotPoint.expanded{
-  width:250px;
-  min-height:116px;
+  width:270px;
+  min-height:122px;
   height:auto;
-  padding:10px 12px;
-  border-radius:10px;
-  background:rgba(10,10,10,.94);
-  border:1px solid rgba(255,204,0,.85);
-  color:#f3f4f6;
-  box-shadow:0 10px 30px rgba(0,0,0,.48), 0 0 18px rgba(255,204,0,.22);
+  padding:12px 14px;
+  border-radius:8px;
+  background:
+    linear-gradient(180deg, oklch(20% .02 250 / .98), oklch(12% .014 250 / .98));
+  border:1px solid oklch(82% .12 86 / .74);
+  color:oklch(94% .01 240);
+  box-shadow:
+    0 18px 42px oklch(0% 0 0 / .52),
+    0 0 0 1px oklch(100% .006 80 / .07),
+    0 0 24px oklch(78% .15 85 / .2);
+  outline:0;
   align-items:flex-start;
   justify-content:flex-start;
   transform:translate(var(--expandX,-50%), var(--expandY,-50%)) rotate(0deg);
@@ -1510,30 +1549,35 @@ tbody tr:hover td,
   pointer-events:none;
   max-height:0;
   overflow:hidden;
-  color:#f3f4f6;
+  color:oklch(93% .012 240);
   font-size:12px;
-  line-height:1.45;
+  line-height:1.5;
   text-align:left;
   white-space:normal;
   transition:opacity .12s ease .06s;
 }
 .shotInfo b{
-  color:var(--spark-yellow);
+  color:oklch(86% .16 86);
 }
 .shotInfo .muted{
-  color:#b8bcc4;
+  color:oklch(76% .025 240);
 }
 
 .shotPoint.post{
-  background:var(--spark-yellow);
+  --shotAura:oklch(86% .16 86 / .32);
+  background:oklch(86% .16 86);
   width:20px;
   height:20px;
-  box-shadow:0 0 18px rgba(255,208,0,.9);
+  color:oklch(16% .02 250);
+  box-shadow:
+    0 0 0 4px var(--shotAura),
+    0 0 22px oklch(86% .16 86 / .52),
+    0 8px 18px oklch(0% 0 0 / .34);
 }
 .shotPoint.post.expanded,
 .shotPoint.outside.expanded{
-  width:250px;
-  min-height:116px;
+  width:270px;
+  min-height:122px;
   height:auto;
 }
 .heatmapUnavailable{
@@ -1543,15 +1587,18 @@ tbody tr:hover td,
   transform:translate(-50%,-50%);
   z-index:8;
   width:min(520px,82%);
-  padding:16px 18px;
-  border:1px solid rgba(255,204,0,.34);
+  padding:18px 20px;
+  border:1px solid oklch(82% .12 86 / .34);
   border-radius:8px;
-  background:rgba(7,9,12,.82);
-  color:#dce8f7;
+  background:
+    linear-gradient(180deg, oklch(18% .018 250 / .94), oklch(11% .014 250 / .96));
+  color:oklch(91% .018 240);
   text-align:left;
-  box-shadow:0 16px 38px rgba(0,0,0,.38);
+  box-shadow:
+    0 18px 42px oklch(0% 0 0 / .42),
+    inset 0 1px 0 oklch(100% .006 80 / .08);
 }
-.heatmapUnavailable b{color:var(--spark-yellow)}
+.heatmapUnavailable b{color:oklch(86% .16 86)}
 .heatmapUnavailable .heatmapStats{
   display:grid;
   grid-template-columns:repeat(4,1fr);
@@ -1561,25 +1608,36 @@ tbody tr:hover td,
 .heatmapUnavailable .heatmapStats span{
   display:block;
   padding:8px;
-  border:1px solid rgba(255,255,255,.10);
+  border:1px solid oklch(100% .006 80 / .1);
   border-radius:6px;
-  background:rgba(255,255,255,.045);
+  background:oklch(100% .006 80 / .045);
   text-align:center;
   font-size:12px;
-  color:#b8bcc4;
+  color:oklch(74% .025 240);
 }
 .heatmapUnavailable .heatmapStats strong{
   display:block;
-  color:#fff;
+  color:oklch(96% .008 240);
   font-size:18px;
 }
 .shootLegend{
   display:flex;
-  gap:14px;
+  gap:8px;
   flex-wrap:wrap;
-  color:var(--muted);
+  color:oklch(77% .026 240);
   font-size:12px;
   margin-top:10px;
+  align-items:center;
+}
+.shootLegend span{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:26px;
+  padding:4px 8px;
+  border:1px solid oklch(100% .006 80 / .08);
+  border-radius:999px;
+  background:oklch(100% .006 80 / .035);
 }
 
 .overviewPanel{
@@ -1849,11 +1907,11 @@ tbody tr:hover td,
 .shootLegend span:before{
   content:"";
   display:inline-block;
-  width:9px;
-  height:9px;
+  width:10px;
+  height:10px;
   border-radius:50%;
-  margin-right:6px;
   background:var(--c);
+  box-shadow:0 0 12px var(--c);
 }
 
 .event.goalEvent{border-left-color:#22c55e}
@@ -3272,7 +3330,7 @@ body.obsOverlayMode #obsOverlayRoot{
       <h2>Shooting Heatmap</h2>
       <div class="help">Shot placement, defender distance, and shooter touch distance.</div>
       <div class="goalMap" id="shootingHeatmap">
-        <div class="goalLabel">GOAL FACE</div>
+        <div class="goalLabel">TARGET GRID</div>
         <div class="postZone left"></div>
         <div class="postZone right"></div>
         <div class="postZone top"></div>
@@ -3281,10 +3339,10 @@ body.obsOverlayMode #obsOverlayRoot{
         <div class="goalZoneLabel" style="left:45%;top:10%">CROSSBAR</div>
       </div>
       <div class="shootLegend">
-        <span style="--c:#38bdf8">Blue = save</span>
-        <span style="--c:#22c55e">Green = goal</span>
-        <span style="--c:#ffd000">Yellow = post/crossbar hit</span>
-        <span style="--c:#ef4444">Red = wide miss</span>
+        <span style="--c:#22c55e">Goal</span>
+        <span style="--c:#38bdf8">Saved</span>
+        <span style="--c:#ffd000">Post / bar</span>
+        <span style="--c:#ef4444">Miss</span>
       </div>
       <div class="note" id="shootingHeatmapNote"></div>
     </div>
@@ -7066,7 +7124,7 @@ function renderShootingHeatmap(a){
   if(!el) return;
   el.innerHTML = `
     <div class="sparkMapWatermark"></div>
-    <div class="goalLabel">GOAL FACE</div>
+    <div class="goalLabel">TARGET GRID</div>
     <div class="postZone left"></div>
     <div class="postZone right"></div>
     <div class="postZone top"></div>
@@ -7172,7 +7230,7 @@ function renderShootingHeatmap(a){
       const size = 24 + v*46;
       blob.style.width = size + "px";
       blob.style.height = size + "px";
-      blob.style.filter = "blur(7px)";
+      blob.style.filter = "blur(8px) saturate(1.18)";
       el.appendChild(blob);
     }
   }
