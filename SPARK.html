@@ -17,7 +17,14 @@
   --spark-graphite:#3f3f3f; --spark-steel:#8f8f8f; --spark-chrome:#f2f2f2;
   --spark-watermark:url("assets/SPARK%20app%20logo%20transparent.png");
   --spark-window-top-frame:48px;
-  --spark-header-height:78px;
+  --spark-header-scale:1;
+  --spark-header-pad-y:calc(10px * var(--spark-header-scale));
+  --spark-header-pad-x:calc(24px * var(--spark-header-scale));
+  --spark-header-logo-size:calc(150px * var(--spark-header-scale));
+  --spark-header-logo-offset:0px;
+  --spark-header-logo-slot-height:var(--spark-header-logo-size);
+  --spark-header-height:calc(var(--spark-header-logo-slot-height) + (var(--spark-header-pad-y) * 2));
+  --spark-header-gap:calc(16px * var(--spark-header-scale));
   --spark-window-side-frame:2px;
   --spark-window-inner-radius:18px;
   --spark-focus:0 0 0 2px rgba(255,208,0,.88),0 0 0 5px rgba(255,208,0,.16);
@@ -227,7 +234,7 @@ header{
   top:var(--spark-window-top-frame);
   z-index:90000;
   height:var(--spark-header-height);
-  padding:10px 24px;
+  padding:var(--spark-header-pad-y) var(--spark-header-pad-x);
   border-bottom:1px solid oklch(84% .15 86 / .34);
   background:
     linear-gradient(90deg,oklch(65% .16 244 / .16),transparent 28%,transparent 72%,oklch(72% .18 35 / .15)),
@@ -241,7 +248,7 @@ header{
 header::before{
   content:"";
   position:absolute;
-  inset:auto 24px 0;
+  inset:auto var(--spark-header-pad-x) 0;
   height:2px;
   background:linear-gradient(90deg,oklch(76% .14 230 / .5),oklch(88% .16 86 / .85),oklch(72% .18 35 / .55));
   opacity:.82;
@@ -253,13 +260,18 @@ header::before{
   height:100%;
   display:flex;
   align-items:center;
-  gap:16px;
+  gap:var(--spark-header-gap);
+}
+.headerBrand > div{
+  min-height:var(--spark-header-logo-slot-height);
+  display:grid;
+  align-content:center;
 }
 .logoSlot{
-  --logo-size:clamp(126px,9vw,168px);
-  --logo-offset:clamp(26px,2vw,38px);
+  --logo-size:var(--spark-header-logo-size);
+  --logo-offset:var(--spark-header-logo-offset);
   width:var(--logo-size);
-  height:58px;
+  height:var(--spark-header-logo-slot-height);
   flex:0 0 var(--logo-size);
   position:relative;
   overflow:visible;
@@ -281,9 +293,9 @@ header::before{
   filter:drop-shadow(0 8px 14px rgba(0,0,0,.42));
   display:block;
 }
-h1{margin:0;font-size:clamp(18px,1.15vw,24px);letter-spacing:.06em;color:oklch(95% .008 240);text-shadow:0 0 18px oklch(86% .16 86 / .18)}
+h1{margin:0;font-size:calc(22px * var(--spark-header-scale));letter-spacing:.06em;color:oklch(95% .008 240);text-shadow:0 0 18px oklch(86% .16 86 / .18)}
 
-.sub{margin-top:3px;color:oklch(78% .024 240);font-size:clamp(11px,.68vw,12px);max-width:92ch}
+.sub{margin-top:calc(3px * var(--spark-header-scale));color:oklch(78% .024 240);font-size:calc(12px * var(--spark-header-scale));max-width:92ch}
 .app{
   width:min(100%,2560px);
   margin:0 auto;
@@ -3173,14 +3185,15 @@ body.obsOverlayMode #obsOverlayRoot{
   font-size:15px;
 }
 @media (min-width:1920px){
-  .app{padding:38px 18px 230px;gap:16px}
+  :root{--spark-header-scale:1.18}
+  .app{padding:calc(var(--spark-header-height) + 18px) 18px 230px;gap:16px}
   .dashboard{gap:16px}
 }
 @media (max-width:1500px){
   .kpis{grid-template-columns:repeat(3,1fr)}
 }
 @media (max-width:900px){
-  :root{--spark-header-height:92px}
+  :root{--spark-header-scale:1;--spark-header-logo-size:128px}
   .topbar{grid-template-columns:1fr}
   .replayDropTop,.replayNavTop,.replayNavControls{grid-template-columns:1fr;display:grid}
   .replayDropPanel .liveApiControls{grid-template-columns:1fr}
@@ -3201,11 +3214,10 @@ body.obsOverlayMode #obsOverlayRoot{
   .overviewStatGrid{grid-template-columns:1fr}
 }
 @media (max-width:640px){
-  :root{--spark-header-height:96px}
+  :root{--spark-header-scale:1;--spark-header-logo-size:112px}
   .app{padding:calc(var(--spark-header-height) + 14px) 8px 220px}
   header{padding:10px 14px}
   .headerBrand{align-items:flex-start}
-  .logoSlot{--logo-size:clamp(94px,28vw,128px);height:48px}
   .sparkWindowFrame{padding:0 8px 0 12px;grid-template-columns:minmax(0,1fr) auto}
   .sparkWindowTitle small{display:none}
   .sparkWindowControl{width:34px;height:28px}
