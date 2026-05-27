@@ -5422,6 +5422,26 @@ function allReplayTouchEvents(){
   return events.sort((left,right)=>left.elapsed - right.elapsed);
 }
 
+function allReplayDemoEvents(){
+  const events = [];
+  (data?.players || []).forEach(player=>{
+    (Array.isArray(player?.demoEvents) ? player.demoEvents : []).forEach(event=>{
+      if(!isGameplayDataSample(event)) return;
+      const elapsed = sampleElapsedSeconds(event);
+      if(!Number.isFinite(elapsed)) return;
+      events.push({
+        ...event,
+        elapsed,
+        player,
+        playerId:player.id,
+        playerName:playerDisplayName(player),
+        team:player.team || ""
+      });
+    });
+  });
+  return events.sort((left,right)=>left.elapsed - right.elapsed);
+}
+
 function allReplayBallSamples(){
   const samples = [];
   (data?.players || []).forEach(player=>{
@@ -5593,6 +5613,25 @@ function nextTouchBallLocation(touches, elapsed, maxDelta=2.6){
   return next ? vectorFromApi(next.ballLocation || next.location || next.position) : null;
 }
 
+function firstKickoffChallenger(frames, elapsed, firstTouch, startBall){
+  const candidates = [];
+  frames.forEach(frame=>{
+    if(!frame.carLocation) return;
+    if(frame.elapsed < elapsed - 2.2 || frame.elapsed > elapsed + 0.2) return;
+    const ball = frame.ballLocation || startBall;
+    if(!ball) return;
+    const distanceToBall = Math.hypot(frame.carLocation.x - ball.x, frame.carLocation.y - ball.y);
+    const ballDistanceFromCenter = Math.hypot(ball.x || 0, ball.y || 0);
+    if(distanceToBall > 1500 || ballDistanceFromCenter > 1900) return;
+    candidates.push({...frame, distanceToBall});
+  });
+  candidates.sort((left,right)=>
+    (left.elapsed - right.elapsed) ||
+    (left.distanceToBall - right.distanceToBall)
+  );
+  return candidates[0] || null;
+}
+
 function inferredKickoffTouchesFromFrames(frames, existingTouches=[]){
   if(!Array.isArray(frames) || !frames.length) return [];
   const duration = replayObservedDurationSeconds();
@@ -5663,6 +5702,7 @@ function buildKickoffOutcomes(scope){
 
   const frames = allReplayPositionFrames();
   const replayTouches = allReplayTouchEvents();
+  const demoEvents = allReplayDemoEvents();
   const inferredTouches = inferredKickoffTouchesFromFrames(frames, replayTouches);
   const touches = [...replayTouches, ...inferredTouches]
     .sort((left,right)=>left.elapsed - right.elapsed)
@@ -5729,28 +5769,47 @@ function buildKickoffOutcomes(scope){
       .map(frame=>({...frame, distanceToBall:Math.hypot(frame.carLocation.x - startBall.x, frame.carLocation.y - startBall.y)}))
       .sort((left,right)=>left.distanceToBall - right.distanceToBall);
     const challengers = nearbyAtTouch.filter(frame=>frame.distanceToBall <= 1450);
-    const sameTeamChallengers = challengers.filter(frame=>frame.team === touch.team);
-    const opponentChallengers = challengers.filter(frame=>frame.team && frame.team !== touch.team);
     const sameTeamFastTouches = touches.filter(candidate=>
       candidate.playerId !== touch.playerId &&
       candidate.team === touch.team &&
       Math.abs(candidate.elapsed - elapsed) <= 0.35
     );
-    const pinch = sameTeamChallengers.length >= 2 || sameTeamFastTouches.length > 0;
+    const selectedKickoffTeams = selectedTeams.size ? selectedTeams : new Set([touch.team].filter(Boolean));
+    const sameTeamTouchFrames = sameTeamFastTouches
+      .map(candidate=>nearbyAtTouch.find(frame=>frame.playerId === candidate.playerId) || candidate)
+      .filter(Boolean);
+    const pinchParticipants = [touch, ...sameTeamTouchFrames].filter(candidate=>
+      candidate.team === touch.team &&
+      selectedKickoffTeams.has(candidate.team)
+    );
+    const pinch = pinchParticipants.length >= 2;
     const targetTeam = direction.half;
     const afterFrames = playerFramesAtElapsed(frames, elapsed + 1.4, 0.95);
     const targetPlayer = targetTeam ? nearestPlayerToLocation(afterFrames, afterBall, targetTeam) : null;
     const receiverInDirection = !!targetPlayer && targetPlayer.distance <= 2800 && !direction.dead;
+    const firstChallenger = firstKickoffChallenger(frames, elapsed, touch, startBall);
+    const fakePlayer =
+      firstChallenger &&
+      firstChallenger.playerId !== touch.playerId &&
+      firstChallenger.team === touch.team
+        ? firstChallenger
+        : null;
+    const fakeDemo = fakePlayer
+      ? demoEvents.find(demo=>demo.playerId === fakePlayer.playerId && demo.elapsed >= elapsed && demo.elapsed <= elapsed + 2)
+      : null;
+    const fakeSuccessful =
+      !!fakePlayer &&
+      !!targetPlayer &&
+      targetPlayer.team === fakePlayer.team &&
+      targetPlayer.playerId !== fakePlayer.playerId &&
+      targetPlayer.distance <= 2800;
+    const fakeKickoff = !!fakePlayer;
+    const spanishKickoff = !!fakePlayer && !!fakeDemo;
     const likelyBackCorner =
       receiverInDirection &&
       targetTeam !== touch.team &&
       /corner|side/.test(direction.lane || "") &&
       Math.abs(afterBall.y || 0) > 1500;
-    const fakeLook =
-      opponentChallengers.length === 0 &&
-      targetTeam &&
-      targetTeam !== touch.team &&
-      movedUU > 900;
     const deadBall = hasBallPath && (direction.dead || (movedUU < 650 && Math.hypot(afterBall.x || 0, afterBall.y || 0) < 1000));
     const scopeFocus = scopeIsTeam
       ? selectedTeams.has(touch.team) || (targetTeam && selectedTeams.has(targetTeam))
@@ -5767,7 +5826,10 @@ function buildKickoffOutcomes(scope){
       targetPlayer,
       receiverInDirection,
       likelyBackCorner,
-      fakeLook,
+      fakeKickoff,
+      spanishKickoff,
+      fakeSuccessful,
+      fakePlayer,
       pinch,
       deadBall,
       challengerCount:challengers.length,
@@ -5798,8 +5860,10 @@ function renderKickoffOutcomes(scope, isTeamView){
     const badges = [];
     if(outcome.deadBall) badges.push(`<span class="kickoffBadge good">dead ball</span>`);
     if(outcome.likelyBackCorner) badges.push(`<span class="kickoffBadge good">back-corner possession</span>`);
-    if(outcome.fakeLook) badges.push(`<span class="kickoffBadge warn">fake look</span>`);
-    if(outcome.pinch) badges.push(`<span class="kickoffBadge warn">pinch / dual challenge</span>`);
+    if(outcome.spanishKickoff) badges.push(`<span class="kickoffBadge warn">Spanish kickoff</span>`);
+    else if(outcome.fakeKickoff) badges.push(`<span class="kickoffBadge warn">fake kickoff</span>`);
+    if(outcome.fakeSuccessful) badges.push(`<span class="kickoffBadge good">successful fake</span>`);
+    if(outcome.pinch) badges.push(`<span class="kickoffBadge warn">pinch kickoff</span>`);
     if(!outcome.hasBallPath) badges.push(`<span class="kickoffBadge">touch read</span>`);
     if(outcome.focus) badges.push(`<span class="kickoffBadge">selected scope</span>`);
     const receiver = outcome.targetPlayer
@@ -5824,16 +5888,18 @@ function renderKickoffOutcomes(scope, isTeamView){
 
   const summary = result.outcomes.reduce((acc,outcome)=>{
     acc.dead += outcome.deadBall ? 1 : 0;
-    acc.fake += outcome.fakeLook ? 1 : 0;
+    acc.fake += outcome.fakeKickoff ? 1 : 0;
+    acc.spanish += outcome.spanishKickoff ? 1 : 0;
+    acc.successfulFake += outcome.fakeSuccessful ? 1 : 0;
     acc.pinch += outcome.pinch ? 1 : 0;
     acc.corner += outcome.likelyBackCorner ? 1 : 0;
     acc.focus += outcome.focus ? 1 : 0;
     return acc;
-  }, {dead:0, fake:0, pinch:0, corner:0, focus:0});
+  }, {dead:0, fake:0, spanish:0, successfulFake:0, pinch:0, corner:0, focus:0});
   const focusText = isTeamView || scope?.ps?.length === 1
     ? ` ${summary.focus} involved ${scope.label}.`
     : "";
-  note.textContent = `${scope.label}: ${result.outcomes.length} kickoff${result.outcomes.length===1?"":"s"} detected, ${summary.dead} dead ball, ${summary.corner} back-corner possession read${summary.corner===1?"":"s"}, ${summary.fake} fake look${summary.fake===1?"":"s"}, ${summary.pinch} pinch/dual challenge${summary.pinch===1?"":"s"}.${focusText}`;
+  note.textContent = `${scope.label}: ${result.outcomes.length} kickoff${result.outcomes.length===1?"":"s"} detected, ${summary.dead} dead ball, ${summary.corner} back-corner possession read${summary.corner===1?"":"s"}, ${summary.fake} fake kickoff${summary.fake===1?"":"s"}, ${summary.spanish} Spanish kickoff${summary.spanish===1?"":"s"}, ${summary.successfulFake} successful fake${summary.successfulFake===1?"":"s"}, ${summary.pinch} pinch kickoff${summary.pinch===1?"":"s"}.${focusText}`;
 }
 
 const ratingBenchmarks = {
