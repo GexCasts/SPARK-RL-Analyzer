@@ -5590,15 +5590,82 @@ function nextTouchBallLocation(touches, elapsed, maxDelta=2.6){
   return next ? vectorFromApi(next.ballLocation || next.location || next.position) : null;
 }
 
+function inferredKickoffTouchesFromFrames(frames, existingTouches=[]){
+  if(!Array.isArray(frames) || !frames.length) return [];
+  const duration = replayObservedDurationSeconds();
+  const starts = [0];
+  replayGoalElapsedSamples().forEach(goal=>{
+    const nextFrame = frames.find(frame=>frame.elapsed > goal.elapsed + 1 && frame.elapsed < goal.elapsed + 14 && frame.ballLocation);
+    if(nextFrame) starts.push(nextFrame.elapsed);
+  });
+
+  const uniqueStarts = starts
+    .filter(elapsed=>Number.isFinite(elapsed) && elapsed >= 0 && elapsed <= duration + 1)
+    .sort((left,right)=>left - right)
+    .filter((elapsed,index,all)=>index === 0 || elapsed - all[index - 1] >= 7.5);
+
+  return uniqueStarts.map((startElapsed, index)=>{
+    const windowFrames = frames
+      .filter(frame=>frame.elapsed >= startElapsed - 0.75 && frame.elapsed <= startElapsed + 9)
+      .sort((left,right)=>left.elapsed - right.elapsed);
+    if(!windowFrames.length) return null;
+
+    const firstExisting = existingTouches.find(touch=>touch.elapsed >= startElapsed - 0.75 && touch.elapsed <= startElapsed + 9);
+    if(firstExisting) return firstExisting;
+
+    const startBall =
+      ballLocationAtElapsed(frames, startElapsed, 1.25) ||
+      windowFrames.find(frame=>frame.ballLocation && Math.hypot(frame.ballLocation.x || 0, frame.ballLocation.y || 0) <= 1300)?.ballLocation ||
+      windowFrames.find(frame=>frame.ballLocation)?.ballLocation ||
+      {x:0,y:0,z:0};
+
+    let best = null;
+    windowFrames.forEach(frame=>{
+      if(!frame.carLocation || !frame.ballLocation) return;
+      const distanceToBall = Math.hypot(frame.carLocation.x - frame.ballLocation.x, frame.carLocation.y - frame.ballLocation.y);
+      const distanceFromCenter = Math.hypot(frame.ballLocation.x || 0, frame.ballLocation.y || 0);
+      if(distanceFromCenter > 1800) return;
+      if(distanceToBall > 1250) return;
+      const elapsedPenalty = Math.max(0, frame.elapsed - startElapsed) * 42;
+      const centerPenalty = Math.max(0, distanceFromCenter - 400) * 0.18;
+      const score = distanceToBall + elapsedPenalty + centerPenalty;
+      if(!best || score < best.score){
+        best = {...frame, distanceToBall, score};
+      }
+    });
+    if(!best) return null;
+
+    return {
+      elapsed:best.elapsed,
+      elapsedSeconds:best.elapsed,
+      scoreboardElapsedSeconds:best.elapsed,
+      player:best.player,
+      playerId:best.playerId,
+      playerName:best.playerName,
+      team:best.team || "",
+      carLocation:best.carLocation,
+      ballLocation:best.ballLocation || startBall,
+      kickoffBallLocation:startBall,
+      kickoffBallFromData:!!startBall,
+      carBallDistance:Math.round(best.distanceToBall),
+      source:`kickoff-frame-inferred-${index + 1}`
+    };
+  }).filter(Boolean);
+}
+
 function buildKickoffOutcomes(scope){
   if(liveApiDashboardActive()){
     return {available:false, reason:"Kickoff outcome analysis is available after uploading a replay."};
   }
 
-  const touches = allReplayTouchEvents();
   const frames = allReplayPositionFrames();
-  if(!touches.length){
-    return {available:false, reason:"Kickoff outcomes need decoded touch data from the uploaded replay."};
+  const replayTouches = allReplayTouchEvents();
+  const inferredTouches = inferredKickoffTouchesFromFrames(frames, replayTouches);
+  const touches = [...replayTouches, ...inferredTouches]
+    .sort((left,right)=>left.elapsed - right.elapsed)
+    .filter((touch,index,all)=>index === 0 || touch.elapsed - all[index - 1].elapsed >= 0.4 || touch.playerId !== all[index - 1].playerId);
+  if(!touches.length && !frames.length){
+    return {available:false, reason:"Kickoff outcomes need decoded replay position data."};
   }
 
   const selectedPlayers = new Set((scope?.ps || []).map(player=>player.id));
