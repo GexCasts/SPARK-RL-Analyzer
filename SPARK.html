@@ -4325,6 +4325,9 @@ let tileReflowAnimationFrame = null;
 let activeTileGridPlacements = null;
 let tileDragStartPlacements = null;
 let tileDropCommitted = false;
+let tileLayoutSettleFrame = null;
+let tileLayoutSettlePass = 0;
+let tileContentResizeObserver = null;
 let coachDockCollapsed = localStorage.getItem(coachDockStorageKey) === "1";
 let defaultTileOrder = [];
 
@@ -4443,15 +4446,70 @@ function managedTileElements(){
   return [...document.querySelectorAll("#analysisDashboard > .card[data-tile-id]")];
 }
 
-function resizeVisibleCharts(){
-  requestAnimationFrame(()=>{
-    Object.values(charts || {}).forEach(chartInstance=>{
-      if(chartInstance && typeof chartInstance.resize === "function") chartInstance.resize();
-    });
-    window.dispatchEvent(new Event("resize"));
-    updateTileRowSpans();
-    document.querySelectorAll(".field,.goalMap").forEach(redrawMapDrawing);
+function resizeChartSurfaces(){
+  Object.values(charts || {}).forEach(chartInstance=>{
+    if(chartInstance && typeof chartInstance.resize === "function") chartInstance.resize();
   });
+}
+
+function redrawVisibleMapSurfaces(){
+  document.querySelectorAll(".field,.goalMap").forEach(container=>{
+    if(container.offsetParent !== null) redrawMapDrawing(container);
+  });
+}
+
+function settleTileLayoutPass(){
+  resizeChartSurfaces();
+  redrawVisibleMapSurfaces();
+  updateTileRowSpans();
+}
+
+function scheduleTileLayoutSettle(passes=4){
+  if(window.matchMedia("(max-width:900px)").matches) return;
+  tileLayoutSettlePass = Math.max(tileLayoutSettlePass, passes);
+  if(tileLayoutSettleFrame) return;
+  const tick = ()=>{
+    tileLayoutSettleFrame = null;
+    if(activeView !== "analysis"){
+      tileLayoutSettlePass = 0;
+      return;
+    }
+    const dashboard = $("analysisDashboard");
+    if(!dashboard || dashboard.style.display === "none"){
+      tileLayoutSettlePass = 0;
+      return;
+    }
+    settleTileLayoutPass();
+    tileLayoutSettlePass -= 1;
+    if(tileLayoutSettlePass > 0) tileLayoutSettleFrame = requestAnimationFrame(tick);
+  };
+  tileLayoutSettleFrame = requestAnimationFrame(tick);
+}
+
+function resizeVisibleCharts(){
+  scheduleTileLayoutSettle(3);
+}
+
+function observeTileContentLayout(){
+  if(!("ResizeObserver" in window)) return;
+  if(!tileContentResizeObserver){
+    tileContentResizeObserver = new ResizeObserver(()=>scheduleTileLayoutSettle(2));
+  }
+  tileContentResizeObserver.disconnect();
+  managedTileElements()
+    .filter(tile=>tile.classList.contains("tileManaged") && !tile.hidden && tile.style.display !== "none")
+    .forEach(tile=>{
+      tile.querySelectorAll([
+        ".field",
+        ".goalMap",
+        ".chartWrap",
+        ".timeline",
+        ".tableWrap",
+        ".note",
+        ".kickoffList",
+        ".overviewPanel"
+      ].join(",")).forEach(element=>tileContentResizeObserver.observe(element));
+    });
 }
 
 function updateTileRowSpans(){
@@ -5176,7 +5234,8 @@ function applyManagedTiles(){
     tile.style.display = hiddenSet.has(id) ? "none" : "";
   });
   renderTileMenu(scopeKind, hiddenSet);
-  resizeVisibleCharts();
+  observeTileContentLayout();
+  scheduleTileLayoutSettle(5);
 }
 
 window.toggleCoachDock = forceState => {
@@ -8578,6 +8637,7 @@ function render(){
     if(overview) overview.style.display = "";
     renderGameOverview();
     applyManagedTiles();
+    scheduleTileLayoutSettle(5);
     return;
   }
 
@@ -8780,6 +8840,7 @@ function render(){
   renderTimeline(a);
   renderCoach(a, impactChartValues, followupSpeed);
   applyManagedTiles();
+  scheduleTileLayoutSettle(6);
 }
 
 
@@ -11325,6 +11386,7 @@ document.addEventListener("touchmove", event=>{
   setTimeout(()=>pulseSparkScrollThumb(target), 0);
 }, {capture:true, passive:true});
 window.addEventListener("resize", ()=>updateSparkScrollThumb(sparkScrollTarget, false));
+window.addEventListener("resize", ()=>scheduleTileLayoutSettle(4));
 requestAnimationFrame(()=>updateSparkScrollThumb(window, false));
 
 if(isObsOverlayMode){
