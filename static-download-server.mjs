@@ -1273,6 +1273,8 @@ function summarizeShotSamples(parsedReplay){
   const bumpEventsByPri = new Map();
   const lastPhysicsSampleTimeByPri = new Map();
   const recentTouchCandidatesByPri = new Map();
+  let activeKickoffWindow = null;
+  let lastKickoffTouchElapsed = -Infinity;
   let ballSampleCount = 0;
   let latestBallLocation = null;
   let scoreboardSecondsRemaining = null;
@@ -1505,6 +1507,114 @@ function summarizeShotSamples(parsedReplay){
     addPerPriEvent(touchEventsByPri, touchedBy.pri, event);
   }
 
+  function addInferredKickoffTouch(time, kickoffWindow, candidate, ballLocation, reason){
+    if(!candidate?.playerName || !Number.isInteger(candidate.pri) || !ballLocation) return false;
+    const elapsedSeconds = Number(candidate.elapsedSeconds ?? currentGameElapsedSeconds(time));
+    if(!Number.isFinite(elapsedSeconds)) return false;
+    if(elapsedSeconds - lastKickoffTouchElapsed < 7.5) return false;
+    const duplicate = touchEvents.some(event=>{
+      const eventElapsed = Number(event.elapsedSeconds ?? event.scoreboardElapsedSeconds);
+      if(!Number.isFinite(eventElapsed) || Math.abs(eventElapsed - elapsedSeconds) > 1.75) return false;
+      const location = event.ballLocation || null;
+      return location ? Math.hypot(location.x || 0, location.y || 0) <= 1600 : true;
+    });
+    if(duplicate) return false;
+
+    noteObservedElapsed(elapsedSeconds);
+    const normalizedTeam = normalizeTeamNumber(candidate.teamNumber);
+    const overtimeBaseSeconds = SOCCAR_REGULATION_SECONDS;
+    const overtimeSeconds = isOvertime ? Math.max(0, elapsedSeconds - overtimeBaseSeconds) : null;
+    const event = {
+      time: Number.isFinite(candidate.time) ? candidate.time : Number.isFinite(time) ? time : 0,
+      elapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+      scoreboardSecondsRemaining: candidate.scoreboardSecondsRemaining ?? scoreboardSecondsRemaining,
+      scoreboardElapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+      isOvertime,
+      overtimeSeconds,
+      pri: candidate.pri,
+      playerName: candidate.playerName,
+      teamNumber: normalizedTeam,
+      carActor: candidate.carActor,
+      carLocation: candidate.carLocation,
+      ballLocation: candidate.ballLocation || ballLocation,
+      kickoffStartElapsedSeconds: Number((kickoffWindow?.startElapsed ?? elapsedSeconds).toFixed(3)),
+      kickoffBallLocation: kickoffWindow?.centerLocation || null,
+      carBallDistance: Math.round(candidate.carBallDistance),
+      source: `kickoff-physics-inferred:${reason}`
+    };
+    touchEvents.push(event);
+    addPerPriEvent(touchEventsByPri, candidate.pri, event);
+    lastKickoffTouchElapsed = elapsedSeconds;
+    return true;
+  }
+
+  function detectKickoffTouchFromPhysics(time, elapsedSeconds, ballLocation, playerSnapshots){
+    if(!isGameplaySampleTime() || !ballLocation || !Array.isArray(playerSnapshots) || !playerSnapshots.length) return;
+    const distanceFromCenter = Math.hypot(ballLocation.x || 0, ballLocation.y || 0);
+    const ballVelocity = currentBallVelocity();
+    const ballSpeed = magnitude2(ballVelocity);
+    const nearCenter = distanceFromCenter <= 360;
+
+    if(nearCenter && (!activeKickoffWindow || elapsedSeconds - activeKickoffWindow.startElapsed > 8)){
+      activeKickoffWindow = {
+        startElapsed: elapsedSeconds,
+        startTime: Number.isFinite(time) ? time : 0,
+        centerLocation: ballLocation,
+        bestCandidate: null
+      };
+    }
+
+    if(!activeKickoffWindow) return;
+    const windowAge = elapsedSeconds - activeKickoffWindow.startElapsed;
+    if(windowAge < -0.25) return;
+    if(windowAge > 8){
+      activeKickoffWindow = nearCenter ? {
+        startElapsed: elapsedSeconds,
+        startTime: Number.isFinite(time) ? time : 0,
+        centerLocation: ballLocation,
+        bestCandidate: null
+      } : null;
+      return;
+    }
+
+    let closest = null;
+    for(const player of playerSnapshots){
+      if(!player.location || !player.playerName) continue;
+      const carBallDistance = distanceBetweenLocations(player.location, ballLocation);
+      if(!closest || carBallDistance < closest.carBallDistance){
+        closest = {
+          time: Number.isFinite(time) ? time : 0,
+          elapsedSeconds,
+          scoreboardSecondsRemaining,
+          pri: player.pri,
+          playerName: player.playerName,
+          teamNumber: player.teamNumber,
+          carActor: player.carActor,
+          carLocation: player.location,
+          ballLocation,
+          carBallDistance
+        };
+      }
+    }
+    if(!closest || closest.carBallDistance > 980) return;
+
+    const currentBest = activeKickoffWindow.bestCandidate;
+    if(!currentBest || closest.carBallDistance < currentBest.carBallDistance || elapsedSeconds - currentBest.elapsedSeconds > 0.35){
+      activeKickoffWindow.bestCandidate = closest;
+    }
+
+    const center = activeKickoffWindow.centerLocation || {x:0,y:0,z:0};
+    const movedFromCenter = Math.hypot((ballLocation.x || 0) - (center.x || 0), (ballLocation.y || 0) - (center.y || 0));
+    const best = activeKickoffWindow.bestCandidate;
+    const clearBallMovement = movedFromCenter >= 260 || ballSpeed >= 850;
+    const closeContact = best?.carBallDistance <= 620 && windowAge >= 0.15;
+    const timedContact = best?.carBallDistance <= 760 && windowAge >= 1.15;
+    if(best && (clearBallMovement || closeContact || timedContact)){
+      const added = addInferredKickoffTouch(time, activeKickoffWindow, best, ballLocation, clearBallMovement ? "ball-movement" : closeContact ? "close-contact" : "timed-contact");
+      if(added) activeKickoffWindow = null;
+    }
+  }
+
   function addDemoEvent(time, payload){
     const demolish = payload?.DemolishExtended || payload;
     if(!demolish || demolish.self_demolish === true) return;
@@ -1623,6 +1733,8 @@ function summarizeShotSamples(parsedReplay){
     ballSampleCount++;
     const elapsedSeconds = currentGameElapsedSeconds(time);
     noteObservedElapsed(elapsedSeconds);
+    const playerSnapshots = activePlayerSnapshots();
+    detectKickoffTouchFromPhysics(time, elapsedSeconds, ballLocation, playerSnapshots);
     const seenPris = new Set();
     for(const pri of carPri.values()){
       if(!Number.isInteger(pri) || seenPris.has(pri)) continue;
