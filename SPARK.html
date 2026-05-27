@@ -4485,6 +4485,7 @@ function updateTileRowSpans(){
       tile.style.gridRow = Number.isFinite(row) && row > 0 ? `${row} / span ${syncedRows}` : `span ${syncedRows}`;
     });
   }
+  pinTileAddTileToBottom();
 }
 
 function tileSpan(tile){
@@ -4517,6 +4518,27 @@ function setTileGridPlacement(tile, placement=null){
     delete tile.dataset.tileGridRow;
     tile.style.gridRow = `span ${rows}`;
   }
+}
+
+function pinTileAddTileToBottom(){
+  const addTile = $("tileAddTile");
+  if(!addTile || addTile.hidden || addTile.style.display === "none" || window.matchMedia("(max-width:900px)").matches) return;
+  const visibleTiles = managedTileElements()
+    .filter(tile=>
+      tile !== addTile &&
+      tile.dataset.tileId !== "gameOverview" &&
+      tile.classList.contains("tileManaged") &&
+      tile.style.display !== "none"
+    );
+  const bottomRow = visibleTiles.reduce((max, tile)=>{
+    const placement = currentTilePlacement(tile);
+    return Math.max(max, placement.row + placement.rows);
+  }, 1);
+  const rows = Math.max(6, Number(addTile.style.getPropertyValue("--tile-rows")) || 6);
+  const row = bottomRow + 1;
+  addTile.dataset.tileGridRow = String(row);
+  addTile.style.gridColumn = "1 / -1";
+  addTile.style.gridRow = `${row} / span ${rows}`;
 }
 
 function tileGridMetrics(){
@@ -4695,6 +4717,20 @@ function applyTileGridPlacements(placements, includeDragged=false){
     if(tile === draggedTile && !includeDragged) return;
     setTileGridPlacement(tile, placement);
   });
+  pinTileAddTileToBottom();
+}
+
+function currentVisibleTilePlacementMap(){
+  return new Map(visibleGridTiles()
+    .filter(tile=>tile.dataset.tileId !== "gameOverview")
+    .map(tile=>[tile, currentTilePlacement(tile)]));
+}
+
+function refreshTileGridAfterResize(tile){
+  if(!tile || window.matchMedia("(max-width:900px)").matches) return;
+  const placement = currentTilePlacement(tile);
+  const placements = resolveTileGridPlacements(tile, placement);
+  applyTileGridPlacements(placements, true);
 }
 
 function saveTileGridPositions(placements){
@@ -4842,13 +4878,17 @@ function beginTileResize(event, tile){
     tile.style.setProperty("--tile-span", nextSpan);
     tile.style.setProperty("--tile-chart-height", `${nextHeight}px`);
     updateTileRowSpans();
+    refreshTileGridAfterResize(tile);
     resizeVisibleCharts();
   }
 
   function onUp(){
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
+    updateTileRowSpans();
+    refreshTileGridAfterResize(tile);
     saveTileSize(tile);
+    saveTileGridPositions(currentVisibleTilePlacementMap());
     resizeVisibleCharts();
   }
 
