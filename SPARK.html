@@ -759,8 +759,30 @@ button.unitSwitch{
   opacity:.48;
   outline:2px solid var(--spark-yellow);
 }
-.tileManaged.tileDropBefore{box-shadow:-6px 0 0 var(--spark-yellow)}
-.tileManaged.tileDropAfter{box-shadow:6px 0 0 var(--spark-yellow)}
+.tileDropPreview{
+  grid-column:span var(--tile-span,8);
+  grid-row:span var(--tile-rows,18);
+  min-height:120px;
+  border:2px dashed oklch(88% .16 86 / .86);
+  border-radius:8px;
+  background:
+    linear-gradient(135deg,oklch(86% .16 86 / .18),oklch(100% .006 80 / .045)),
+    oklch(8% .01 250 / .72);
+  box-shadow:
+    inset 0 0 0 1px oklch(100% .006 80 / .12),
+    0 0 28px oklch(86% .16 86 / .2);
+  display:grid;
+  place-items:center;
+  color:oklch(88% .16 86);
+  font-size:11px;
+  font-weight:950;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  pointer-events:none;
+}
+.tileDropPreview::before{
+  content:"Drop here";
+}
 .tileManaged > h2{
   user-select:none;
   padding-right:42px;
@@ -4276,6 +4298,7 @@ const playerDefaultTileIds = new Set(["boostManagement","positioning","boostMap"
 let tileLayoutState = {};
 let managedTilesReady = false;
 let draggedTile = null;
+let tileDropPreview = null;
 let coachDockCollapsed = localStorage.getItem(coachDockStorageKey) === "1";
 let defaultTileOrder = [];
 
@@ -4436,12 +4459,26 @@ function updateTileRowSpans(){
 }
 
 function clearTileDropMarkers(){
-  managedTileElements().forEach(tile=>tile.classList.remove("tileDropBefore","tileDropAfter"));
+  if(tileDropPreview?.parentNode) tileDropPreview.parentNode.removeChild(tileDropPreview);
+}
+
+function ensureTileDropPreview(){
+  if(!tileDropPreview){
+    tileDropPreview = document.createElement("div");
+    tileDropPreview.className = "tileDropPreview";
+    tileDropPreview.setAttribute("aria-hidden", "true");
+  }
+  if(draggedTile){
+    tileDropPreview.style.setProperty("--tile-span", Number(draggedTile.style.getPropertyValue("--tile-span")) || Number(draggedTile.dataset.tileSpan) || 8);
+    tileDropPreview.style.setProperty("--tile-rows", Number(draggedTile.style.getPropertyValue("--tile-rows")) || 18);
+  }
+  return tileDropPreview;
 }
 
 function visibleManagedTiles(){
   return managedTileElements().filter(tile =>
     tile !== draggedTile &&
+    tile !== tileDropPreview &&
     tile.classList.contains("tileManaged") &&
     tile.style.display !== "none"
   );
@@ -4473,9 +4510,41 @@ function tileInsertionTarget(event){
 
 function shouldInsertBeforeTile(event, target){
   const rect = target.getBoundingClientRect();
-  const verticalBias = event.clientY < rect.top + rect.height * .42;
-  const horizontalBias = event.clientX < rect.left + rect.width / 2;
-  return verticalBias || horizontalBias;
+  return event.clientY < rect.top + rect.height / 2;
+}
+
+function placeTileDropPreview(event){
+  const dashboard = $("analysisDashboard");
+  if(!dashboard || !draggedTile) return;
+  const preview = ensureTileDropPreview();
+  const target = tileInsertionTarget(event);
+  const addTile = $("tileAddTile");
+  if(target && target !== draggedTile){
+    if(shouldInsertBeforeTile(event, target)) target.before(preview);
+    else target.after(preview);
+  }else if(addTile && !addTile.hidden){
+    addTile.before(preview);
+  }else{
+    dashboard.appendChild(preview);
+  }
+  updateTileRowSpans();
+}
+
+function autoScrollTileDrag(event){
+  const edge = 92;
+  const maxStep = 26;
+  let delta = 0;
+  if(event.clientY < edge){
+    delta = -Math.round(maxStep * (1 - event.clientY / edge));
+  }else if(event.clientY > window.innerHeight - edge){
+    delta = Math.round(maxStep * (1 - (window.innerHeight - event.clientY) / edge));
+  }
+  if(delta){
+    window.scrollBy({top:delta, left:0, behavior:"auto"});
+    const scroller = document.scrollingElement || document.documentElement;
+    if(scroller) scroller.scrollTop += delta;
+    if(document.body) document.body.scrollTop += delta;
+  }
 }
 
 function saveCurrentTileOrder(){
@@ -4514,6 +4583,8 @@ function showTileInScope(tileId, scopeKind=currentTileScopeKind()){
   const hidden = new Set(scope.hidden || [...defaultHiddenTileSet(scopeKind)]);
   hidden.delete(tileId);
   scope.hidden = [...hidden];
+  const order = Array.isArray(scope.order) ? scope.order : defaultTileOrderForScope(scopeKind);
+  scope.order = [...order.filter(id=>id !== tileId), tileId];
   saveTileLayoutState();
   applyManagedTiles();
   requestAnimationFrame(()=>{
@@ -4632,21 +4703,25 @@ function initializeManagedTiles(){
 
   const dashboard = $("analysisDashboard");
   if(dashboard){
+    document.addEventListener("dragover", event=>{
+      if(draggedTile) autoScrollTileDrag(event);
+    });
     dashboard.addEventListener("dragover", event=>{
       if(!draggedTile) return;
       event.preventDefault();
-      const target = tileInsertionTarget(event);
-      clearTileDropMarkers();
-      if(!target) return;
-      target.classList.add(shouldInsertBeforeTile(event, target) ? "tileDropBefore" : "tileDropAfter");
+      if(event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      autoScrollTileDrag(event);
+      placeTileDropPreview(event);
     });
     dashboard.addEventListener("drop", event=>{
       if(!draggedTile) return;
       event.preventDefault();
-      const target = tileInsertionTarget(event);
-      if(target && target !== draggedTile){
-        if(shouldInsertBeforeTile(event, target)) target.before(draggedTile);
-        else target.after(draggedTile);
+      if(tileDropPreview?.parentNode){
+        tileDropPreview.before(draggedTile);
+      }else{
+        const addTile = $("tileAddTile");
+        if(addTile && !addTile.hidden) addTile.before(draggedTile);
+        else dashboard.appendChild(draggedTile);
       }
       clearTileDropMarkers();
       saveCurrentTileOrder();
@@ -4702,13 +4777,22 @@ function applyTileOrder(scope){
   const order = Array.isArray(scope.order) ? scope.order : defaultTileOrderForScope(currentTileScopeKind());
   const byId = new Map(managedTileElements().map(tile=>[tile.dataset.tileId, tile]));
   let anchor = $("gameOverviewCard");
+  const placed = new Set(["gameOverview"]);
   order.forEach(id=>{
     const tile = byId.get(id);
     if(tile && tile !== anchor){
       if(anchor) anchor.after(tile);
       else dashboard.appendChild(tile);
       anchor = tile;
+      placed.add(id);
     }
+  });
+  managedTileElements().forEach(tile=>{
+    const id = tile.dataset.tileId;
+    if(!id || placed.has(id)) return;
+    if(anchor) anchor.after(tile);
+    else dashboard.appendChild(tile);
+    anchor = tile;
   });
   const addTile = $("tileAddTile");
   if(addTile) dashboard.appendChild(addTile);
