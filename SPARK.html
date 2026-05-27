@@ -604,7 +604,7 @@ button.unitSwitch{
 .dashboard{
   display:grid;
   grid-template-columns:repeat(24,minmax(34px,1fr));
-  grid-auto-flow:dense;
+  grid-auto-flow:row;
   grid-auto-rows:8px;
   gap:10px;
   align-items:stretch;
@@ -744,7 +744,8 @@ button.unitSwitch{
   min-height:120px;
   cursor:grab;
   overflow:hidden;
-  transition:border-color .16s var(--spark-ease),box-shadow .16s var(--spark-ease),opacity .16s var(--spark-ease);
+  transition:border-color .16s var(--spark-ease),box-shadow .16s var(--spark-ease),opacity .16s var(--spark-ease),transform .24s cubic-bezier(.16,1,.3,1);
+  will-change:transform;
 }
 .tileManaged:hover{
   border-color:rgba(255,208,0,.34);
@@ -791,6 +792,8 @@ button.unitSwitch{
   letter-spacing:.06em;
   text-transform:uppercase;
   pointer-events:none;
+  transition:transform .24s cubic-bezier(.16,1,.3,1),opacity .16s var(--spark-ease);
+  will-change:transform;
 }
 .tileDropPreview::before{
   content:"Drop here";
@@ -4311,6 +4314,7 @@ let tileLayoutState = {};
 let managedTilesReady = false;
 let draggedTile = null;
 let tileDropPreview = null;
+let tileReflowAnimationFrame = null;
 let coachDockCollapsed = localStorage.getItem(coachDockStorageKey) === "1";
 let defaultTileOrder = [];
 
@@ -4474,6 +4478,44 @@ function clearTileDropMarkers(){
   if(tileDropPreview?.parentNode) tileDropPreview.parentNode.removeChild(tileDropPreview);
 }
 
+function tileReflowElements(){
+  return [
+    ...managedTileElements().filter(tile=>tile.classList.contains("tileManaged") && tile.style.display !== "none"),
+    $("tileAddTile"),
+    tileDropPreview
+  ].filter(tile=>tile && !tile.hidden && tile.isConnected);
+}
+
+function animateTileReflow(mutator){
+  const before = new Map();
+  tileReflowElements().forEach(tile=>{
+    before.set(tile, tile.getBoundingClientRect());
+  });
+  mutator();
+  updateTileRowSpans();
+  const afterElements = tileReflowElements();
+  afterElements.forEach(tile=>{
+    const oldRect = before.get(tile);
+    if(!oldRect) return;
+    const newRect = tile.getBoundingClientRect();
+    const dx = oldRect.left - newRect.left;
+    const dy = oldRect.top - newRect.top;
+    if(Math.abs(dx) < .5 && Math.abs(dy) < .5) return;
+    tile.style.transition = "none";
+    tile.style.transform = `translate(${dx}px, ${dy}px)`;
+  });
+  void ($("analysisDashboard")?.offsetHeight);
+  if(tileReflowAnimationFrame) cancelAnimationFrame(tileReflowAnimationFrame);
+  tileReflowAnimationFrame = requestAnimationFrame(()=>{
+    afterElements.forEach(tile=>{
+      if(!tile.isConnected) return;
+      tile.style.transition = "";
+      tile.style.transform = "";
+    });
+    tileReflowAnimationFrame = null;
+  });
+}
+
 function ensureTileDropPreview(){
   if(!tileDropPreview){
     tileDropPreview = document.createElement("div");
@@ -4531,15 +4573,43 @@ function placeTileDropPreview(event){
   const preview = ensureTileDropPreview();
   const target = tileInsertionTarget(event);
   const addTile = $("tileAddTile");
+  let parent = dashboard;
+  let reference = null;
   if(target && target !== draggedTile){
-    if(shouldInsertBeforeTile(event, target)) target.before(preview);
-    else target.after(preview);
+    parent = target.parentNode || dashboard;
+    if(shouldInsertBeforeTile(event, target)){
+      reference = target;
+    }else{
+      reference = target.nextElementSibling === preview ? preview.nextElementSibling : target.nextElementSibling;
+    }
   }else if(addTile && !addTile.hidden){
-    addTile.before(preview);
+    parent = addTile.parentNode || dashboard;
+    reference = addTile;
   }else{
-    dashboard.appendChild(preview);
+    parent = dashboard;
+    reference = null;
   }
-  updateTileRowSpans();
+  if(preview.parentNode === parent && preview.nextElementSibling === reference) return;
+  animateTileReflow(()=>{
+    parent.insertBefore(preview, reference);
+  });
+}
+
+function commitTileDrop(){
+  const dashboard = $("analysisDashboard");
+  if(!dashboard || !draggedTile) return;
+  animateTileReflow(()=>{
+    if(tileDropPreview?.parentNode){
+      tileDropPreview.before(draggedTile);
+    }else{
+      const addTile = $("tileAddTile");
+      if(addTile && !addTile.hidden) addTile.before(draggedTile);
+      else dashboard.appendChild(draggedTile);
+    }
+    clearTileDropMarkers();
+  });
+  saveCurrentTileOrder();
+  resizeVisibleCharts();
 }
 
 function autoScrollTileDrag(event){
@@ -4728,16 +4798,7 @@ function initializeManagedTiles(){
     dashboard.addEventListener("drop", event=>{
       if(!draggedTile) return;
       event.preventDefault();
-      if(tileDropPreview?.parentNode){
-        tileDropPreview.before(draggedTile);
-      }else{
-        const addTile = $("tileAddTile");
-        if(addTile && !addTile.hidden) addTile.before(draggedTile);
-        else dashboard.appendChild(draggedTile);
-      }
-      clearTileDropMarkers();
-      saveCurrentTileOrder();
-      resizeVisibleCharts();
+      commitTileDrop();
     });
   }
 
