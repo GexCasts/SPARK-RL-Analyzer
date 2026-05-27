@@ -4315,6 +4315,9 @@ let managedTilesReady = false;
 let draggedTile = null;
 let tileDropPreview = null;
 let tileReflowAnimationFrame = null;
+let activeTileGridPlacements = null;
+let tileDragStartPlacements = null;
+let tileDropCommitted = false;
 let coachDockCollapsed = localStorage.getItem(coachDockStorageKey) === "1";
 let defaultTileOrder = [];
 
@@ -4336,6 +4339,7 @@ function normalizeTileScopeLayout(layout){
   if(Array.isArray(layout?.order)) nextLayout.order = layout.order.filter(Boolean);
   if(Array.isArray(layout?.hidden)) nextLayout.hidden = layout.hidden.filter(Boolean);
   if(layout?.sizes && typeof layout.sizes === "object") nextLayout.sizes = layout.sizes;
+  if(layout?.positions && typeof layout.positions === "object") nextLayout.positions = layout.positions;
   return nextLayout;
 }
 
@@ -4461,7 +4465,8 @@ function updateTileRowSpans(){
     const minRows = tile.id === "tileAddTile" ? 6 : 14;
     const rows = Math.max(minRows, Math.ceil((height + rowGap) / (rowHeight + rowGap)));
     tile.style.setProperty("--tile-rows", rows);
-    tile.style.gridRow = `span ${rows}`;
+    const row = Number(tile.dataset.tileGridRow);
+    tile.style.gridRow = Number.isFinite(row) && row > 0 ? `${row} / span ${rows}` : `span ${rows}`;
   });
   const mapTiles = [$("positioningMapCard"), $("boostMapCard")]
     .filter(tile=>tile && !tile.hidden && tile.style.display !== "none");
@@ -4469,9 +4474,96 @@ function updateTileRowSpans(){
     const syncedRows = Math.max(...mapTiles.map(tile=>Number(tile.style.getPropertyValue("--tile-rows")) || 14));
     mapTiles.forEach(tile=>{
       tile.style.setProperty("--tile-rows", syncedRows);
-      tile.style.gridRow = `span ${syncedRows}`;
+      const row = Number(tile.dataset.tileGridRow);
+      tile.style.gridRow = Number.isFinite(row) && row > 0 ? `${row} / span ${syncedRows}` : `span ${syncedRows}`;
     });
   }
+}
+
+function tileSpan(tile){
+  return clampValue(Number(tile?.style?.getPropertyValue("--tile-span")) || Number(tile?.dataset?.tileSpan) || 8, 4, 24);
+}
+
+function tileRows(tile){
+  return Math.max(6, Number(tile?.style?.getPropertyValue("--tile-rows")) || 14);
+}
+
+function setTileGridPlacement(tile, placement=null){
+  if(!tile) return;
+  const span = tileSpan(tile);
+  const rows = tileRows(tile);
+  const col = Number(placement?.col);
+  const row = Number(placement?.row);
+  if(Number.isFinite(col) && col > 0){
+    const safeCol = clampValue(Math.round(col), 1, Math.max(1, 25 - span));
+    tile.dataset.tileGridCol = String(safeCol);
+    tile.style.gridColumn = `${safeCol} / span ${span}`;
+  }else{
+    delete tile.dataset.tileGridCol;
+    tile.style.gridColumn = `span ${span}`;
+  }
+  if(Number.isFinite(row) && row > 0){
+    const safeRow = Math.max(1, Math.round(row));
+    tile.dataset.tileGridRow = String(safeRow);
+    tile.style.gridRow = `${safeRow} / span ${rows}`;
+  }else{
+    delete tile.dataset.tileGridRow;
+    tile.style.gridRow = `span ${rows}`;
+  }
+}
+
+function tileGridMetrics(){
+  const dashboard = $("analysisDashboard");
+  if(!dashboard) return null;
+  const rect = dashboard.getBoundingClientRect();
+  const styles = getComputedStyle(dashboard);
+  const columnGap = Number.parseFloat(styles.columnGap) || 10;
+  const rowGap = Number.parseFloat(styles.rowGap) || 10;
+  const rowHeight = Number.parseFloat(styles.gridAutoRows) || 8;
+  const columnWidth = Math.max(1, (rect.width - (columnGap * 23)) / 24);
+  return {dashboard, rect, columnGap, rowGap, rowHeight, columnWidth};
+}
+
+function pointerGridPlacement(event, tile){
+  const metrics = tileGridMetrics();
+  if(!metrics || !tile) return null;
+  const span = tileSpan(tile);
+  const x = event.clientX - metrics.rect.left;
+  const y = event.clientY - metrics.rect.top;
+  const colUnit = metrics.columnWidth + metrics.columnGap;
+  const rowUnit = metrics.rowHeight + metrics.rowGap;
+  const col = clampValue(Math.floor(x / colUnit) + 1, 1, Math.max(1, 25 - span));
+  const row = Math.max(1, Math.floor(y / rowUnit) + 1);
+  return {col,row};
+}
+
+function placementsOverlap(a, b){
+  if(!a || !b) return false;
+  return a.col < b.col + b.span &&
+    a.col + a.span > b.col &&
+    a.row < b.row + b.rows &&
+    a.row + a.rows > b.row;
+}
+
+function firstOpenTilePlacement(tile, occupied, preferred={col:1,row:1}){
+  const span = tileSpan(tile);
+  const rows = tileRows(tile);
+  const maxCol = Math.max(1, 25 - span);
+  const startCol = clampValue(Math.round(Number(preferred.col) || 1), 1, maxCol);
+  const startRow = Math.max(1, Math.round(Number(preferred.row) || 1));
+  let best = null;
+  const maxRow = Math.max(startRow + 90, ...occupied.map(item=>item.row + item.rows + 18), 90);
+  for(let row=1; row<=maxRow; row++){
+    for(let col=1; col<=maxCol; col++){
+      const candidate = {col,row,span,rows};
+      if(occupied.some(item=>placementsOverlap(candidate, item))) continue;
+      const distance = Math.abs(row - startRow) * 24 + Math.abs(col - startCol);
+      if(!best || distance < best.distance){
+        best = {...candidate, distance};
+      }
+    }
+  }
+  return best || {col:startCol,row:maxRow + 1,span,rows};
 }
 
 function clearTileDropMarkers(){
@@ -4529,86 +4621,123 @@ function ensureTileDropPreview(){
   return tileDropPreview;
 }
 
-function visibleManagedTiles(){
+function currentTilePlacement(tile){
+  const col = Number(tile?.dataset?.tileGridCol);
+  const row = Number(tile?.dataset?.tileGridRow);
+  if(Number.isFinite(col) && Number.isFinite(row) && col > 0 && row > 0){
+    return {col,row,span:tileSpan(tile),rows:tileRows(tile)};
+  }
+  const metrics = tileGridMetrics();
+  if(!metrics || !tile) return {col:1,row:1,span:tileSpan(tile),rows:tileRows(tile)};
+  const rect = tile.getBoundingClientRect();
+  const colUnit = metrics.columnWidth + metrics.columnGap;
+  const rowUnit = metrics.rowHeight + metrics.rowGap;
+  return {
+    col:clampValue(Math.round((rect.left - metrics.rect.left) / colUnit) + 1, 1, Math.max(1, 25 - tileSpan(tile))),
+    row:Math.max(1, Math.round((rect.top - metrics.rect.top) / rowUnit) + 1),
+    span:tileSpan(tile),
+    rows:tileRows(tile)
+  };
+}
+
+function visibleGridTiles(){
   return managedTileElements().filter(tile =>
-    tile !== draggedTile &&
     tile !== tileDropPreview &&
     tile.classList.contains("tileManaged") &&
     tile.style.display !== "none"
   );
 }
 
-function tileInsertionTarget(event){
-  const direct = event.target.closest?.(".tileManaged");
-  if(direct && direct !== draggedTile && direct.style.display !== "none") return direct;
+function resolveTileGridPlacements(targetTile, targetPlacement){
+  const tiles = visibleGridTiles().filter(tile=>tile !== targetTile);
+  const result = new Map();
+  const occupied = [{
+    tile:targetTile,
+    col:targetPlacement.col,
+    row:targetPlacement.row,
+    span:tileSpan(targetTile),
+    rows:tileRows(targetTile)
+  }];
+  result.set(targetTile, occupied[0]);
 
-  const candidates = visibleManagedTiles();
-  if(!candidates.length) return null;
-  const pointerX = event.clientX;
-  const pointerY = event.clientY;
-
-  let closest = null;
-  let closestDistance = Infinity;
-  for(const tile of candidates){
-    const rect = tile.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const distance = Math.hypot(pointerX - centerX, pointerY - centerY);
-    if(distance < closestDistance){
-      closest = tile;
-      closestDistance = distance;
-    }
-  }
-  return closest;
+  tiles
+    .map(tile=>({tile, placement:tileDragStartPlacements?.get(tile) || currentTilePlacement(tile)}))
+    .sort((left,right)=>
+      (left.placement.row - right.placement.row) ||
+      (left.placement.col - right.placement.col)
+    )
+    .forEach(({tile, placement})=>{
+      const candidate = {
+        tile,
+        col:placement.col,
+        row:placement.row,
+        span:tileSpan(tile),
+        rows:tileRows(tile)
+      };
+      const finalPlacement = occupied.some(item=>placementsOverlap(candidate, item))
+        ? firstOpenTilePlacement(tile, occupied, placement)
+        : candidate;
+      occupied.push(finalPlacement);
+      result.set(tile, finalPlacement);
+    });
+  return result;
 }
 
-function shouldInsertBeforeTile(event, target){
-  const rect = target.getBoundingClientRect();
-  return event.clientY < rect.top + rect.height / 2;
+function applyTileGridPlacements(placements, includeDragged=false){
+  placements.forEach((placement, tile)=>{
+    if(tile === draggedTile && !includeDragged) return;
+    setTileGridPlacement(tile, placement);
+  });
+}
+
+function saveTileGridPositions(placements){
+  const scope = tileScopeState();
+  if(!scope.positions) scope.positions = {};
+  placements.forEach((placement, tile)=>{
+    if(!tile?.dataset?.tileId || tile.dataset.tileId === "gameOverview") return;
+    scope.positions[tile.dataset.tileId] = {
+      col:placement.col,
+      row:placement.row
+    };
+  });
+  scope.order = [...placements.entries()]
+    .filter(([tile])=>tile?.dataset?.tileId && tile.dataset.tileId !== "gameOverview")
+    .sort((left,right)=>
+      (left[1].row - right[1].row) ||
+      (left[1].col - right[1].col)
+    )
+    .map(([tile])=>tile.dataset.tileId);
+  saveTileLayoutState();
 }
 
 function placeTileDropPreview(event){
   const dashboard = $("analysisDashboard");
   if(!dashboard || !draggedTile) return;
   const preview = ensureTileDropPreview();
-  const target = tileInsertionTarget(event);
-  const addTile = $("tileAddTile");
-  let parent = dashboard;
-  let reference = null;
-  if(target && target !== draggedTile){
-    parent = target.parentNode || dashboard;
-    if(shouldInsertBeforeTile(event, target)){
-      reference = target;
-    }else{
-      reference = target.nextElementSibling === preview ? preview.nextElementSibling : target.nextElementSibling;
-    }
-  }else if(addTile && !addTile.hidden){
-    parent = addTile.parentNode || dashboard;
-    reference = addTile;
-  }else{
-    parent = dashboard;
-    reference = null;
-  }
-  if(preview.parentNode === parent && preview.nextElementSibling === reference) return;
+  const targetPlacement = pointerGridPlacement(event, draggedTile);
+  if(!targetPlacement) return;
+  const placements = resolveTileGridPlacements(draggedTile, targetPlacement);
+  const previous = activeTileGridPlacements?.get(draggedTile);
+  if(preview.parentNode === dashboard && previous && previous.col === targetPlacement.col && previous.row === targetPlacement.row) return;
+  activeTileGridPlacements = placements;
   animateTileReflow(()=>{
-    parent.insertBefore(preview, reference);
+    if(!preview.parentNode) dashboard.appendChild(preview);
+    setTileGridPlacement(preview, targetPlacement);
+    applyTileGridPlacements(placements);
   });
 }
 
 function commitTileDrop(){
   const dashboard = $("analysisDashboard");
   if(!dashboard || !draggedTile) return;
+  const placements = activeTileGridPlacements || resolveTileGridPlacements(draggedTile, currentTilePlacement(tileDropPreview || draggedTile));
+  tileDropCommitted = true;
   animateTileReflow(()=>{
-    if(tileDropPreview?.parentNode){
-      tileDropPreview.before(draggedTile);
-    }else{
-      const addTile = $("tileAddTile");
-      if(addTile && !addTile.hidden) addTile.before(draggedTile);
-      else dashboard.appendChild(draggedTile);
-    }
+    if(tileDropPreview?.parentNode) tileDropPreview.before(draggedTile);
+    applyTileGridPlacements(placements, true);
     clearTileDropMarkers();
   });
-  saveCurrentTileOrder();
+  saveTileGridPositions(placements);
   resizeVisibleCharts();
 }
 
@@ -4634,6 +4763,15 @@ function saveCurrentTileOrder(){
   scope.order = managedTileElements()
     .filter(tile=>tile.dataset.tileId !== "gameOverview")
     .map(tile=>tile.dataset.tileId);
+  if(!scope.positions) scope.positions = {};
+  managedTileElements().forEach(tile=>{
+    if(!tile.dataset.tileId || tile.dataset.tileId === "gameOverview") return;
+    const col = Number(tile.dataset.tileGridCol);
+    const row = Number(tile.dataset.tileGridRow);
+    if(Number.isFinite(col) && Number.isFinite(row) && col > 0 && row > 0){
+      scope.positions[tile.dataset.tileId] = {col,row};
+    }
+  });
   saveTileLayoutState();
 }
 
@@ -4644,6 +4782,9 @@ function saveTileSize(tile){
     span:Number(tile.style.getPropertyValue("--tile-span")) || Number(tile.dataset.tileSpan) || 8,
     chartHeight:Number((tile.style.getPropertyValue("--tile-chart-height") || "").replace("px","")) || null
   };
+  if(scope.positions?.[tile.dataset.tileId]){
+    scope.positions[tile.dataset.tileId].col = clampValue(scope.positions[tile.dataset.tileId].col, 1, Math.max(1, 25 - tileSpan(tile)));
+  }
   saveTileLayoutState();
 }
 
@@ -4667,6 +4808,7 @@ function showTileInScope(tileId, scopeKind=currentTileScopeKind()){
   scope.hidden = [...hidden];
   const order = Array.isArray(scope.order) ? scope.order : defaultTileOrderForScope(scopeKind);
   scope.order = [...order.filter(id=>id !== tileId), tileId];
+  if(scope.positions) delete scope.positions[tileId];
   saveTileLayoutState();
   applyManagedTiles();
   requestAnimationFrame(()=>{
@@ -4738,7 +4880,11 @@ function beginTileDrag(event, tile){
     event.preventDefault();
     return;
   }
+  updateTileRowSpans();
   draggedTile = tile;
+  activeTileGridPlacements = null;
+  tileDragStartPlacements = new Map(visibleGridTiles().map(candidate=>[candidate, currentTilePlacement(candidate)]));
+  tileDropCommitted = false;
   tile.classList.add("dragging");
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData("text/plain", tile.dataset.tileId);
@@ -4746,8 +4892,17 @@ function beginTileDrag(event, tile){
 
 function finishTileDrag(tile){
   tile.classList.remove("dragging");
-  clearTileDropMarkers();
-  saveCurrentTileOrder();
+  if(!tileDropCommitted && tileDragStartPlacements){
+    animateTileReflow(()=>{
+      applyTileGridPlacements(tileDragStartPlacements, true);
+      clearTileDropMarkers();
+    });
+  }else{
+    clearTileDropMarkers();
+  }
+  activeTileGridPlacements = null;
+  tileDragStartPlacements = null;
+  tileDropCommitted = false;
   draggedTile = null;
 }
 
@@ -4886,6 +5041,18 @@ function applyTileSizes(scope){
   });
 }
 
+function applyTilePositions(scope){
+  const positions = scope.positions || {};
+  managedTileElements().forEach(tile=>{
+    const position = positions[tile.dataset.tileId];
+    if(position){
+      setTileGridPlacement(tile, position);
+    }else{
+      setTileGridPlacement(tile, null);
+    }
+  });
+}
+
 function renderTileMenu(scopeKind, hiddenSet){
   const panel = $("tileMenuPanel");
   if(!panel) return;
@@ -4946,6 +5113,7 @@ function applyManagedTiles(){
   const scope = tileScopeState(scopeKind);
   applyTileOrder(scope);
   applyTileSizes(scope);
+  applyTilePositions(scope);
   const hiddenSet = new Set(Array.isArray(scope.hidden) ? scope.hidden : [...defaultHiddenTileSet(scopeKind)]);
 
   managedTileElements().forEach(tile=>{
