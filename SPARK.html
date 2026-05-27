@@ -5517,10 +5517,13 @@ function kickoffDirectionFromDisplacement(displacement){
   const half = dy < 0 ? "Blue" : "Orange";
   const sideMagnitude = Math.abs(dx);
   const downfieldMagnitude = Math.abs(dy);
+  const side = half === "Blue"
+    ? (dx < 0 ? "right" : "left")
+    : (dx < 0 ? "left" : "right");
   let lane = "side";
-  if(sideMagnitude > downfieldMagnitude * 0.9) lane = dx > 0 ? "top side" : "bottom side";
-  else if(sideMagnitude > 1250) lane = dx > 0 ? "top corner" : "bottom corner";
-  else if(downfieldMagnitude < 900) lane = dx > 0 ? "top side" : "bottom side";
+  if(sideMagnitude > downfieldMagnitude * 0.9) lane = `${side} side`;
+  else if(sideMagnitude > 1250) lane = `${side} corner`;
+  else if(downfieldMagnitude < 900) lane = `${side} side`;
 
   return {
     label:`toward ${half} ${lane}`,
