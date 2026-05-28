@@ -243,9 +243,10 @@ header{
   padding:var(--spark-header-pad-y) var(--spark-header-pad-x);
   border-bottom:1px solid oklch(84% .15 86 / .34);
   background:
-    linear-gradient(90deg,color-mix(in srgb,var(--team-blue) 30%,transparent),transparent 28%,transparent 72%,color-mix(in srgb,var(--team-orange) 32%,transparent)),
-    radial-gradient(circle at 18% 40%,oklch(86% .16 86 / .16),transparent 32%),
-    linear-gradient(180deg,oklch(18% .016 250 / .98),oklch(10% .012 250 / .98));
+    linear-gradient(118deg,transparent 0 33%,oklch(91% .18 92 / .22) 33.5%,transparent 36%,transparent 58%,oklch(100% .006 80 / .10) 58.35%,transparent 60.4%),
+    radial-gradient(circle at 19% 42%,oklch(88% .17 90 / .24),transparent 34%),
+    radial-gradient(circle at 74% 8%,oklch(100% .006 80 / .10),transparent 24%),
+    linear-gradient(180deg,oklch(18% .018 250 / .98),oklch(8% .012 250 / .99));
   backdrop-filter:blur(12px);
   box-shadow:0 10px 28px oklch(0% 0 0 / .38), inset 0 1px 0 oklch(100% .006 80 / .08);
   border-radius:var(--spark-window-inner-radius) var(--spark-window-inner-radius) 0 0;
@@ -254,10 +255,23 @@ header{
 header::before{
   content:"";
   position:absolute;
-  inset:auto var(--spark-header-pad-x) 0;
+  inset:0;
+  background:
+    linear-gradient(102deg,transparent 0 14%,oklch(92% .18 92 / .48) 14.2%,transparent 15.2%,transparent 41%,oklch(92% .18 92 / .34) 41.25%,transparent 42.5%,transparent 75%,oklch(100% .006 80 / .22) 75.25%,transparent 76.1%),
+    repeating-linear-gradient(90deg,oklch(100% .006 80 / .035) 0 1px,transparent 1px 38px);
+  opacity:.78;
+  pointer-events:none;
+}
+header::after{
+  content:"";
+  position:absolute;
+  left:var(--spark-header-pad-x);
+  right:var(--spark-header-pad-x);
+  bottom:0;
   height:2px;
-  background:linear-gradient(90deg,var(--team-blue),oklch(88% .16 86 / .85),var(--team-orange));
-  opacity:.82;
+  background:linear-gradient(90deg,transparent,oklch(100% .006 80 / .82) 18%,var(--spark-yellow) 50%,oklch(100% .006 80 / .82) 82%,transparent);
+  box-shadow:0 0 16px oklch(88% .18 92 / .42);
+  opacity:.9;
 }
 
 .headerBrand{
@@ -296,7 +310,7 @@ header::before{
   padding:0;
   border:0;
   box-shadow:none;
-  filter:drop-shadow(0 8px 14px rgba(0,0,0,.42));
+  filter:drop-shadow(0 8px 14px rgba(0,0,0,.42)) drop-shadow(0 0 12px rgba(255,208,0,.28));
   display:block;
 }
 h1{margin:0;font-size:calc(22px * var(--spark-header-scale));letter-spacing:.06em;color:oklch(95% .008 240);text-shadow:0 0 18px oklch(86% .16 86 / .18)}
@@ -1747,7 +1761,7 @@ tbody tr:hover td,
 .overviewTeamCard{
   min-width:0;
   border:1px solid oklch(100% .006 80 / .12);
-  background:linear-gradient(135deg,oklch(100% .006 80 / .07),oklch(0% 0 0 / .16));
+  background:linear-gradient(135deg,oklch(100% .006 80 / .09),oklch(0% 0 0 / .26));
   padding:15px 17px;
   border-radius:6px;
   display:flex;
@@ -1761,15 +1775,15 @@ tbody tr:hover td,
 .overviewTeamCard.blue{
   border-color:color-mix(in srgb,var(--team-blue) 78%,#d8ecff);
   background:
-    linear-gradient(90deg,color-mix(in srgb,var(--team-blue) 56%,transparent),color-mix(in srgb,var(--team-blue) 26%,transparent) 48%,oklch(0% 0 0 / .12)),
-    radial-gradient(circle at 12% 50%,color-mix(in srgb,var(--team-blue) 32%,transparent),transparent 46%);
+    linear-gradient(90deg,color-mix(in srgb,var(--team-blue) 42%,#07101b),color-mix(in srgb,var(--team-blue) 20%,#0c1118) 50%,oklch(0% 0 0 / .28)),
+    radial-gradient(circle at 12% 50%,color-mix(in srgb,var(--team-blue) 26%,transparent),transparent 46%);
 }
 .overviewTeamCard.orange{
   justify-content:space-between;
   border-color:color-mix(in srgb,var(--team-orange) 78%,#ffd9bd);
   background:
-    linear-gradient(270deg,color-mix(in srgb,var(--team-orange) 58%,transparent),color-mix(in srgb,var(--team-orange) 28%,transparent) 48%,oklch(0% 0 0 / .12)),
-    radial-gradient(circle at 88% 50%,color-mix(in srgb,var(--team-orange) 34%,transparent),transparent 46%);
+    linear-gradient(270deg,color-mix(in srgb,var(--team-orange) 42%,#1a0d03),color-mix(in srgb,var(--team-orange) 20%,#17100a) 50%,oklch(0% 0 0 / .28)),
+    radial-gradient(circle at 88% 50%,color-mix(in srgb,var(--team-orange) 26%,transparent),transparent 46%);
 }
 .overviewTeamName{
   font-weight:1000;
@@ -1783,13 +1797,13 @@ tbody tr:hover td,
   max-width:100%;
 }
 .overviewTeamCard.blue .overviewTeamName{
-  color:var(--team-blue-text);
-  text-shadow:0 0 18px color-mix(in srgb,var(--team-blue) 52%,transparent),0 2px 0 oklch(0% 0 0 / .32);
+  color:color-mix(in srgb,var(--team-blue) 24%,#f4fbff);
+  text-shadow:0 2px 0 oklch(0% 0 0 / .52),0 0 18px color-mix(in srgb,var(--team-blue) 42%,transparent);
 }
 .overviewTeamCard.orange .overviewTeamName{
-  color:var(--team-orange-text);
+  color:color-mix(in srgb,var(--team-orange) 24%,#fff7ef);
   text-align:right;
-  text-shadow:0 0 18px color-mix(in srgb,var(--team-orange) 56%,transparent),0 2px 0 oklch(0% 0 0 / .32);
+  text-shadow:0 2px 0 oklch(0% 0 0 / .52),0 0 18px color-mix(in srgb,var(--team-orange) 42%,transparent);
 }
 .overviewTeamScoreBlock{
   flex:0 0 auto;
@@ -1809,7 +1823,7 @@ tbody tr:hover td,
   text-align:left;
 }
 .overviewTeamScoreBlock small{
-  color:oklch(86% .018 240 / .78);
+  color:oklch(90% .018 240 / .9);
   font-size:11px;
   font-weight:950;
   text-transform:uppercase;
@@ -1878,7 +1892,7 @@ tbody tr:hover td,
   justify-content:space-between;
   align-items:center;
   gap:10px;
-  color:oklch(92% .012 240);
+  color:oklch(95% .01 240);
   font-weight:950;
   font-size:12px;
 }
@@ -1899,10 +1913,10 @@ tbody tr:hover td,
   font-weight:1000;
 }
 .overviewMetricValues b{font-size:22px}
-.overviewMetricValues .right{text-align:right;color:var(--team-orange-text)}
-.overviewMetricValues .left{color:var(--team-blue-text)}
+.overviewMetricValues .left{color:color-mix(in srgb,var(--team-blue) 28%,#f4fbff)}
+.overviewMetricValues .right{text-align:right;color:color-mix(in srgb,var(--team-orange) 28%,#fff7ef)}
 .overviewMetricValues span{
-  color:oklch(83% .018 240);
+  color:oklch(89% .016 240);
   font-size:12px;
   font-weight:950;
   text-align:center;
@@ -1937,7 +1951,7 @@ tbody tr:hover td,
 }
 .overviewSpotlight small{
   display:block;
-  color:oklch(76% .025 240);
+  color:oklch(86% .02 240);
   font-weight:900;
   text-transform:uppercase;
   margin-bottom:4px;
@@ -2001,6 +2015,7 @@ tbody tr:hover td,
   padding:9px 10px;
   border-bottom:1px solid oklch(100% .006 80 / .07);
   text-align:right;
+  color:oklch(91% .01 240);
 }
 .playerOverviewTable td:first-child,
 .playerOverviewTable td:nth-child(2){
@@ -2013,17 +2028,17 @@ tbody tr:hover td,
   font-weight:900;
 }
 .playerOverviewBlue{
-  color:var(--team-blue-text);
+  color:color-mix(in srgb,var(--team-blue) 28%,#f4fbff);
 }
 .playerOverviewOrange{
-  color:var(--team-orange-text);
+  color:color-mix(in srgb,var(--team-orange) 28%,#fff7ef);
 }
 
 .overviewNote{
   position:relative;
   z-index:1;
   margin-top:0;
-  color:oklch(73% .024 240);
+  color:oklch(83% .018 240);
   font-size:12px;
   line-height:1.5;
 }
