@@ -4633,12 +4633,13 @@ function pointerGridPlacement(event, tile){
   const metrics = tileGridMetrics();
   if(!metrics || !tile) return null;
   const span = tileSpan(tile);
+  const rows = tileRows(tile);
   const x = event.clientX - metrics.rect.left;
   const y = event.clientY - metrics.rect.top;
   const colUnit = metrics.columnWidth + metrics.columnGap;
   const rowUnit = metrics.rowHeight + metrics.rowGap;
-  const col = clampValue(Math.floor(x / colUnit) + 1, 1, Math.max(1, 25 - span));
-  const row = Math.max(1, Math.floor(y / rowUnit) + 1);
+  const col = clampValue(Math.floor(x / colUnit) + 1 - Math.floor(span / 2), 1, Math.max(1, 25 - span));
+  const row = Math.max(1, Math.floor(y / rowUnit) + 1 - Math.floor(rows / 2));
   return {col,row};
 }
 
@@ -4863,11 +4864,13 @@ function commitTileDrop(){
 function autoScrollTileDrag(event){
   const edge = 92;
   const maxStep = 26;
+  const cursorY = Number(event?.clientY);
+  if(!Number.isFinite(cursorY)) return;
   let delta = 0;
-  if(event.clientY < edge){
-    delta = -Math.round(maxStep * (1 - event.clientY / edge));
-  }else if(event.clientY > window.innerHeight - edge){
-    delta = Math.round(maxStep * (1 - (window.innerHeight - event.clientY) / edge));
+  if(cursorY < edge){
+    delta = -Math.round(maxStep * (1 - cursorY / edge));
+  }else if(cursorY > window.innerHeight - edge){
+    delta = Math.round(maxStep * (1 - (window.innerHeight - cursorY) / edge));
   }
   if(delta){
     window.scrollBy({top:delta, left:0, behavior:"auto"});
@@ -5070,7 +5073,6 @@ function initializeManagedTiles(){
       if(!draggedTile) return;
       event.preventDefault();
       if(event.dataTransfer) event.dataTransfer.dropEffect = "move";
-      autoScrollTileDrag(event);
       placeTileDropPreview(event);
     });
     dashboard.addEventListener("drop", event=>{
