@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.05.28.0710",
-    "generatedUtc":  "2026-05-28T07:10:32.4123059Z",
+    "appVersion":  "2026.05.28.0716",
+    "generatedUtc":  "2026-05-28T07:16:54.2685205Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -152,24 +152,24 @@
                   },
                   {
                       "path":  "SPARK Launcher.exe",
-                      "version":  "bb4d1e5722d8",
-                      "sha256":  "bb4d1e5722d89e140d62729500a2a3eb241ea0627c4193ff7b1589fa75f9d71a",
-                      "size":  47616,
-                      "modifiedUtc":  "2026-05-24T10:14:07.0851898Z"
+                      "version":  "06987c09681b",
+                      "sha256":  "06987c09681bf2d56b9fb4e4544941549f170c158078ae0de44439ab050e08f2",
+                      "size":  50176,
+                      "modifiedUtc":  "2026-05-28T07:16:22.5889741Z"
                   },
                   {
                       "path":  "SPARK.html",
-                      "version":  "611c70eea048",
-                      "sha256":  "611c70eea048fda0ede2ced4abd6c4b66d11d569ad9a3d9fd0f3d4f0f9343806",
-                      "size":  3533933,
-                      "modifiedUtc":  "2026-05-28T07:09:53.8812840Z"
+                      "version":  "a2f243d9557a",
+                      "sha256":  "a2f243d9557a661f377739b5f0cb89974c383e5187df9043524e6e903710ef70",
+                      "size":  3533729,
+                      "modifiedUtc":  "2026-05-28T07:14:04.5650933Z"
                   },
                   {
                       "path":  "SPARK-Launcher.cs",
-                      "version":  "43b75ca6553f",
-                      "sha256":  "43b75ca6553f083048acb9ccb03310ac03e88a3fc1b719081b6f99138c6382f6",
-                      "size":  38643,
-                      "modifiedUtc":  "2026-05-24T10:09:21.4691967Z"
+                      "version":  "5449072fa76c",
+                      "sha256":  "5449072fa76cfae3c10e1146e6311f92e677d0c3d9c90789e718f278f73b977d",
+                      "size":  39459,
+                      "modifiedUtc":  "2026-05-28T07:14:32.0796710Z"
                   },
                   {
                       "path":  "SPARK-Launcher.ps1",

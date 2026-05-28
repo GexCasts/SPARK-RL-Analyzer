@@ -3217,9 +3217,6 @@ body.obsOverlayMode #obsOverlayRoot{
   .app{padding:calc(var(--spark-header-height) + 18px) 18px 230px;gap:16px}
   .dashboard{gap:16px}
 }
-@media (max-width:1500px){
-  .kpis{grid-template-columns:repeat(3,1fr)}
-}
 @media (max-width:900px){
   :root{--spark-header-scale:.9;--spark-header-logo-size:115px}
   .topbar{grid-template-columns:1fr}
@@ -3229,9 +3226,8 @@ body.obsOverlayMode #obsOverlayRoot{
   .replayNavPanel .modeTabs{justify-content:flex-start}
   .nameDisplayToggle,.unitDisplayToggle{align-items:flex-start;flex-direction:column}
   .unitSwitch{width:100%;min-width:0}
-  .dashboard{grid-template-columns:1fr}
   .coach{grid-template-columns:1fr;max-height:70vh;overflow:auto}
-  .tileManaged,.span2{grid-column:1 / -1!important;grid-row:auto!important;overflow:visible}.kpis{grid-template-columns:repeat(2,1fr)}
+  .kpis{grid-template-columns:repeat(2,1fr)}
   .event{grid-template-columns:1fr}.tag{text-align:left}
   .overviewPanel{grid-template-columns:1fr}
   .overviewPanel > .tableWrap{grid-column:auto;grid-row:auto}

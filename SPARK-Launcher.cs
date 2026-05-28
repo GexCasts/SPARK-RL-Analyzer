@@ -423,7 +423,8 @@ namespace SparkLauncher
         private static void MakeWindowFrameless(IntPtr hWnd)
         {
             long style = GetWindowLongPtrSafe(hWnd, GWL_STYLE).ToInt64();
-            style &= ~(WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+            style &= ~WS_CAPTION;
+            style |= WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
             SetWindowLongPtrSafe(hWnd, GWL_STYLE, new IntPtr(style));
             SetWindowPos(hWnd, IntPtr.Zero, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
@@ -719,6 +720,11 @@ namespace SparkLauncher
 
     internal sealed class SparkAppShellForm : Form
     {
+        private const int WS_CAPTION = unchecked((int)0x00C00000);
+        private const int WS_THICKFRAME = 0x00040000;
+        private const int WS_SYSMENU = 0x00080000;
+        private const int WS_MINIMIZEBOX = 0x00020000;
+        private const int WS_MAXIMIZEBOX = 0x00010000;
         private const int WM_NCLBUTTONDOWN = 0x00A1;
         private const int WM_NCHITTEST = 0x0084;
         private const int HTCAPTION = 2;
@@ -758,6 +764,17 @@ namespace SparkLauncher
             webView.Dock = DockStyle.Fill;
             webView.DefaultBackgroundColor = Color.Black;
             Controls.Add(webView);
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.Style &= ~WS_CAPTION;
+                cp.Style |= WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+                return cp;
+            }
         }
 
         protected override async void OnShown(EventArgs e)
@@ -868,23 +885,25 @@ namespace SparkLauncher
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_NCHITTEST && !isCustomMaximized)
+            {
+                int border = 10;
+                Point screenPoint = new Point((short)((long)m.LParam & 0xFFFF), (short)(((long)m.LParam >> 16) & 0xFFFF));
+                Point point = PointToClient(screenPoint);
+                bool left = point.X <= border;
+                bool right = point.X >= ClientSize.Width - border;
+                bool top = point.Y <= border;
+                bool bottom = point.Y >= ClientSize.Height - border;
+                if (left && top) { m.Result = new IntPtr(HTTOPLEFT); return; }
+                if (right && top) { m.Result = new IntPtr(HTTOPRIGHT); return; }
+                if (left && bottom) { m.Result = new IntPtr(HTBOTTOMLEFT); return; }
+                if (right && bottom) { m.Result = new IntPtr(HTBOTTOMRIGHT); return; }
+                if (left) { m.Result = new IntPtr(HTLEFT); return; }
+                if (right) { m.Result = new IntPtr(HTRIGHT); return; }
+                if (top) { m.Result = new IntPtr(HTTOP); return; }
+                if (bottom) { m.Result = new IntPtr(HTBOTTOM); return; }
+            }
             base.WndProc(ref m);
-            if (m.Msg != WM_NCHITTEST || isCustomMaximized) return;
-
-            int border = 8;
-            Point point = PointToClient(new Point((short)((long)m.LParam & 0xFFFF), (short)(((long)m.LParam >> 16) & 0xFFFF)));
-            bool left = point.X <= border;
-            bool right = point.X >= ClientSize.Width - border;
-            bool top = point.Y <= border;
-            bool bottom = point.Y >= ClientSize.Height - border;
-            if (left && top) m.Result = new IntPtr(HTTOPLEFT);
-            else if (right && top) m.Result = new IntPtr(HTTOPRIGHT);
-            else if (left && bottom) m.Result = new IntPtr(HTBOTTOMLEFT);
-            else if (right && bottom) m.Result = new IntPtr(HTBOTTOMRIGHT);
-            else if (left) m.Result = new IntPtr(HTLEFT);
-            else if (right) m.Result = new IntPtr(HTRIGHT);
-            else if (top) m.Result = new IntPtr(HTTOP);
-            else if (bottom) m.Result = new IntPtr(HTBOTTOM);
         }
 
         [DllImport("user32.dll")]
