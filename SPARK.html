@@ -2007,8 +2007,7 @@ tbody tr:hover td,
   text-transform:uppercase;
   letter-spacing:.035em;
 }
-.playerOverviewTable th:first-child,
-.playerOverviewTable th:nth-child(2){
+.playerOverviewTable th:first-child{
   text-align:left;
 }
 .playerOverviewTable td{
@@ -2017,8 +2016,7 @@ tbody tr:hover td,
   text-align:right;
   color:oklch(91% .01 240);
 }
-.playerOverviewTable td:first-child,
-.playerOverviewTable td:nth-child(2){
+.playerOverviewTable td:first-child{
   text-align:left;
 }
 .playerOverviewTable tr:nth-child(even) td{
@@ -8229,7 +8227,6 @@ function renderGameOverview(){
       return `
         <tr>
           <td class="playerOverviewName ${teamClass}">${playerDisplayName(p)}</td>
-          <td>${p.team}</td>
           <td>${Number.isFinite(p.scoreboardScore) ? p.scoreboardScore : "-"}</td>
           <td>${p.goals || 0}</td>
           <td>${p.shots || 0}</td>
@@ -8243,11 +8240,10 @@ function renderGameOverview(){
     }).join("");
 
   $("overviewPlayerStats").innerHTML = `
-    <caption>Player Box Score</caption>
+    <caption>Scoreboard</caption>
     <thead>
       <tr>
         <th>Player</th>
-        <th>Team</th>
         <th>Score</th>
         <th>Goals</th>
         <th>Shots</th>
