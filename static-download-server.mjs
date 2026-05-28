@@ -626,6 +626,27 @@ function projectedGoalEntryLocation(location, vector, teamNumber){
   };
 }
 
+function projectedBackboardImpactLocation(location, vector, teamNumber){
+  if(!location || !vector) return null;
+  const normalizedTeam = normalizeTeamNumber(teamNumber);
+  if(normalizedTeam === null) return null;
+  const targetY = normalizedTeam === 0 ? 5120 : -5120;
+  const y = Number(location.y);
+  const vy = Number(vector.y);
+  if(!Number.isFinite(y) || !Number.isFinite(vy) || Math.abs(vy) < 1e-6) return null;
+  const t = (targetY - y) / vy;
+  if(!Number.isFinite(t) || t <= 0 || t > 7) return null;
+  const x = Number(location.x) + Number(vector.x || 0) * t;
+  const z = Number(location.z || 0) + Number(vector.z || 0) * t;
+  if(!Number.isFinite(x) || !Number.isFinite(z)) return null;
+
+  return {
+    x: clampNumber(x, -3200, 3200),
+    y: targetY,
+    z: clampNumber(z, 0, 1800)
+  };
+}
+
 function clampedGoalFaceLocation(location, teamNumber){
   if(!location) return null;
   const normalizedTeam = normalizeTeamNumber(teamNumber);
@@ -2093,6 +2114,31 @@ function summarizeShotSamples(parsedReplay){
     return null;
   }
 
+  function projectedMissPlacement(shot, teamNumber){
+    const candidates = [];
+    if(shot?.ballLocation && shot?.ballVelocity){
+      candidates.push({origin:shot.ballLocation, vector:shot.ballVelocity, source:"miss-backboard-projection"});
+    }
+    if(shot?.lastTouchLocation && shot?.ballLocation){
+      candidates.push({
+        origin:shot.ballLocation,
+        vector:{
+          x:(shot.ballLocation.x || 0) - (shot.lastTouchLocation.x || 0),
+          y:(shot.ballLocation.y || 0) - (shot.lastTouchLocation.y || 0),
+          z:(shot.ballLocation.z || 0) - (shot.lastTouchLocation.z || 0)
+        },
+        source:"miss-touch-path-projection"
+      });
+    }
+
+    for(const candidate of candidates){
+      const projected = projectedBackboardImpactLocation(candidate.origin, candidate.vector, teamNumber);
+      if(projected) return {location:projected, source:candidate.source};
+    }
+
+    return null;
+  }
+
   for(const shot of shotEvents){
     const playerName = resolveName(shot.playerName);
     const censoredName = censoredAliases.get(playerName) || (isMaskedReplayName(shot.playerName) ? shot.playerName : null);
@@ -2132,6 +2178,12 @@ function summarizeShotSamples(parsedReplay){
         shot.goalTime = save.goalTime || shot.goalTime;
         shot.isOvertime = !!save.isOvertime;
         shot.overtimeSeconds = save.overtimeSeconds;
+      }else{
+        const projectedMiss = projectedMissPlacement(shot, teamNumber);
+        if(projectedMiss){
+          placementLocation = projectedMiss.location;
+          placementSource = projectedMiss.source;
+        }
       }
     }
 
