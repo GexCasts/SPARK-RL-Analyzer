@@ -8079,7 +8079,7 @@ function renderShootingHeatmap(a){
       info.innerHTML = `
           <b>Goal scorer:</b> ${s.player}<br>
           <b>Game time:</b> ${s.goalTime}<br>
-          <b>Ball speed on goal:</b> ${optionalBallSpeedText(s.ballSpeed)}<br>
+          <b>Shot speed:</b> ${optionalBallSpeedText(s.ballSpeed)}<br>
           <b>Nearest defender:</b> ${optionalDistanceText(s.nearestOpponentDistance)}${s.defender ? ` (${escapeHtml(s.defender)})` : ""}<br>
           <b>Last touch distance from net:</b> ${optionalDistanceText(s.lastTouchDistanceToNet)}<br>
           <span class="muted">Target: ${s.target}</span>
@@ -8092,7 +8092,7 @@ function renderShootingHeatmap(a){
           ${s.result === "save"
             ? `<span class="muted">Defender: ${s.defender ? escapeHtml(s.defender) : "Unknown"}</span><br>`
             : `<span class="muted">Nearest defender: ${optionalDistanceText(s.nearestOpponentDistance)}${s.defender ? ` (${escapeHtml(s.defender)})` : ""}</span><br>`}
-          <span class="muted">${s.result === "save" ? "Ball speed before save" : "Ball speed"}: ${optionalBallSpeedText(s.ballSpeed)}</span><br>
+          <span class="muted">Shot speed: ${optionalBallSpeedText(s.ballSpeed)}</span><br>
           <span class="muted">Last touch distance from net: ${optionalDistanceText(s.lastTouchDistanceToNet)}</span><br>
           <span class="muted">Target: ${s.target}</span>
         `;
