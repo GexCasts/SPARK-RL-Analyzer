@@ -7761,6 +7761,10 @@ function optionalDistanceText(uu){
   return Number.isFinite(uu) ? formatDistanceFromUU(uu) : "Unavailable";
 }
 
+function optionalBallSpeedText(speedUU){
+  return Number.isFinite(speedUU) ? formatSpeedFromUUPerSecond(speedUU) : "Unavailable";
+}
+
 function positionShotPopupInBounds(dot, map){
   if(!dot || !map) return;
 
@@ -7806,6 +7810,7 @@ function getFrameAccurateShootingSamples(a){
       const elapsed = Number(shot.elapsed ?? shot.elapsedSeconds ?? shot.timeSeconds ?? 0);
       const nearestOpponentDistance = Number(shot.nearestOpponentDistanceUU ?? shot.nearestOpponentDistance ?? NaN);
       const lastTouchDistanceToNet = Number(shot.lastTouchDistanceToNetUU ?? shot.lastTouchDistanceToNet ?? NaN);
+      const ballSpeed = Number(shot.ballSpeedUUPerSecond ?? shot.ballSpeedUU ?? shot.ballSpeed ?? shot.speedUU ?? NaN);
       const scoreboardElapsed = scoreboardElapsedFromSample(shot);
       const goalTime = scoreboardClockFromSample(shot) || shotClockFromElapsed(elapsed, replayObservedDurationSeconds()) || shot.goalTime;
       const nearestOpponent = cleanReplayName(shot.nearestOpponent || shot.nearestDefender || shot.closestDefender || "");
@@ -7827,6 +7832,8 @@ function getFrameAccurateShootingSamples(a){
         nearestOpponent: nearestOpponent || null,
         defender: defender || null,
         lastTouchDistanceToNet: Number.isFinite(lastTouchDistanceToNet) ? lastTouchDistanceToNet : null,
+        ballSpeed: Number.isFinite(ballSpeed) ? ballSpeed : null,
+        ballSpeedSource: shot.ballSpeedSource || null,
         placementSource: shot.placementSource || null,
         placementProjectionSource: shot.placementProjectionSource || null,
         placementCorrected: face.placementCorrected,
@@ -8072,6 +8079,7 @@ function renderShootingHeatmap(a){
       info.innerHTML = `
           <b>Goal scorer:</b> ${s.player}<br>
           <b>Game time:</b> ${s.goalTime}<br>
+          <b>Ball speed on goal:</b> ${optionalBallSpeedText(s.ballSpeed)}<br>
           <b>Nearest defender:</b> ${optionalDistanceText(s.nearestOpponentDistance)}${s.defender ? ` (${escapeHtml(s.defender)})` : ""}<br>
           <b>Last touch distance from net:</b> ${optionalDistanceText(s.lastTouchDistanceToNet)}<br>
           <span class="muted">Target: ${s.target}</span>
@@ -8084,6 +8092,7 @@ function renderShootingHeatmap(a){
           ${s.result === "save"
             ? `<span class="muted">Defender: ${s.defender ? escapeHtml(s.defender) : "Unknown"}</span><br>`
             : `<span class="muted">Nearest defender: ${optionalDistanceText(s.nearestOpponentDistance)}${s.defender ? ` (${escapeHtml(s.defender)})` : ""}</span><br>`}
+          <span class="muted">${s.result === "save" ? "Ball speed before save" : "Ball speed"}: ${optionalBallSpeedText(s.ballSpeed)}</span><br>
           <span class="muted">Last touch distance from net: ${optionalDistanceText(s.lastTouchDistanceToNet)}</span><br>
           <span class="muted">Target: ${s.target}</span>
         `;

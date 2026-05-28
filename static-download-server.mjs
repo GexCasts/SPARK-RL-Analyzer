@@ -2147,6 +2147,8 @@ function summarizeShotSamples(parsedReplay){
     let placementLocation = shot.ballLocation || shot.shooterLocation;
     let placementSource = "shot";
     let saveLocation = null;
+    let ballSpeedVelocity = shot.ballVelocity || null;
+    let ballSpeedSource = "shot";
 
     const goalIndex = findMatchingGoal(shot);
     if(goalIndex !== null){
@@ -2155,6 +2157,8 @@ function summarizeShotSamples(parsedReplay){
       result = "goal";
       placementLocation = goal.ballLocation || placementLocation;
       placementSource = "goal";
+      ballSpeedVelocity = goal.ballVelocity || ballSpeedVelocity;
+      ballSpeedSource = goal.ballVelocity ? "goal" : ballSpeedSource;
       shot.nearestOpponentDistanceUU = goal.nearestOpponentDistanceUU;
       shot.nearestOpponent = goal.nearestOpponent;
       shot.goalTime = goal.goalTime || shot.goalTime;
@@ -2172,6 +2176,8 @@ function summarizeShotSamples(parsedReplay){
         saveLocation = save.ballLocation || null;
         placementLocation = projectedSave?.location || clampedGoalFaceLocation(save.ballLocation || placementLocation, teamNumber) || placementLocation;
         placementSource = projectedSave?.source || "save";
+        ballSpeedVelocity = save.ballVelocity || ballSpeedVelocity;
+        ballSpeedSource = save.ballVelocity ? "save" : ballSpeedSource;
         shot.nearestOpponentDistanceUU = save.nearestOpponentDistanceUU;
         shot.nearestOpponent = save.nearestOpponent;
         shot.defender = resolveName(save.playerName);
@@ -2214,6 +2220,8 @@ function summarizeShotSamples(parsedReplay){
       lastTouchLocation: shot.lastTouchLocation,
       lastTouchTime: shot.lastTouchTime,
       lastTouchScoreboardSecondsRemaining: shot.lastTouchScoreboardSecondsRemaining,
+      ballSpeedUUPerSecond: Number.isFinite(vectorSpeed(ballSpeedVelocity)) ? Math.round(vectorSpeed(ballSpeedVelocity)) : null,
+      ballSpeedSource,
       placementLocation,
       placementProjectionSource: placementSource.includes("projection") ? placementSource : null,
       saveLocation,
@@ -2255,6 +2263,8 @@ function summarizeShotSamples(parsedReplay){
       lastTouchLocation: goal.lastTouchLocation,
       lastTouchTime: goal.lastTouchTime,
       lastTouchScoreboardSecondsRemaining: goal.lastTouchScoreboardSecondsRemaining,
+      ballSpeedUUPerSecond: Number.isFinite(vectorSpeed(goal.ballVelocity)) ? Math.round(vectorSpeed(goal.ballVelocity)) : null,
+      ballSpeedSource: "goal",
       placementLocation: goal.ballLocation,
       shooterLocation: goal.shooterLocation
     });
