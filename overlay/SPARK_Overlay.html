@@ -1156,6 +1156,8 @@ function replayFlag(payload){
 function matchEndedFlag(payload, event=""){
   const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
   const ended = firstDefined(
+    valueByKey(payload,["bHasWinner","hasWinner","HasWinner"]),
+    valueByKey(game,["bHasWinner","hasWinner","HasWinner"]),
     valueByKey(payload,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"]),
     valueByKey(game,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"])
   );
@@ -1382,6 +1384,9 @@ function handleMessage(raw){
   const focusName = focusNameFromPayload(msg.payload);
   if(focusName) state.focusedPlayerName = focusName;
   const eventName = compactEventName(msg.event);
+  if(state.matchEnded && (eventName.includes("matchcreated") || eventName.includes("matchinitialized") || eventName.includes("roundstarted"))){
+    resetForNextMatch();
+  }
   if(eventName.includes("ballhit")){
     const hitPlayer = playerNameFromValue(firstDefined(valueByKey(msg.payload,["Player","player","playerName","PlayerName","lastTouchPlayer","LastTouchPlayer"]), msg.payload?.BallLastTouch?.Player, msg.payload?.ballLastTouch?.player));
     const team = normalizeTeam(valueByKey(msg.payload,["team","Team"]));

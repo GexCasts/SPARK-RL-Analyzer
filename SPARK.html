@@ -10728,6 +10728,8 @@ function liveTeamTotals(team){
 function liveApiGameEnded(payload, event=""){
   const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
   const ended = firstDefined(
+    valueByKey(payload,["bHasWinner","hasWinner","HasWinner"]),
+    valueByKey(game,["bHasWinner","hasWinner","HasWinner"]),
     valueByKey(payload,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"]),
     valueByKey(game,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"])
   );
