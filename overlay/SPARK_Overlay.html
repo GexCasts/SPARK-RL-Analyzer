@@ -346,7 +346,7 @@ html,body{
   position:absolute;
   left:42px;
   bottom:42px;
-  width:336px;
+  width:468px;
   min-height:132px;
   padding:10px 12px 12px;
   background:
@@ -380,7 +380,7 @@ html,body{
 .liveStatPlayer{
   --team:var(--spark-gold);
   display:grid;
-  grid-template-columns:118px repeat(4,34px);
+  grid-template-columns:118px repeat(4,72px);
   grid-template-rows:23px 0fr;
   align-items:center;
   column-gap:5px;
@@ -436,9 +436,9 @@ html,body{
 }
 .liveStatValue span{
   color:rgba(247,247,244,.54);
-  font-size:7px;
+  font-size:8px;
   font-weight:950;
-  letter-spacing:.06em;
+  letter-spacing:.02em;
 }
 .liveStatBoost{
   grid-column:1 / -1;
@@ -519,7 +519,9 @@ html,body{
   position:relative;
   z-index:1;
   width:1500px;
-  margin:86px auto 0;
+  top:50%;
+  margin:0 auto;
+  transform:translateY(-50%);
 }
 .finalHeader{
   display:flex;
@@ -1241,10 +1243,10 @@ function renderLiveStatCard(){
     const focused = focusName && player.name === focusName;
     return `<div class="liveStatPlayer ${player.team.toLowerCase()} ${focused ? "focused" : ""}" style="--boost:${boost}%">
       <div class="liveStatName">${escapeHtml(player.name)}</div>
-      <div class="liveStatValue"><b>${Math.round(stats.goals || 0)}</b><span>G</span></div>
-      <div class="liveStatValue"><b>${Math.round(stats.shots || 0)}</b><span>SH</span></div>
-      <div class="liveStatValue"><b>${Math.round(stats.assists || 0)}</b><span>A</span></div>
-      <div class="liveStatValue"><b>${Math.round(stats.saves || 0)}</b><span>SV</span></div>
+      <div class="liveStatValue"><b>${Math.round(stats.goals || 0)}</b><span>Goals</span></div>
+      <div class="liveStatValue"><b>${Math.round(stats.shots || 0)}</b><span>Shots</span></div>
+      <div class="liveStatValue"><b>${Math.round(stats.assists || 0)}</b><span>Assists</span></div>
+      <div class="liveStatValue"><b>${Math.round(stats.saves || 0)}</b><span>Saves</span></div>
       <div class="liveStatBoost"><i></i></div>
     </div>`;
   }).join("");
@@ -1311,7 +1313,6 @@ function playFinalTransition(config){
     return;
   }
   if(stinger.getAttribute("src") !== src) stinger.src = src;
-  try{ stinger.currentTime = 0; }catch{}
   stinger.muted = true;
   stinger.playsInline = true;
   stinger.classList.add("active");
@@ -1320,8 +1321,17 @@ function playFinalTransition(config){
     try{ stinger.pause(); }catch{}
   };
   stinger.onended = cleanup;
-  const played = stinger.play?.();
-  if(played?.catch) played.catch(cleanup);
+  const start = ()=>{
+    try{ stinger.currentTime = 0; }catch{}
+    const played = stinger.play?.();
+    if(played?.catch) played.catch(error=>{
+      console.warn("Could not play stinger transition:", error);
+      cleanup();
+    });
+  };
+  if(stinger.readyState >= 2) start();
+  else stinger.addEventListener("canplay", start, {once:true});
+  stinger.load?.();
   stingerTimer = setTimeout(cleanup, 4500);
 }
 function render(){
@@ -1448,11 +1458,12 @@ window.addEventListener("storage", event=>{
   if(event.key === overlayConfigKey) render();
 });
 updateStageScale();
-refreshServerConfig();
-setInterval(refreshServerConfig, 2000);
-startHeartbeat();
-connect();
-render();
+refreshServerConfig().finally(()=>{
+  setInterval(refreshServerConfig, 2000);
+  startHeartbeat();
+  connect();
+  render();
+});
 </script>
 </body>
 </html>
