@@ -51,6 +51,8 @@ namespace SparkLauncher
         private const long WS_SYSMENU = 0x00080000L;
         private const long WS_MINIMIZEBOX = 0x00020000L;
         private const long WS_MAXIMIZEBOX = 0x00010000L;
+        private const int DWMWA_BORDER_COLOR = 34;
+        private const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
 
         private readonly string root;
         private readonly string toolsDir;
@@ -428,6 +430,20 @@ namespace SparkLauncher
             SetWindowLongPtrSafe(hWnd, GWL_STYLE, new IntPtr(style));
             SetWindowPos(hWnd, IntPtr.Zero, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            HideNativeBorder(hWnd);
+        }
+
+        private static void HideNativeBorder(IntPtr hWnd)
+        {
+            if (hWnd == IntPtr.Zero) return;
+            try
+            {
+                int borderColor = DWMWA_COLOR_NONE;
+                DwmSetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
+            }
+            catch
+            {
+            }
         }
 
         private static string GetWindowTextSafe(IntPtr hWnd)
@@ -716,6 +732,9 @@ namespace SparkLauncher
 
         [DllImport("user32.dll")]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
     }
 
     internal sealed class SparkAppShellForm : Form
@@ -736,6 +755,8 @@ namespace SparkLauncher
         private const int HTBOTTOM = 15;
         private const int HTBOTTOMLEFT = 16;
         private const int HTBOTTOMRIGHT = 17;
+        private const int DWMWA_BORDER_COLOR = 34;
+        private const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
 
         private readonly string appUrl;
         private readonly string root;
@@ -777,10 +798,29 @@ namespace SparkLauncher
             }
         }
 
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            HideNativeBorder();
+        }
+
         protected override async void OnShown(EventArgs e)
         {
             base.OnShown(e);
             await InitializeWebViewAsync();
+        }
+
+        private void HideNativeBorder()
+        {
+            if (Handle == IntPtr.Zero) return;
+            try
+            {
+                int borderColor = DWMWA_COLOR_NONE;
+                DwmSetWindowAttribute(Handle, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
+            }
+            catch
+            {
+            }
         }
 
         private async Task InitializeWebViewAsync()
@@ -866,6 +906,7 @@ namespace SparkLauncher
             SuspendLayout();
             Bounds = workingArea;
             isCustomMaximized = true;
+            HideNativeBorder();
             ResumeLayout(true);
         }
 
@@ -880,6 +921,7 @@ namespace SparkLauncher
             SuspendLayout();
             Bounds = targetBounds;
             isCustomMaximized = false;
+            HideNativeBorder();
             ResumeLayout(true);
         }
 
@@ -911,6 +953,9 @@ namespace SparkLauncher
 
         [DllImport("user32.dll")]
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
     }
 
     internal static class Program
