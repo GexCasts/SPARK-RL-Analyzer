@@ -31,6 +31,88 @@ html,body{
   transform:scale(var(--stage-scale));
   transform-origin:top left;
 }
+.customScoreboardSkin,
+.customScoreboardLayer{
+  display:none;
+}
+.customScoreboardSkin{
+  position:absolute;
+  inset:0;
+  width:1920px;
+  height:1080px;
+  object-fit:contain;
+  object-position:top center;
+  z-index:1;
+  pointer-events:none;
+}
+.customScoreboardLayer{
+  position:absolute;
+  inset:0;
+  z-index:3;
+  pointer-events:none;
+}
+.stage.customScoreboard .scorebug{
+  display:none;
+}
+.stage.customScoreboard .customScoreboardSkin,
+.stage.customScoreboard .customScoreboardLayer{
+  display:block;
+}
+.stage.replayActive.customScoreboard .customScoreboardLayer,
+.stage.replayActive.customScoreboard .customScoreboardSkin{
+  display:none;
+}
+.maskSlot{
+  position:absolute;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-width:1px;
+  min-height:1px;
+  color:#f7f7f4;
+  font-weight:1000;
+  line-height:1;
+  text-align:center;
+  text-transform:uppercase;
+  text-shadow:0 3px 7px rgba(0,0,0,.65);
+  overflow:hidden;
+}
+.maskSlot.logo img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  object-position:center;
+  filter:drop-shadow(0 4px 7px rgba(0,0,0,.55));
+}
+.maskSlot.score{
+  font-size:var(--slot-font,52px);
+  color:#fffdf3;
+}
+.maskSlot.clock{
+  font-size:var(--slot-font,44px);
+  color:#fffdf3;
+  letter-spacing:.02em;
+}
+.maskSlot.teamName{
+  padding:0 12px;
+  font-size:var(--slot-font,26px);
+  letter-spacing:.03em;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+.maskSlot.seriesTitle{
+  font-size:var(--slot-font,16px);
+  letter-spacing:.12em;
+  color:#050609;
+  text-shadow:none;
+}
+.maskSlot.seriesDots{
+  gap:8px;
+}
+.maskSlot.seriesDots .dot{
+  width:clamp(10px,22%,20px);
+  height:clamp(8px,70%,18px);
+}
 .scorebug{
   position:absolute;
   left:50%;
@@ -352,6 +434,19 @@ html,body{
 </head>
 <body>
 <div class="stage" id="stage">
+  <img class="customScoreboardSkin" id="customScoreboardSkin" alt="">
+  <div class="customScoreboardLayer" id="customScoreboardLayer">
+    <div class="maskSlot logo" id="maskBlueLogo"><img alt=""></div>
+    <div class="maskSlot logo" id="maskOrangeLogo"><img alt=""></div>
+    <div class="maskSlot score" id="maskBlueScore">0</div>
+    <div class="maskSlot score" id="maskOrangeScore">0</div>
+    <div class="maskSlot clock" id="maskClock">5:00</div>
+    <div class="maskSlot teamName" id="maskBlueName">Blue</div>
+    <div class="maskSlot teamName" id="maskOrangeName">Orange</div>
+    <div class="maskSlot seriesDots" id="maskBlueSeries"></div>
+    <div class="maskSlot seriesDots" id="maskOrangeSeries"></div>
+    <div class="maskSlot seriesTitle" id="maskSeriesTitle"></div>
+  </div>
   <div class="scorebug">
     <div class="wing left"><img class="teamLogo" id="blueLogo" alt=""><span class="teamLabel" id="blueName">Blue</span></div>
     <div class="wing right"><span class="teamLabel" id="orangeName">Orange</span><img class="teamLogo" id="orangeLogo" alt=""></div>
@@ -379,6 +474,11 @@ const overlayConfigKey = "oneReplayAnalyzer.overlayConfig.v1";
 const defaultConfig = {
   blueTeamName:"",
   orangeTeamName:"",
+  blueLogoUrl:"",
+  orangeLogoUrl:"",
+  scoreboardImageUrl:"",
+  scoreboardMaskUrl:"",
+  seriesTitle:"",
   seriesBestOf:5,
   blueSeriesScore:0,
   orangeSeriesScore:0
@@ -448,6 +548,190 @@ function renderDots(side, config){
 function teamLogoFor(side, config){
   const manual = String(side === "Blue" ? config.blueLogoUrl || "" : config.orangeLogoUrl || "").trim();
   return manual || "/__1ne_logo.png";
+}
+const maskColorTargets = {
+  logos:{rgb:[255,0,0]},
+  scores:{rgb:[0,0,255]},
+  clock:{rgb:[255,255,0]},
+  names:{rgb:[255,0,255]},
+  series:{rgb:[0,255,255]},
+  title:{rgb:[0,255,0]}
+};
+const maskState = {source:"", regions:null, loading:false, token:0};
+function colorMatches(data, index, target){
+  const r = data[index], g = data[index + 1], b = data[index + 2], a = data[index + 3];
+  if(a < 80) return false;
+  const [tr,tg,tb] = target;
+  return Math.abs(r - tr) <= 60 && Math.abs(g - tg) <= 60 && Math.abs(b - tb) <= 60;
+}
+function loadImageElement(src){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+function componentsForColor(data, width, height, target){
+  const seen = new Uint8Array(width * height);
+  const components = [];
+  const queue = [];
+  for(let y = 0; y < height; y++){
+    for(let x = 0; x < width; x++){
+      const start = y * width + x;
+      if(seen[start]) continue;
+      const pixel = start * 4;
+      if(!colorMatches(data, pixel, target)){
+        seen[start] = 1;
+        continue;
+      }
+      let minX = x, maxX = x, minY = y, maxY = y, count = 0;
+      queue.length = 0;
+      queue.push(start);
+      seen[start] = 1;
+      for(let cursor = 0; cursor < queue.length; cursor++){
+        const current = queue[cursor];
+        const cx = current % width;
+        const cy = Math.floor(current / width);
+        count++;
+        if(cx < minX) minX = cx;
+        if(cx > maxX) maxX = cx;
+        if(cy < minY) minY = cy;
+        if(cy > maxY) maxY = cy;
+        const neighbors = [current - 1, current + 1, current - width, current + width];
+        for(const next of neighbors){
+          if(next < 0 || next >= seen.length || seen[next]) continue;
+          if((next === current - 1 && cx === 0) || (next === current + 1 && cx === width - 1)) continue;
+          const nextPixel = next * 4;
+          if(!colorMatches(data, nextPixel, target)){
+            seen[next] = 1;
+            continue;
+          }
+          seen[next] = 1;
+          queue.push(next);
+        }
+      }
+      if(count >= 48){
+        components.push({
+          x:minX * (1920 / width),
+          y:minY * (1080 / height),
+          width:(maxX - minX + 1) * (1920 / width),
+          height:(maxY - minY + 1) * (1080 / height),
+          count
+        });
+      }
+    }
+  }
+  return components.sort((a,b)=>b.count - a.count);
+}
+async function analyzeScoreboardMask(src){
+  const token = ++maskState.token;
+  maskState.source = src;
+  maskState.loading = true;
+  try{
+    const img = await loadImageElement(src);
+    if(token !== maskState.token) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    const ctx = canvas.getContext("2d", {willReadFrequently:true});
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const regions = {};
+    Object.entries(maskColorTargets).forEach(([key, target])=>{
+      regions[key] = componentsForColor(data, canvas.width, canvas.height, target.rgb);
+    });
+    maskState.regions = regions;
+    maskState.loading = false;
+    return regions;
+  }catch{
+    if(token === maskState.token){
+      maskState.regions = null;
+      maskState.loading = false;
+    }
+    return null;
+  }
+}
+function activeMaskRegions(config){
+  const src = String(config.scoreboardMaskUrl || "");
+  if(!src) return null;
+  if(maskState.source !== src){
+    maskState.regions = null;
+    analyzeScoreboardMask(src).then(()=>render());
+    return null;
+  }
+  return maskState.regions;
+}
+function sideRegions(regions, key){
+  return [...(regions?.[key] || [])].sort((a,b)=>(a.x + a.width / 2) - (b.x + b.width / 2));
+}
+function largestRegion(regions, key){
+  return [...(regions?.[key] || [])].sort((a,b)=>b.count - a.count)[0] || null;
+}
+function setMaskSlot(id, region, options={}){
+  const el = $(id);
+  if(!el) return;
+  if(!region){
+    el.style.display = "none";
+    return;
+  }
+  const pad = Number(options.pad || 0);
+  const x = region.x + pad;
+  const y = region.y + pad;
+  const width = Math.max(1, region.width - pad * 2);
+  const height = Math.max(1, region.height - pad * 2);
+  el.style.display = "flex";
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  el.style.width = `${width}px`;
+  el.style.height = `${height}px`;
+  if(options.fontScale){
+    el.style.setProperty("--slot-font", `${Math.max(8, Math.min(options.maxFont || 96, height * options.fontScale, width * (options.widthScale || 1)))}px`);
+  }
+}
+function renderMaskDots(id, side, config){
+  const el = $(id);
+  if(el) el.innerHTML = renderDots(side, config);
+}
+function renderCustomScoreboard(config){
+  const hasCustom = !!(config.scoreboardImageUrl && config.scoreboardMaskUrl);
+  const stage = $("stage");
+  stage.classList.toggle("customScoreboard", hasCustom);
+  if(!hasCustom) return;
+
+  const skin = $("customScoreboardSkin");
+  if(skin && skin.src !== config.scoreboardImageUrl) skin.src = config.scoreboardImageUrl;
+
+  const regions = activeMaskRegions(config);
+  if(!regions) return;
+  const logoRegions = sideRegions(regions, "logos");
+  const scoreRegions = sideRegions(regions, "scores");
+  const nameRegions = sideRegions(regions, "names");
+  const seriesRegions = sideRegions(regions, "series");
+  const clockRegion = largestRegion(regions, "clock");
+  const titleRegion = largestRegion(regions, "title");
+
+  setMaskSlot("maskBlueLogo", logoRegions[0], {pad:4});
+  setMaskSlot("maskOrangeLogo", logoRegions[logoRegions.length - 1], {pad:4});
+  setMaskSlot("maskBlueScore", scoreRegions[0], {fontScale:.78, widthScale:.62, maxFont:82});
+  setMaskSlot("maskOrangeScore", scoreRegions[scoreRegions.length - 1], {fontScale:.78, widthScale:.62, maxFont:82});
+  setMaskSlot("maskClock", clockRegion, {fontScale:.58, widthScale:.22, maxFont:66});
+  setMaskSlot("maskBlueName", nameRegions[0], {pad:8, fontScale:.45, widthScale:.12, maxFont:42});
+  setMaskSlot("maskOrangeName", nameRegions[nameRegions.length - 1], {pad:8, fontScale:.45, widthScale:.12, maxFont:42});
+  setMaskSlot("maskBlueSeries", seriesRegions[0], {pad:6});
+  setMaskSlot("maskOrangeSeries", seriesRegions[seriesRegions.length - 1], {pad:6});
+  setMaskSlot("maskSeriesTitle", titleRegion, {pad:6, fontScale:.42, widthScale:.09, maxFont:30});
+
+  $("maskBlueLogo").querySelector("img").src = teamLogoFor("Blue", config);
+  $("maskOrangeLogo").querySelector("img").src = teamLogoFor("Orange", config);
+  $("maskBlueScore").textContent = state.teams.Blue.score || 0;
+  $("maskOrangeScore").textContent = state.teams.Orange.score || 0;
+  $("maskClock").textContent = formatClock(state.clock);
+  $("maskBlueName").textContent = config.blueTeamName || state.teams.Blue.name || "Blue";
+  $("maskOrangeName").textContent = config.orangeTeamName || state.teams.Orange.name || "Orange";
+  $("maskSeriesTitle").textContent = String(config.seriesTitle || overlayGameLabel(config)).trim();
+  renderMaskDots("maskBlueSeries", "Blue", config);
+  renderMaskDots("maskOrangeSeries", "Orange", config);
 }
 function extractPlayers(payload){
   const players = valueByKey(payload,["players","Players"]);
@@ -601,6 +885,7 @@ function render(){
   $("orangeSeries").innerHTML = renderDots("Orange", config);
   $("blueBoosts").innerHTML = renderBoostRows("Blue");
   $("orangeBoosts").innerHTML = renderBoostRows("Orange");
+  renderCustomScoreboard(config);
   renderLiveStatCard();
 }
 function handleMessage(raw){

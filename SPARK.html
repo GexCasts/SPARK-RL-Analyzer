@@ -1152,6 +1152,41 @@ canvas{width:100%!important;height:100%!important}
 }
 .overlayLogoTools{display:flex;gap:8px;flex-wrap:wrap}
 .overlayLogoTools button{border-radius:8px}
+.overlaySkinStatus{
+  display:grid;
+  gap:8px;
+  padding:10px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:8px;
+  color:var(--muted);
+  font-size:12px;
+  text-transform:none;
+}
+.overlayMaskLegend{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.overlayMaskLegend span{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 8px;
+  background:#0f1013;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:999px;
+  color:#e8e8e8;
+  font-size:11px;
+  font-weight:900;
+}
+.overlayMaskLegend i{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:var(--c);
+  box-shadow:0 0 10px var(--c);
+}
 .overlayTestTools{
   display:flex;
   align-items:center;
@@ -3613,6 +3648,9 @@ const overlayDefaultConfig = {
   orangeTeamName:"",
   blueLogoUrl:"",
   orangeLogoUrl:"",
+  scoreboardImageUrl:"",
+  scoreboardMaskUrl:"",
+  seriesTitle:"",
   seriesBestOf:5,
   blueSeriesScore:0,
   orangeSeriesScore:0,
@@ -5411,6 +5449,37 @@ function loadOverlayLogoFile(side, input){
   reader.readAsDataURL(file);
 }
 
+function loadOverlaySkinFile(key, input){
+  const file = input?.files?.[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async ()=>{
+    const dataUrl = String(reader.result || "");
+    const kind = key === "scoreboardMaskUrl" ? "scoreboard-mask" : "scoreboard";
+    if(location.protocol.startsWith("http")){
+      try{
+        const response = await fetch(`${location.origin}/api/overlay-asset`, {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({kind, dataUrl}),
+          cache:"no-store"
+        });
+        if(response.ok){
+          const json = await response.json();
+          if(json?.url){
+            updateOverlayConfigField(key, json.url);
+            return;
+          }
+        }
+      }catch(err){
+        console.warn("Could not save overlay asset through SPARK server:", err);
+      }
+    }
+    updateOverlayConfigField(key, dataUrl);
+  };
+  reader.readAsDataURL(file);
+}
+
 function renderOverlayControl(){
   const panel = $("overlayControlPanel");
   if(!panel) return;
@@ -5477,6 +5546,40 @@ function renderOverlayControl(){
         </details>
 
         <details class="overlayCategory" open>
+          <summary>Scoreboard Skin</summary>
+          <div class="overlayCategoryBody">
+            <label class="overlayField">Scoreboard Image
+              <div class="overlayLogoTools">
+                <button type="button" onclick="$('overlayScoreboardFile').click()">${overlayConfig.scoreboardImageUrl ? "Replace Scoreboard" : "Choose Scoreboard"}</button>
+                <button type="button" onclick="updateOverlayConfigField('scoreboardImageUrl','')" ${overlayConfig.scoreboardImageUrl ? "" : "disabled"}>Clear</button>
+                <input class="overlayFileInput" id="overlayScoreboardFile" type="file" accept="image/*" onchange="loadOverlaySkinFile('scoreboardImageUrl',this)">
+              </div>
+            </label>
+            <label class="overlayField">Reference Mask
+              <div class="overlayLogoTools">
+                <button type="button" onclick="$('overlayScoreboardMaskFile').click()">${overlayConfig.scoreboardMaskUrl ? "Replace Mask" : "Choose Mask"}</button>
+                <button type="button" onclick="updateOverlayConfigField('scoreboardMaskUrl','')" ${overlayConfig.scoreboardMaskUrl ? "" : "disabled"}>Clear</button>
+                <input class="overlayFileInput" id="overlayScoreboardMaskFile" type="file" accept="image/*" onchange="loadOverlaySkinFile('scoreboardMaskUrl',this)">
+              </div>
+            </label>
+            <label class="overlayField">Series Title / Ticker
+              <input class="overlayInput" id="overlaySeriesTitleInput" value="${escapeHtml(overlayConfig.seriesTitle)}" placeholder="Shown in the green mask region">
+            </label>
+            <div class="overlaySkinStatus">
+              <span>${overlayConfig.scoreboardImageUrl && overlayConfig.scoreboardMaskUrl ? "Custom scoreboard is active in the overlay preview." : "Upload both files to activate custom scoreboard placement."}</span>
+              <div class="overlayMaskLegend" aria-label="Mask color key">
+                <span><i style="--c:#ff0000"></i>Logos</span>
+                <span><i style="--c:#0000ff"></i>Goals</span>
+                <span><i style="--c:#ffff00"></i>Timer</span>
+                <span><i style="--c:#ff00ff"></i>Names</span>
+                <span><i style="--c:#00ffff"></i>Series score</span>
+                <span><i style="--c:#00ff00"></i>Title</span>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="overlayCategory" open>
           <summary>Stats Screen Test</summary>
           <div class="overlayCategoryBody">
             <div class="overlayTestTools">
@@ -5531,6 +5634,7 @@ function renderOverlayControl(){
   bind("overlayBlueLogoInput","blueLogoUrl");
   bind("overlayOrangeLogoInput","orangeLogoUrl");
   bind("overlayBestOfInput","seriesBestOf","change");
+  bind("overlaySeriesTitleInput","seriesTitle","input");
 }
 
 

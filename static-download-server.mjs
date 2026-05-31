@@ -15,6 +15,7 @@ const overlayFileName = path.join("overlay", "SPARK_Overlay.html");
 const logoPath = path.join(here, "assets", "Spark Logo.png");
 const oneNeLogoPath = path.join(here, "assets", "1NE_Vector_edited.png");
 const tileLayoutPath = path.join(here, "SPARK-layout.json");
+const overlayAssetDir = path.join(here, ".tmp", "overlay-assets");
 const rrrocketVersion = "0.11.1";
 const rrrocketCandidates = [
   process.env.SPARK_RRROCKET_PATH,
@@ -39,6 +40,10 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type"
 };
+const overlayAssetKinds = new Map([
+  ["scoreboard", "scoreboard.png"],
+  ["scoreboard-mask", "scoreboard-mask.png"]
+]);
 const activeClients = new Map();
 const clientStaleMs = 120000;
 const shutdownGraceMs = 60000;
@@ -2802,6 +2807,39 @@ async function handleTileLayout(req, res){
   res.end(JSON.stringify({ok:true, fileName:path.basename(tileLayoutPath)}));
 }
 
+async function handleOverlayAssetUpload(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use POST.");
+    return;
+  }
+
+  const body = await readRequestBody(req, 12 * 1024 * 1024);
+  let message = {};
+  try{
+    message = JSON.parse(body.toString("utf8") || "{}");
+  }catch{
+    throw new Error("Invalid overlay asset JSON.");
+  }
+  const kind = String(message.kind || "").trim();
+  const fileName = overlayAssetKinds.get(kind);
+  const dataUrl = String(message.dataUrl || "");
+  const match = dataUrl.match(/^data:image\/(?:png|webp|jpeg);base64,([A-Za-z0-9+/=]+)$/);
+  if(!fileName || !match) throw new Error("Invalid overlay asset.");
+
+  const bytes = Buffer.from(match[1], "base64");
+  if(!bytes.length || bytes.length > 8 * 1024 * 1024) throw new Error("Overlay asset is too large.");
+  await fs.mkdir(overlayAssetDir, {recursive:true});
+  await fs.writeFile(path.join(overlayAssetDir, fileName), bytes);
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify({ok:true, url:`/__overlay_asset/${kind}?v=${Date.now()}`}));
+}
+
 function runPowerShell(script){
   return new Promise((resolve, reject)=>{
     execFile("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {windowsHide:true}, (error, stdout, stderr)=>{
@@ -2928,6 +2966,10 @@ server = http.createServer(async (req,res)=>{
       await handleTileLayout(req, res);
       return;
     }
+    if(url.pathname === "/api/overlay-asset"){
+      await handleOverlayAssetUpload(req, res);
+      return;
+    }
     if(url.pathname === "/api/window-control"){
       await handleWindowControl(req, res);
       return;
@@ -2951,6 +2993,18 @@ server = http.createServer(async (req,res)=>{
     if(url.pathname === "/__spark_logo.png" || url.pathname === "/__1ne_logo.png"){
       const data = await fs.readFile(url.pathname === "/__1ne_logo.png" ? oneNeLogoPath : logoPath);
       res.writeHead(200, {"Content-Type":"image/png"});
+      res.end(data);
+      return;
+    }
+    if(url.pathname.startsWith("/__overlay_asset/")){
+      const kind = path.basename(url.pathname);
+      const fileName = overlayAssetKinds.get(kind);
+      if(!fileName){
+        res.writeHead(404).end("Not found");
+        return;
+      }
+      const data = await fs.readFile(path.join(overlayAssetDir, fileName));
+      res.writeHead(200, {"Content-Type":"image/png", "Cache-Control":"no-store"});
       res.end(data);
       return;
     }
