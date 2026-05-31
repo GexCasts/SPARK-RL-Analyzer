@@ -43,8 +43,10 @@ const corsHeaders = {
 const overlayAssetKinds = new Map([
   ["scoreboard", "scoreboard.png"],
   ["scoreboard-mask", "scoreboard-mask.png"],
-  ["tournament-logo", "tournament-logo.png"]
+  ["tournament-logo", "tournament-logo.png"],
+  ["stinger-transition", "stinger-transition"]
 ]);
+const overlayStingerMetaFile = "stinger-transition.json";
 const activeClients = new Map();
 const clientStaleMs = 120000;
 const shutdownGraceMs = 60000;
@@ -2820,7 +2822,7 @@ async function handleOverlayAssetUpload(req, res){
     return;
   }
 
-  const body = await readRequestBody(req, 12 * 1024 * 1024);
+  const body = await readRequestBody(req, 160 * 1024 * 1024);
   let message = {};
   try{
     message = JSON.parse(body.toString("utf8") || "{}");
@@ -2830,15 +2832,46 @@ async function handleOverlayAssetUpload(req, res){
   const kind = String(message.kind || "").trim();
   const fileName = overlayAssetKinds.get(kind);
   const dataUrl = String(message.dataUrl || "");
-  const match = dataUrl.match(/^data:image\/(?:png|webp|jpeg);base64,([A-Za-z0-9+/=]+)$/);
+  const match = dataUrl.match(/^data:([^;,]+)?;base64,([A-Za-z0-9+/=]+)$/);
   if(!fileName || !match) throw new Error("Invalid overlay asset.");
 
-  const bytes = Buffer.from(match[1], "base64");
-  if(!bytes.length || bytes.length > 8 * 1024 * 1024) throw new Error("Overlay asset is too large.");
+  const mime = String(match[1] || "application/octet-stream").toLowerCase();
+  const bytes = Buffer.from(match[2], "base64");
+  if(kind !== "stinger-transition" && !/^image\/(?:png|webp|jpeg)$/.test(mime)) throw new Error("Invalid overlay image.");
+  const maxBytes = kind === "stinger-transition" ? 150 * 1024 * 1024 : 8 * 1024 * 1024;
+  if(!bytes.length || bytes.length > maxBytes) throw new Error("Overlay asset is too large.");
   await fs.mkdir(overlayAssetDir, {recursive:true});
-  await fs.writeFile(path.join(overlayAssetDir, fileName), bytes);
+  if(kind === "stinger-transition"){
+    const cleanName = path.basename(String(message.fileName || "stinger-transition"));
+    const ext = overlayAssetExtension(cleanName, mime);
+    const assetFile = `${fileName}${ext}`;
+    await fs.writeFile(path.join(overlayAssetDir, assetFile), bytes);
+    await fs.writeFile(path.join(overlayAssetDir, overlayStingerMetaFile), JSON.stringify({fileName:cleanName, mime, assetFile}, null, 2));
+  }else{
+    await fs.writeFile(path.join(overlayAssetDir, fileName), bytes);
+  }
   res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
   res.end(JSON.stringify({ok:true, url:`/__overlay_asset/${kind}?v=${Date.now()}`}));
+}
+
+function overlayAssetExtension(fileName, mime){
+  const ext = path.extname(String(fileName || "")).toLowerCase().replace(/[^.\w]/g, "");
+  if(ext && ext.length <= 12) return ext;
+  const byMime = new Map([
+    ["video/webm", ".webm"],
+    ["video/mp4", ".mp4"],
+    ["video/quicktime", ".mov"],
+    ["video/x-matroska", ".mkv"],
+    ["video/x-msvideo", ".avi"],
+    ["video/mp2t", ".ts"],
+    ["video/x-flv", ".flv"],
+    ["video/x-m4v", ".m4v"],
+    ["image/gif", ".gif"],
+    ["image/png", ".png"],
+    ["image/webp", ".webp"],
+    ["application/octet-stream", ".bin"]
+  ]);
+  return byMime.get(String(mime || "").toLowerCase()) || ".bin";
 }
 
 function runPowerShell(script){
@@ -3004,8 +3037,17 @@ server = http.createServer(async (req,res)=>{
         res.writeHead(404).end("Not found");
         return;
       }
-      const data = await fs.readFile(path.join(overlayAssetDir, fileName));
-      res.writeHead(200, {"Content-Type":"image/png", "Cache-Control":"no-store"});
+      let assetFile = fileName;
+      let contentType = "image/png";
+      if(kind === "stinger-transition"){
+        const metaRaw = await fs.readFile(path.join(overlayAssetDir, overlayStingerMetaFile), "utf8");
+        const meta = JSON.parse(metaRaw || "{}");
+        assetFile = path.basename(String(meta.assetFile || ""));
+        contentType = String(meta.mime || "application/octet-stream");
+        if(!assetFile) throw new Error("Missing stinger transition asset.");
+      }
+      const data = await fs.readFile(path.join(overlayAssetDir, assetFile));
+      res.writeHead(200, {"Content-Type":contentType, "Cache-Control":"no-store"});
       res.end(data);
       return;
     }

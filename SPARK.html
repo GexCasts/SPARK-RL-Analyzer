@@ -2873,6 +2873,25 @@ body.obsOverlayMode #obsOverlayRoot{
   color:#f8f8f8;
 }
 .obsFinalScreen.active{display:block}
+.obsStage.fadeTransition .obsFinalScreen.active{
+  animation:obsStatsFadeIn .18s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes obsStatsFadeIn{
+  from{opacity:0}
+  to{opacity:1}
+}
+.obsStingerTransition{
+  display:none;
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  z-index:30;
+  background:transparent;
+  pointer-events:none;
+}
+.obsStingerTransition.active{display:block}
 .obsFinalScreen::before{
   content:"";
   position:absolute;
@@ -3672,6 +3691,7 @@ body.obsOverlayMode #obsOverlayRoot{
         </div>
       </div>
     </div>
+    <video class="obsStingerTransition" id="obsStingerTransition" muted playsinline preload="auto"></video>
   </div>
 </div>
 
@@ -3717,12 +3737,16 @@ const overlayDefaultConfig = {
   tournamentLogoY:146,
   tournamentLogoWidth:280,
   tournamentLogoRatio:2.2,
+  stingerTransitionUrl:"",
+  stingerTransitionName:"",
   seriesBestOf:5,
   blueSeriesScore:0,
   orangeSeriesScore:0,
   testFinalStatsPreview:false
 };
 let overlayConfig = readOverlayConfig();
+let obsFinalScreenVisible = false;
+let obsStingerTimer = null;
 
 const playerColors=["#ffd000","#f0a020","#f2f2f2","#a0a0a0","#ff6555","#ffe060","#707070","#c7c7c7"];
 
@@ -5521,7 +5545,13 @@ function loadOverlaySkinFile(key, input){
   const reader = new FileReader();
   reader.onload = async ()=>{
     const dataUrl = String(reader.result || "");
-    const kind = key === "scoreboardMaskUrl" ? "scoreboard-mask" : key === "tournamentLogoUrl" ? "tournament-logo" : "scoreboard";
+    const kind = key === "scoreboardMaskUrl"
+      ? "scoreboard-mask"
+      : key === "tournamentLogoUrl"
+        ? "tournament-logo"
+        : key === "stingerTransitionUrl"
+          ? "stinger-transition"
+          : "scoreboard";
     let tournamentRatio = null;
     if(key === "tournamentLogoUrl"){
       try{
@@ -5538,6 +5568,8 @@ function loadOverlaySkinFile(key, input){
     const saveUploadedUrl = url=>{
       if(key === "tournamentLogoUrl" && Number.isFinite(tournamentRatio)){
         saveOverlayConfig({...overlayConfig, tournamentLogoUrl:url, tournamentLogoRatio:tournamentRatio});
+      }else if(key === "stingerTransitionUrl"){
+        saveOverlayConfig({...overlayConfig, stingerTransitionUrl:url, stingerTransitionName:file.name || "Custom stinger"});
       }else{
         updateOverlayConfigField(key, url);
       }
@@ -5547,7 +5579,7 @@ function loadOverlaySkinFile(key, input){
         const response = await fetch(`${location.origin}/api/overlay-asset`, {
           method:"POST",
           headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({kind, dataUrl}),
+          body:JSON.stringify({kind, dataUrl, fileName:file.name || ""}),
           cache:"no-store"
         });
         if(response.ok){
@@ -5773,6 +5805,22 @@ function renderOverlayControl(){
             </div>
             <div class="overlaySkinStatus">
               <span>${overlayConfig.tournamentLogoUrl ? "Drag the logo in the preview. Use the yellow handle to resize it." : "Upload a transparent PNG, then place it directly in the preview."}</span>
+            </div>
+          </div>
+        </details>
+
+        <details class="overlayCategory" open>
+          <summary>Stats Transition</summary>
+          <div class="overlayCategoryBody">
+            <label class="overlayField">Stinger File
+              <div class="overlayLogoTools">
+                <button type="button" onclick="$('overlayStingerFile').click()">${overlayConfig.stingerTransitionUrl ? "Replace Stinger" : "Choose Stinger"}</button>
+                <button type="button" onclick="saveOverlayConfig({...overlayConfig, stingerTransitionUrl:'', stingerTransitionName:''})" ${overlayConfig.stingerTransitionUrl ? "" : "disabled"}>Clear</button>
+                <input class="overlayFileInput" id="overlayStingerFile" type="file" accept="video/*,.webm,.mp4,.mov,.mkv,.avi,.m4v,.flv,.ts,.gif" onchange="loadOverlaySkinFile('stingerTransitionUrl',this)">
+              </div>
+            </label>
+            <div class="overlaySkinStatus">
+              <span>${overlayConfig.stingerTransitionUrl ? `Custom stinger: ${escapeHtml(overlayConfig.stingerTransitionName || "Uploaded file")}` : "No stinger selected. Stats screen uses a quick fade."}</span>
             </div>
           </div>
         </details>
@@ -10757,6 +10805,42 @@ function obsFinalCompareBar(left, right){
   return `<div class="obsFinalStatCompare" style="--blue:${blue}fr;--orange:${orange}fr"><i></i><i></i></div>`;
 }
 
+function playObsStatsTransition(showFinalScreen){
+  const stage = document.querySelector(".obsStage");
+  const stinger = $("obsStingerTransition");
+  const src = String((overlayConfig || overlayDefaultConfig).stingerTransitionUrl || "");
+  if(stage){
+    stage.classList.remove("fadeTransition");
+    void stage.offsetWidth;
+    if(!src) stage.classList.add("fadeTransition");
+  }
+  if(obsStingerTimer){
+    clearTimeout(obsStingerTimer);
+    obsStingerTimer = null;
+  }
+  if(!stinger) return;
+  stinger.classList.remove("active");
+  stinger.onended = null;
+  try{ stinger.pause(); }catch{}
+  if(!src){
+    stinger.removeAttribute("src");
+    return;
+  }
+  if(stinger.getAttribute("src") !== src) stinger.src = src;
+  try{ stinger.currentTime = 0; }catch{}
+  stinger.muted = true;
+  stinger.playsInline = true;
+  stinger.classList.add("active");
+  const cleanup = ()=>{
+    stinger.classList.remove("active");
+    try{ stinger.pause(); }catch{}
+  };
+  stinger.onended = cleanup;
+  const played = stinger.play?.();
+  if(played?.catch) played.catch(cleanup);
+  obsStingerTimer = setTimeout(cleanup, showFinalScreen ? 4500 : 2400);
+}
+
 function renderObsFinalScreen(){
   if(!isObsOverlayMode || !liveApiState) return;
   overlayConfig = readOverlayConfig();
@@ -10764,6 +10848,10 @@ function renderObsFinalScreen(){
   if(!screen) return;
   const manualPreview = !!overlayConfig.testFinalStatsPreview;
   const showFinalScreen = !!((liveApiState.matchEnded || forceObsFinalPreview || manualPreview) && !liveApiState.replayActive);
+  if(showFinalScreen !== obsFinalScreenVisible){
+    playObsStatsTransition(showFinalScreen);
+    obsFinalScreenVisible = showFinalScreen;
+  }
   screen.classList.toggle("active", showFinalScreen);
   if(!showFinalScreen) return;
 
