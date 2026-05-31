@@ -42,7 +42,8 @@ const corsHeaders = {
 };
 const overlayAssetKinds = new Map([
   ["scoreboard", "scoreboard.png"],
-  ["scoreboard-mask", "scoreboard-mask.png"]
+  ["scoreboard-mask", "scoreboard-mask.png"],
+  ["tournament-logo", "tournament-logo.png"]
 ]);
 const activeClients = new Map();
 const clientStaleMs = 120000;

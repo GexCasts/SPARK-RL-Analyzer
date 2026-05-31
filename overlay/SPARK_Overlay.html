@@ -31,6 +31,20 @@ html,body{
   transform:scale(var(--stage-scale));
   transform-origin:top left;
 }
+.tournamentLogo{
+  position:absolute;
+  left:var(--logo-x,820px);
+  top:var(--logo-y,146px);
+  width:var(--logo-w,280px);
+  height:auto;
+  display:none;
+  z-index:4;
+  object-fit:contain;
+  object-position:center;
+  pointer-events:none;
+  filter:drop-shadow(0 5px 10px rgba(0,0,0,.48));
+}
+.stage.hasTournamentLogo .tournamentLogo{display:block}
 .customScoreboardSkin,
 .customScoreboardLayer{
   display:none;
@@ -434,6 +448,7 @@ html,body{
 </head>
 <body>
 <div class="stage" id="stage">
+  <img class="tournamentLogo" id="tournamentLogo" alt="">
   <img class="customScoreboardSkin" id="customScoreboardSkin" alt="">
   <div class="customScoreboardLayer" id="customScoreboardLayer">
     <div class="maskSlot logo" id="maskBlueLogo"><img alt=""></div>
@@ -479,6 +494,11 @@ const defaultConfig = {
   scoreboardImageUrl:"",
   scoreboardMaskUrl:"",
   seriesTitle:"",
+  tournamentLogoUrl:"",
+  tournamentLogoX:820,
+  tournamentLogoY:146,
+  tournamentLogoWidth:280,
+  tournamentLogoRatio:2.2,
   seriesBestOf:5,
   blueSeriesScore:0,
   orangeSeriesScore:0
@@ -873,6 +893,15 @@ function render(){
   const stage = $("stage");
   stage.classList.toggle("live", state.connected && state.updates > 0);
   stage.classList.toggle("replayActive", !!state.replay);
+  const tournamentLogo = $("tournamentLogo");
+  const hasTournamentLogo = !!String(config.tournamentLogoUrl || "").trim();
+  stage.classList.toggle("hasTournamentLogo", hasTournamentLogo);
+  if(tournamentLogo && hasTournamentLogo){
+    if(tournamentLogo.src !== config.tournamentLogoUrl) tournamentLogo.src = config.tournamentLogoUrl;
+    tournamentLogo.style.setProperty("--logo-x", `${Math.max(0, Math.min(1920, Number(config.tournamentLogoX) || 0))}px`);
+    tournamentLogo.style.setProperty("--logo-y", `${Math.max(0, Math.min(1080, Number(config.tournamentLogoY) || 0))}px`);
+    tournamentLogo.style.setProperty("--logo-w", `${Math.max(24, Math.min(900, Number(config.tournamentLogoWidth) || 280))}px`);
+  }
   $("blueName").textContent = config.blueTeamName || state.teams.Blue.name || "Blue";
   $("orangeName").textContent = config.orangeTeamName || state.teams.Orange.name || "Orange";
   $("blueLogo").src = teamLogoFor("Blue", config);

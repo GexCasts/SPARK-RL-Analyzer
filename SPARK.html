@@ -995,6 +995,60 @@ canvas{width:100%!important;height:100%!important}
   border:0;
   background:transparent;
 }
+.overlayTournamentEditor{
+  position:absolute;
+  left:calc(var(--x,820) / 1920 * 100%);
+  top:calc(var(--y,146) / 1080 * 100%);
+  width:calc(var(--w,280) / 1920 * 100%);
+  aspect-ratio:var(--ratio,2.2);
+  z-index:4;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  border:2px solid rgba(255,208,0,.95);
+  border-radius:4px;
+  background:rgba(255,208,0,.06);
+  box-shadow:0 0 0 1px rgba(0,0,0,.72),0 10px 26px rgba(0,0,0,.28);
+  cursor:move;
+  pointer-events:auto;
+  touch-action:none;
+}
+.overlayTournamentEditor.active{display:flex}
+.overlayTournamentEditor img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  pointer-events:none;
+  filter:drop-shadow(0 4px 8px rgba(0,0,0,.48));
+}
+.overlayTournamentEditor::before{
+  content:"Tournament logo";
+  position:absolute;
+  left:0;
+  top:-28px;
+  padding:5px 8px;
+  border-radius:999px;
+  background:rgba(0,0,0,.78);
+  color:var(--spark-yellow);
+  font-size:10px;
+  font-weight:1000;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.overlayTournamentResize{
+  position:absolute;
+  right:-8px;
+  bottom:-8px;
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  border:2px solid #050607;
+  background:var(--spark-yellow);
+  box-shadow:0 4px 10px rgba(0,0,0,.4);
+  cursor:nwse-resize;
+  pointer-events:auto;
+}
 .overlayQuickControls{
   display:grid;
   grid-template-columns:1fr auto 1fr;
@@ -1057,6 +1111,12 @@ canvas{width:100%!important;height:100%!important}
   grid-template-columns:repeat(2,minmax(260px,1fr));
   gap:14px;
 }
+.overlayPlacementGrid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.overlayPlacementGrid .overlayField{min-width:0}
 .overlayControlStack .overlayControlGrid{grid-template-columns:1fr}
 .overlayField{
   display:grid;
@@ -1131,6 +1191,7 @@ canvas{width:100%!important;height:100%!important}
   .overlayQuickControls{grid-template-columns:1fr}
   .overlayQuickActions{grid-template-columns:1fr}
   .overlayControlGrid{grid-template-columns:1fr}
+  .overlayPlacementGrid{grid-template-columns:1fr}
   .overlaySeriesControls{grid-template-columns:1fr}
   .overlayTestTools{align-items:flex-start;flex-direction:column}
   .overlayTestToggle{width:100%;min-width:0}
@@ -3651,6 +3712,11 @@ const overlayDefaultConfig = {
   scoreboardImageUrl:"",
   scoreboardMaskUrl:"",
   seriesTitle:"",
+  tournamentLogoUrl:"",
+  tournamentLogoX:820,
+  tournamentLogoY:146,
+  tournamentLogoWidth:280,
+  tournamentLogoRatio:2.2,
   seriesBestOf:5,
   blueSeriesScore:0,
   orangeSeriesScore:0,
@@ -5455,7 +5521,27 @@ function loadOverlaySkinFile(key, input){
   const reader = new FileReader();
   reader.onload = async ()=>{
     const dataUrl = String(reader.result || "");
-    const kind = key === "scoreboardMaskUrl" ? "scoreboard-mask" : "scoreboard";
+    const kind = key === "scoreboardMaskUrl" ? "scoreboard-mask" : key === "tournamentLogoUrl" ? "tournament-logo" : "scoreboard";
+    let tournamentRatio = null;
+    if(key === "tournamentLogoUrl"){
+      try{
+        tournamentRatio = await new Promise(resolve=>{
+          const img = new Image();
+          img.onload = ()=>resolve((img.naturalWidth || img.width || 1) / Math.max(1, img.naturalHeight || img.height || 1));
+          img.onerror = ()=>resolve(null);
+          img.src = dataUrl;
+        });
+      }catch{
+        tournamentRatio = null;
+      }
+    }
+    const saveUploadedUrl = url=>{
+      if(key === "tournamentLogoUrl" && Number.isFinite(tournamentRatio)){
+        saveOverlayConfig({...overlayConfig, tournamentLogoUrl:url, tournamentLogoRatio:tournamentRatio});
+      }else{
+        updateOverlayConfigField(key, url);
+      }
+    };
     if(location.protocol.startsWith("http")){
       try{
         const response = await fetch(`${location.origin}/api/overlay-asset`, {
@@ -5467,7 +5553,7 @@ function loadOverlaySkinFile(key, input){
         if(response.ok){
           const json = await response.json();
           if(json?.url){
-            updateOverlayConfigField(key, json.url);
+            saveUploadedUrl(json.url);
             return;
           }
         }
@@ -5475,9 +5561,94 @@ function loadOverlaySkinFile(key, input){
         console.warn("Could not save overlay asset through SPARK server:", err);
       }
     }
-    updateOverlayConfigField(key, dataUrl);
+    saveUploadedUrl(dataUrl);
   };
   reader.readAsDataURL(file);
+}
+
+function setOverlayTournamentPlacement(partial){
+  const next = {
+    ...overlayConfig,
+    ...partial
+  };
+  next.tournamentLogoX = Math.round(Math.max(0, Math.min(1920, Number(next.tournamentLogoX) || 0)));
+  next.tournamentLogoY = Math.round(Math.max(0, Math.min(1080, Number(next.tournamentLogoY) || 0)));
+  next.tournamentLogoWidth = Math.round(Math.max(24, Math.min(900, Number(next.tournamentLogoWidth) || 280)));
+  next.tournamentLogoRatio = Math.max(.2, Math.min(8, Number(next.tournamentLogoRatio) || 2.2));
+  overlayConfig = next;
+  try{ localStorage.setItem(overlayConfigKey, JSON.stringify(overlayConfig)); }
+  catch(err){ console.warn("Could not save overlay config:", err); }
+  applyOverlayTournamentEditor();
+  renderObsOverlay();
+}
+
+function applyOverlayTournamentEditor(){
+  const editor = $("overlayTournamentEditor");
+  if(!editor) return;
+  const logoUrl = String(overlayConfig.tournamentLogoUrl || "");
+  editor.classList.toggle("active", !!logoUrl);
+  editor.style.setProperty("--x", String(Number(overlayConfig.tournamentLogoX) || 0));
+  editor.style.setProperty("--y", String(Number(overlayConfig.tournamentLogoY) || 0));
+  editor.style.setProperty("--w", String(Number(overlayConfig.tournamentLogoWidth) || 280));
+  editor.style.setProperty("--ratio", String(Number(overlayConfig.tournamentLogoRatio) || 2.2));
+  const img = editor.querySelector("img");
+  if(img && logoUrl && img.src !== logoUrl) img.src = logoUrl;
+  ["X","Y","Width"].forEach(part=>{
+    const input = $(`overlayTournament${part}Input`);
+    const key = `tournamentLogo${part}`;
+    if(input) input.value = Math.round(Number(overlayConfig[key]) || 0);
+  });
+}
+
+function bindOverlayTournamentEditor(){
+  const editor = $("overlayTournamentEditor");
+  const wrap = editor?.closest(".overlayPreviewFrameWrap");
+  if(!editor || !wrap) return;
+  const resizeHandle = editor.querySelector(".overlayTournamentResize");
+  const startDrag = (event, mode)=>{
+    event.preventDefault();
+    event.stopPropagation();
+    const start = {
+      pointerId:event.pointerId,
+      clientX:event.clientX,
+      clientY:event.clientY,
+      x:Number(overlayConfig.tournamentLogoX) || 0,
+      y:Number(overlayConfig.tournamentLogoY) || 0,
+      width:Number(overlayConfig.tournamentLogoWidth) || 280
+    };
+    editor.setPointerCapture(event.pointerId);
+    const move = moveEvent=>{
+      if(moveEvent.pointerId !== start.pointerId) return;
+      const bounds = wrap.getBoundingClientRect();
+      const scaleX = 1920 / Math.max(1, bounds.width);
+      const scaleY = 1080 / Math.max(1, bounds.height);
+      const dx = (moveEvent.clientX - start.clientX) * scaleX;
+      const dy = (moveEvent.clientY - start.clientY) * scaleY;
+      if(mode === "resize"){
+        const nextWidth = Math.max(24, Math.min(900, start.width + dx));
+        setOverlayTournamentPlacement({tournamentLogoWidth:nextWidth});
+      }else{
+        const nextWidth = Number(overlayConfig.tournamentLogoWidth) || start.width;
+        const nextHeight = nextWidth / Math.max(.2, Number(overlayConfig.tournamentLogoRatio) || 2.2);
+        setOverlayTournamentPlacement({
+          tournamentLogoX:Math.max(0, Math.min(1920 - nextWidth, start.x + dx)),
+          tournamentLogoY:Math.max(0, Math.min(1080 - nextHeight, start.y + dy))
+        });
+      }
+    };
+    const end = endEvent=>{
+      if(endEvent.pointerId !== start.pointerId) return;
+      editor.releasePointerCapture(event.pointerId);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+  editor.addEventListener("pointerdown", event=>startDrag(event, "move"));
+  resizeHandle?.addEventListener("pointerdown", event=>startDrag(event, "resize"));
 }
 
 function renderOverlayControl(){
@@ -5580,6 +5751,33 @@ function renderOverlayControl(){
         </details>
 
         <details class="overlayCategory" open>
+          <summary>Tournament Logo</summary>
+          <div class="overlayCategoryBody">
+            <label class="overlayField">Logo Image
+              <div class="overlayLogoTools">
+                <button type="button" onclick="$('overlayTournamentLogoFile').click()">${overlayConfig.tournamentLogoUrl ? "Replace Logo" : "Choose Logo"}</button>
+                <button type="button" onclick="updateOverlayConfigField('tournamentLogoUrl','')" ${overlayConfig.tournamentLogoUrl ? "" : "disabled"}>Clear</button>
+                <input class="overlayFileInput" id="overlayTournamentLogoFile" type="file" accept="image/png,image/webp,image/jpeg,image/*" onchange="loadOverlaySkinFile('tournamentLogoUrl',this)">
+              </div>
+            </label>
+            <div class="overlayPlacementGrid">
+              <label class="overlayField">X
+                <input class="overlayInput" id="overlayTournamentXInput" type="number" min="0" max="1920" step="1" value="${Math.round(Number(overlayConfig.tournamentLogoX) || 0)}">
+              </label>
+              <label class="overlayField">Y
+                <input class="overlayInput" id="overlayTournamentYInput" type="number" min="0" max="1080" step="1" value="${Math.round(Number(overlayConfig.tournamentLogoY) || 0)}">
+              </label>
+              <label class="overlayField">Width
+                <input class="overlayInput" id="overlayTournamentWidthInput" type="number" min="24" max="900" step="1" value="${Math.round(Number(overlayConfig.tournamentLogoWidth) || 280)}">
+              </label>
+            </div>
+            <div class="overlaySkinStatus">
+              <span>${overlayConfig.tournamentLogoUrl ? "Drag the logo in the preview. Use the yellow handle to resize it." : "Upload a transparent PNG, then place it directly in the preview."}</span>
+            </div>
+          </div>
+        </details>
+
+        <details class="overlayCategory" open>
           <summary>Stats Screen Test</summary>
           <div class="overlayCategoryBody">
             <div class="overlayTestTools">
@@ -5603,6 +5801,10 @@ function renderOverlayControl(){
       <div class="overlayPreviewDesk">
         <div class="overlayPreviewFrameWrap">
           <iframe class="overlayPreviewFrame" src="${escapeHtml(previewUrl)}" title="Overlay Preview"></iframe>
+          <div class="overlayTournamentEditor ${overlayConfig.tournamentLogoUrl ? "active" : ""}" id="overlayTournamentEditor" style="--x:${Number(overlayConfig.tournamentLogoX) || 0};--y:${Number(overlayConfig.tournamentLogoY) || 0};--w:${Number(overlayConfig.tournamentLogoWidth) || 280};--ratio:${Number(overlayConfig.tournamentLogoRatio) || 2.2}">
+            <img src="${escapeHtml(overlayConfig.tournamentLogoUrl || "")}" alt="">
+            <span class="overlayTournamentResize" aria-hidden="true"></span>
+          </div>
         </div>
         <div class="overlayQuickControls">
           <div class="overlayQuickTeam blue">
@@ -5635,6 +5837,17 @@ function renderOverlayControl(){
   bind("overlayOrangeLogoInput","orangeLogoUrl");
   bind("overlayBestOfInput","seriesBestOf","change");
   bind("overlaySeriesTitleInput","seriesTitle","input");
+  const tournamentBindings = [
+    ["overlayTournamentXInput","tournamentLogoX"],
+    ["overlayTournamentYInput","tournamentLogoY"],
+    ["overlayTournamentWidthInput","tournamentLogoWidth"]
+  ];
+  tournamentBindings.forEach(([id,key])=>{
+    const el = $(id);
+    if(el) el.addEventListener("input", ()=>setOverlayTournamentPlacement({[key]:Number(el.value)}));
+  });
+  bindOverlayTournamentEditor();
+  applyOverlayTournamentEditor();
 }
 
 
@@ -10292,6 +10505,10 @@ function readOverlayConfig(){
       seriesBestOf:bestOf,
       blueSeriesScore:Math.max(0, Math.min(maxWins, Number(stored.blueSeriesScore) || 0)),
       orangeSeriesScore:Math.max(0, Math.min(maxWins, Number(stored.orangeSeriesScore) || 0)),
+      tournamentLogoX:Math.round(Math.max(0, Math.min(1920, Number(stored.tournamentLogoX ?? overlayDefaultConfig.tournamentLogoX) || 0))),
+      tournamentLogoY:Math.round(Math.max(0, Math.min(1080, Number(stored.tournamentLogoY ?? overlayDefaultConfig.tournamentLogoY) || 0))),
+      tournamentLogoWidth:Math.round(Math.max(24, Math.min(900, Number(stored.tournamentLogoWidth ?? overlayDefaultConfig.tournamentLogoWidth) || 280))),
+      tournamentLogoRatio:Math.max(.2, Math.min(8, Number(stored.tournamentLogoRatio ?? overlayDefaultConfig.tournamentLogoRatio) || 2.2)),
       testFinalStatsPreview:stored.testFinalStatsPreview === true || stored.testFinalStatsPreview === "true"
     };
   }catch(err){
@@ -10308,6 +10525,10 @@ function saveOverlayConfig(nextConfig){
     seriesBestOf:bestOf,
     blueSeriesScore:Math.max(0, Math.min(maxWins, Number(nextConfig.blueSeriesScore) || 0)),
     orangeSeriesScore:Math.max(0, Math.min(maxWins, Number(nextConfig.orangeSeriesScore) || 0)),
+    tournamentLogoX:Math.round(Math.max(0, Math.min(1920, Number(nextConfig.tournamentLogoX) || 0))),
+    tournamentLogoY:Math.round(Math.max(0, Math.min(1080, Number(nextConfig.tournamentLogoY) || 0))),
+    tournamentLogoWidth:Math.round(Math.max(24, Math.min(900, Number(nextConfig.tournamentLogoWidth) || 280))),
+    tournamentLogoRatio:Math.max(.2, Math.min(8, Number(nextConfig.tournamentLogoRatio) || 2.2)),
     testFinalStatsPreview:nextConfig.testFinalStatsPreview === true
   };
   try{ localStorage.setItem(overlayConfigKey, JSON.stringify(overlayConfig)); }
