@@ -72,10 +72,6 @@ html,body{
 .stage.customScoreboard .customScoreboardLayer{
   display:block;
 }
-.stage.replayActive.customScoreboard .customScoreboardLayer,
-.stage.replayActive.customScoreboard .customScoreboardSkin{
-  display:none;
-}
 .maskSlot{
   position:absolute;
   display:flex;
@@ -98,6 +94,9 @@ html,body{
   object-position:center;
   filter:drop-shadow(0 4px 7px rgba(0,0,0,.55));
 }
+.maskSlot.logo.empty{
+  display:none !important;
+}
 .maskSlot.score{
   font-size:var(--slot-font,52px);
   color:#fffdf3;
@@ -115,10 +114,11 @@ html,body{
   text-overflow:ellipsis;
 }
 .maskSlot.seriesTitle{
-  font-size:var(--slot-font,16px);
-  letter-spacing:.12em;
+  font-size:var(--slot-font,22px);
+  letter-spacing:.08em;
   color:#050609;
   text-shadow:none;
+  white-space:nowrap;
 }
 .maskSlot.seriesDots{
   gap:8px;
@@ -174,6 +174,9 @@ html,body{
   object-fit:contain;
   object-position:center;
   filter:drop-shadow(0 3px 5px rgba(0,0,0,.55));
+}
+.teamLogo.empty{
+  display:none;
 }
 .teamLabel{
   min-width:0;
@@ -304,19 +307,31 @@ html,body{
 .name,.boostValue{position:relative;padding:0 6px;z-index:1}
 .replay{
   position:absolute;
-  left:50%;
-  top:146px;
-  transform:translateX(-50%);
-  padding:6px 22px;
-  background:rgba(255,208,0,.92);
-  color:#060606;
-  font-size:14px;
+  left:0;
+  right:0;
+  bottom:0;
+  height:86px;
+  padding-top:27px;
+  background:
+    linear-gradient(90deg,transparent 0 28%,rgba(255,208,0,.92) 28% 72%,transparent 72% 100%),
+    linear-gradient(180deg,transparent,rgba(5,6,9,.82) 42%,rgba(5,6,9,.96));
+  color:#fffdf3;
+  font-size:24px;
   font-weight:950;
   text-transform:uppercase;
-  letter-spacing:.18em;
+  letter-spacing:.24em;
+  text-align:center;
+  text-shadow:0 3px 8px rgba(0,0,0,.75);
   display:none;
+  clip-path:polygon(0 40%,34% 40%,39% 0,61% 0,66% 40%,100% 40%,100% 100%,0 100%);
+  filter:drop-shadow(0 -7px 18px rgba(0,0,0,.55));
+  z-index:6;
 }
 .stage.replayActive .replay{display:block}
+.stage.replayActive .boosts,
+.stage.replayActive .liveStatCard{
+  display:none;
+}
 .status{
   position:absolute;
   left:50%;
@@ -331,16 +346,16 @@ html,body{
   position:absolute;
   left:42px;
   bottom:42px;
-  width:520px;
-  min-height:176px;
-  padding:14px 16px 16px;
+  width:420px;
+  min-height:132px;
+  padding:10px 12px 12px;
   background:
     linear-gradient(180deg,rgba(255,255,255,.08),transparent 34%),
     rgba(5,6,9,.94);
   border:1px solid rgba(255,208,0,.72);
   box-shadow:0 18px 30px rgba(0,0,0,.48), inset 0 1px rgba(255,255,255,.12);
   display:grid;
-  gap:10px;
+  gap:7px;
   overflow:hidden;
 }
 .liveStatHeader{
@@ -349,41 +364,41 @@ html,body{
   justify-content:space-between;
   gap:12px;
   color:rgba(247,247,244,.72);
-  font-size:12px;
+  font-size:10px;
   font-weight:950;
   letter-spacing:.12em;
   text-transform:uppercase;
 }
 .liveStatHeader b{
   color:var(--spark-gold);
-  font-size:13px;
+  font-size:11px;
 }
 .liveStatPlayers{
   display:grid;
-  gap:6px;
+  gap:4px;
 }
 .liveStatPlayer{
   --team:var(--spark-gold);
   display:grid;
-  grid-template-columns:minmax(126px,1fr) repeat(4,48px);
-  grid-template-rows:30px 0fr;
+  grid-template-columns:minmax(96px,1fr) repeat(4,36px);
+  grid-template-rows:23px 0fr;
   align-items:center;
-  column-gap:8px;
-  min-height:30px;
-  padding:0 8px;
+  column-gap:5px;
+  min-height:23px;
+  padding:0 6px;
   border:1px solid rgba(255,255,255,.10);
   background:rgba(255,255,255,.045);
   color:rgba(247,247,244,.84);
-  font-size:12px;
+  font-size:10px;
   font-weight:850;
   transition:grid-template-rows .22s cubic-bezier(.16,1,.3,1), min-height .22s cubic-bezier(.16,1,.3,1), padding .22s cubic-bezier(.16,1,.3,1), background .18s ease, border-color .18s ease, color .18s ease;
 }
 .liveStatPlayer.blue{--team:var(--blue)}
 .liveStatPlayer.orange{--team:var(--orange)}
 .liveStatPlayer.focused{
-  grid-template-rows:35px 17px;
-  min-height:58px;
-  padding:4px 9px 7px;
+  grid-template-rows:28px 12px;
+  min-height:44px;
+  padding:3px 7px 5px;
   border-color:color-mix(in srgb,var(--team) 74%,#f7f7f4);
   background:linear-gradient(90deg,color-mix(in srgb,var(--team) 26%,transparent),rgba(255,255,255,.06));
   color:#fffdf3;
@@ -394,13 +409,13 @@ html,body{
   overflow:hidden;
   white-space:nowrap;
   text-overflow:ellipsis;
-  font-size:13px;
+  font-size:11px;
   font-weight:950;
   color:inherit;
   transition:font-size .22s cubic-bezier(.16,1,.3,1), font-weight .18s ease;
 }
 .liveStatPlayer.focused .liveStatName{
-  font-size:16px;
+  font-size:13px;
   font-weight:1000;
 }
 .liveStatValue{
@@ -411,16 +426,16 @@ html,body{
 }
 .liveStatValue b{
   color:#fffdf3;
-  font-size:14px;
+  font-size:11px;
   transition:font-size .22s cubic-bezier(.16,1,.3,1), color .18s ease;
 }
 .liveStatPlayer.focused .liveStatValue b{
   color:var(--spark-gold);
-  font-size:16px;
+  font-size:13px;
 }
 .liveStatValue span{
   color:rgba(247,247,244,.54);
-  font-size:8px;
+  font-size:7px;
   font-weight:950;
   letter-spacing:.06em;
 }
@@ -428,7 +443,7 @@ html,body{
   grid-column:1 / -1;
   grid-row:2;
   align-self:end;
-  height:9px;
+  height:7px;
   overflow:hidden;
   opacity:0;
   background:rgba(255,255,255,.16);
@@ -585,7 +600,7 @@ function renderDots(side, config){
 }
 function teamLogoFor(side, config){
   const manual = String(side === "Blue" ? config.blueLogoUrl || "" : config.orangeLogoUrl || "").trim();
-  return manual || "/__1ne_logo.png";
+  return manual;
 }
 const maskColorTargets = {
   logos:{rgb:[255,0,0]},
@@ -724,12 +739,24 @@ function setMaskSlot(id, region, options={}){
   el.style.width = `${width}px`;
   el.style.height = `${height}px`;
   if(options.fontScale){
-    el.style.setProperty("--slot-font", `${Math.max(8, Math.min(options.maxFont || 96, height * options.fontScale, width * (options.widthScale || 1)))}px`);
+    const text = options.text === undefined ? String(el.textContent || "") : String(options.text || "");
+    if(options.text !== undefined) el.textContent = text;
+    const chars = Math.max(1, text.length);
+    const widthLimit = width / Math.max(1, chars * (options.charScale || .56));
+    el.style.setProperty("--slot-font", `${Math.max(options.minFont || 8, Math.min(options.maxFont || 96, height * options.fontScale, widthLimit))}px`);
   }
 }
 function renderMaskDots(id, side, config){
   const el = $(id);
   if(el) el.innerHTML = renderDots(side, config);
+}
+function setMaskLogo(id, src){
+  const el = $(id);
+  if(!el) return;
+  const img = el.querySelector("img");
+  const hasLogo = !!String(src || "").trim();
+  el.classList.toggle("empty", !hasLogo);
+  if(img) img.src = hasLogo ? src : "";
 }
 function renderCustomScoreboard(config){
   const hasCustom = !!(config.scoreboardImageUrl && config.scoreboardMaskUrl);
@@ -751,23 +778,20 @@ function renderCustomScoreboard(config){
 
   setMaskSlot("maskBlueLogo", logoRegions[0], {pad:4});
   setMaskSlot("maskOrangeLogo", logoRegions[logoRegions.length - 1], {pad:4});
-  setMaskSlot("maskBlueScore", scoreRegions[0], {fontScale:.78, widthScale:.62, maxFont:82});
-  setMaskSlot("maskOrangeScore", scoreRegions[scoreRegions.length - 1], {fontScale:.78, widthScale:.62, maxFont:82});
-  setMaskSlot("maskClock", clockRegion, {fontScale:.58, widthScale:.22, maxFont:66});
-  setMaskSlot("maskBlueName", nameRegions[0], {pad:8, fontScale:.45, widthScale:.12, maxFont:42});
-  setMaskSlot("maskOrangeName", nameRegions[nameRegions.length - 1], {pad:8, fontScale:.45, widthScale:.12, maxFont:42});
+  const blueName = config.blueTeamName || state.teams.Blue.name || "Blue";
+  const orangeName = config.orangeTeamName || state.teams.Orange.name || "Orange";
+  const title = String(config.seriesTitle || overlayGameLabel(config)).trim();
+  setMaskSlot("maskBlueScore", scoreRegions[0], {fontScale:.82, maxFont:86, text:state.teams.Blue.score || 0});
+  setMaskSlot("maskOrangeScore", scoreRegions[scoreRegions.length - 1], {fontScale:.82, maxFont:86, text:state.teams.Orange.score || 0});
+  setMaskSlot("maskClock", clockRegion, {fontScale:.7, charScale:.52, maxFont:72, text:formatClock(state.clock)});
+  setMaskSlot("maskBlueName", nameRegions[0], {pad:8, fontScale:.72, charScale:.6, maxFont:58, text:blueName});
+  setMaskSlot("maskOrangeName", nameRegions[nameRegions.length - 1], {pad:8, fontScale:.72, charScale:.6, maxFont:58, text:orangeName});
   setMaskSlot("maskBlueSeries", seriesRegions[0], {pad:6});
   setMaskSlot("maskOrangeSeries", seriesRegions[seriesRegions.length - 1], {pad:6});
-  setMaskSlot("maskSeriesTitle", titleRegion, {pad:6, fontScale:.42, widthScale:.09, maxFont:30});
+  setMaskSlot("maskSeriesTitle", titleRegion, {pad:3, fontScale:.78, charScale:.48, maxFont:44, text:title});
 
-  $("maskBlueLogo").querySelector("img").src = teamLogoFor("Blue", config);
-  $("maskOrangeLogo").querySelector("img").src = teamLogoFor("Orange", config);
-  $("maskBlueScore").textContent = state.teams.Blue.score || 0;
-  $("maskOrangeScore").textContent = state.teams.Orange.score || 0;
-  $("maskClock").textContent = formatClock(state.clock);
-  $("maskBlueName").textContent = config.blueTeamName || state.teams.Blue.name || "Blue";
-  $("maskOrangeName").textContent = config.orangeTeamName || state.teams.Orange.name || "Orange";
-  $("maskSeriesTitle").textContent = String(config.seriesTitle || overlayGameLabel(config)).trim();
+  setMaskLogo("maskBlueLogo", teamLogoFor("Blue", config));
+  setMaskLogo("maskOrangeLogo", teamLogoFor("Orange", config));
   renderMaskDots("maskBlueSeries", "Blue", config);
   renderMaskDots("maskOrangeSeries", "Orange", config);
 }
@@ -922,8 +946,12 @@ function render(){
   }
   $("blueName").textContent = config.blueTeamName || state.teams.Blue.name || "Blue";
   $("orangeName").textContent = config.orangeTeamName || state.teams.Orange.name || "Orange";
-  $("blueLogo").src = teamLogoFor("Blue", config);
-  $("orangeLogo").src = teamLogoFor("Orange", config);
+  const blueLogo = teamLogoFor("Blue", config);
+  const orangeLogo = teamLogoFor("Orange", config);
+  $("blueLogo").classList.toggle("empty", !blueLogo);
+  $("orangeLogo").classList.toggle("empty", !orangeLogo);
+  $("blueLogo").src = blueLogo || "";
+  $("orangeLogo").src = orangeLogo || "";
   $("blueScore").textContent = state.teams.Blue.score || 0;
   $("orangeScore").textContent = state.teams.Orange.score || 0;
   $("clock").textContent = formatClock(state.clock);

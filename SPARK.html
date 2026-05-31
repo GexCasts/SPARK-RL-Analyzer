@@ -2490,6 +2490,9 @@ body.obsOverlayMode #obsOverlayRoot{
   overflow:visible;
   pointer-events:none;
 }
+.obsLogoBox.empty{
+  display:none;
+}
 .obsLogoBox img{
   width:100%;
   height:100%;
@@ -5706,9 +5709,9 @@ function renderOverlayControl(){
     <div class="overlayStudioLayout">
       <div class="overlayControlStack">
         <div class="overlayPreviewStrip">
-          <div class="overlayPreviewTeam"><img src="${escapeHtml(blueLogo)}" alt=""><span>${escapeHtml(blueName)}</span></div>
+          <div class="overlayPreviewTeam">${blueLogo ? `<img src="${escapeHtml(blueLogo)}" alt="">` : ""}<span>${escapeHtml(blueName)}</span></div>
           <div class="overlayPreviewSeries">${escapeHtml(overlaySeriesLabel())}</div>
-          <div class="overlayPreviewTeam right"><span>${escapeHtml(orangeName)}</span><img src="${escapeHtml(orangeLogo)}" alt=""></div>
+          <div class="overlayPreviewTeam right"><span>${escapeHtml(orangeName)}</span>${orangeLogo ? `<img src="${escapeHtml(orangeLogo)}" alt="">` : ""}</div>
         </div>
 
         <details class="overlayCategory" open>
@@ -5736,18 +5739,18 @@ function renderOverlayControl(){
           <summary>Logos</summary>
           <div class="overlayCategoryBody">
             <label class="overlayField">Left / Blue Logo URL
-              <input class="overlayInput" id="overlayBlueLogoInput" value="${escapeHtml(overlayConfig.blueLogoUrl)}" placeholder="https://... or blank for 1NE logo">
+              <input class="overlayInput" id="overlayBlueLogoInput" value="${escapeHtml(overlayConfig.blueLogoUrl)}" placeholder="https://... or blank for no logo">
               <div class="overlayLogoTools">
                 <button type="button" onclick="$('overlayBlueLogoFile').click()">Choose Local Logo</button>
-                <button type="button" onclick="updateOverlayConfigField('blueLogoUrl','')">Use 1NE Logo</button>
+                <button type="button" onclick="updateOverlayConfigField('blueLogoUrl','')">Clear Logo</button>
                 <input class="overlayFileInput" id="overlayBlueLogoFile" type="file" accept="image/*" onchange="loadOverlayLogoFile('Blue',this)">
               </div>
             </label>
             <label class="overlayField">Right / Orange Logo URL
-              <input class="overlayInput" id="overlayOrangeLogoInput" value="${escapeHtml(overlayConfig.orangeLogoUrl)}" placeholder="https://... or blank for 1NE logo">
+              <input class="overlayInput" id="overlayOrangeLogoInput" value="${escapeHtml(overlayConfig.orangeLogoUrl)}" placeholder="https://... or blank for no logo">
               <div class="overlayLogoTools">
                 <button type="button" onclick="$('overlayOrangeLogoFile').click()">Choose Local Logo</button>
-                <button type="button" onclick="updateOverlayConfigField('orangeLogoUrl','')">Use 1NE Logo</button>
+                <button type="button" onclick="updateOverlayConfigField('orangeLogoUrl','')">Clear Logo</button>
                 <input class="overlayFileInput" id="overlayOrangeLogoFile" type="file" accept="image/*" onchange="loadOverlayLogoFile('Orange',this)">
               </div>
             </label>
@@ -5848,7 +5851,7 @@ function renderOverlayControl(){
 
         <div class="note overlayControlFooter">
           Overlay URL: <b>${obsOverlayUrl}</b><br>
-          Manual logo fields work best with hosted http/https image URLs. Blank fields use the 1NE logo.
+          Manual logo fields work best with hosted http/https image URLs. Blank fields leave team logos hidden.
         </div>
       </div>
 
@@ -10608,9 +10611,7 @@ function updateOverlayConfigField(key, value){
 
 function overlayLogoFor(side){
   const cfg = overlayConfig || overlayDefaultConfig;
-  const manual = String(side === "Blue" ? cfg.blueLogoUrl : cfg.orangeLogoUrl || "").trim();
-  if(manual) return manual;
-  return location.protocol.startsWith("http") ? overlayLogoRoute : overlayLogoUrl;
+  return String(side === "Blue" ? cfg.blueLogoUrl || "" : cfg.orangeLogoUrl || "").trim();
 }
 
 function overlayTeamName(side, fallback){
@@ -10953,7 +10954,9 @@ function renderObsOverlay(){
   renderObsReplayOverlay();
   document.querySelectorAll(".obsLogoBox img").forEach(img=>{
     const side = img.closest(".obsTeamName")?.classList.contains("right") ? "Orange" : "Blue";
-    img.src = overlayLogoFor(side);
+    const src = overlayLogoFor(side);
+    img.closest(".obsLogoBox")?.classList.toggle("empty", !src);
+    img.src = src || "";
   });
   const blueTeam = liveApiState.teams?.Blue || {name:"Blue",score:0};
   const orangeTeam = liveApiState.teams?.Orange || {name:"Orange",score:0};
