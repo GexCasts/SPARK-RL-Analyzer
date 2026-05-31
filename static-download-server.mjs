@@ -64,6 +64,8 @@ let liveApiFeedSocket = null;
 let liveApiReconnectTimer = null;
 let liveApiStreamBuffer = "";
 let liveApiLatestMessage = null;
+let liveApiLatestStateMessage = null;
+let liveApiStateBroadcastTimer = null;
 
 function clearShutdownTimer(){
   if(shutdownTimer){
@@ -122,6 +124,34 @@ function broadcastLiveApiMessage(text){
   for(const client of liveApiClients) sendLiveApiWebSocketText(client, text);
 }
 
+function liveApiMessageEventName(text){
+  try{
+    const msg = JSON.parse(text);
+    return String(msg.event ?? msg.Event ?? msg.type ?? msg.Type ?? msg.name ?? msg.Name ?? "").toLowerCase();
+  }catch{
+    return "";
+  }
+}
+
+function broadcastLiveApiFeedMessage(text){
+  const eventName = liveApiMessageEventName(text);
+  const compactEventName = eventName.replace(/[^a-z]/g, "");
+  if(compactEventName.includes("updatestate")){
+    liveApiLatestStateMessage = text;
+    liveApiLatestMessage = text;
+    if(liveApiStateBroadcastTimer) return;
+    liveApiStateBroadcastTimer = setTimeout(()=>{
+      liveApiStateBroadcastTimer = null;
+      const latest = liveApiLatestStateMessage;
+      liveApiLatestStateMessage = null;
+      if(latest) broadcastLiveApiMessage(latest);
+    }, 33);
+    liveApiStateBroadcastTimer.unref();
+    return;
+  }
+  broadcastLiveApiMessage(text);
+}
+
 function extractLiveApiJsonObjects(chunk){
   liveApiStreamBuffer += chunk;
   const messages = [];
@@ -174,7 +204,7 @@ function connectLiveApiFeed(){
   });
   liveApiFeedSocket.setEncoding("utf8");
   liveApiFeedSocket.on("data", data=>{
-    for(const message of extractLiveApiJsonObjects(data)) broadcastLiveApiMessage(message);
+    for(const message of extractLiveApiJsonObjects(data)) broadcastLiveApiFeedMessage(message);
   });
   liveApiFeedSocket.on("error", err=>{
     console.warn(`SPARK Live API bridge feed error: ${err.message}`);
@@ -191,6 +221,11 @@ function stopLiveApiFeedIfIdle(){
   if(liveApiReconnectTimer){
     clearTimeout(liveApiReconnectTimer);
     liveApiReconnectTimer = null;
+  }
+  if(liveApiStateBroadcastTimer){
+    clearTimeout(liveApiStateBroadcastTimer);
+    liveApiStateBroadcastTimer = null;
+    liveApiLatestStateMessage = null;
   }
   if(liveApiFeedSocket){
     liveApiFeedSocket.destroy();

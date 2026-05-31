@@ -992,9 +992,13 @@ function updatePlayers(payload){
     if(!name) return;
     const team = normalizeTeam(firstDefined(valueByKey(player,["TeamNum","teamNum","Team","team"]), valueByKey(player,["Team"])));
     if(!team) return;
-    const existing = state.players.get(name) || {name, team, boost:0, stats:{score:0,goals:0,shots:0,assists:0,saves:0,demos:0,touches:0}};
+    const existing = state.players.get(name) || {name, team, boost:0, boostKnown:false, stats:{score:0,goals:0,shots:0,assists:0,saves:0,demos:0,touches:0}};
     existing.team = team;
-    existing.boost = toNumber(firstDefined(valueByKey(player,["Boost","boost","BoostAmount","boostAmount"]), existing.boost), existing.boost);
+    const boost = boostValueFromPlayer(player);
+    if(boost !== null){
+      existing.boost = boost;
+      existing.boostKnown = true;
+    }
     existing.stats.score = toNumber(firstDefined(valueByKey(player,["Score","score","points","Points"]), existing.stats.score), existing.stats.score);
     existing.stats.goals = toNumber(firstDefined(valueByKey(player,["Goals","goals"]), existing.stats.goals), existing.stats.goals);
     existing.stats.shots = toNumber(firstDefined(valueByKey(player,["Shots","shots"]), existing.stats.shots), existing.stats.shots);
@@ -1020,10 +1024,28 @@ function focusNameFromPayload(payload){
 function ensurePlayer(name, team=null){
   const clean = cleanName(name);
   if(!clean) return null;
-  const existing = state.players.get(clean) || {name:clean, team, boost:0, stats:{score:0,goals:0,shots:0,assists:0,saves:0,demos:0,touches:0}};
+  const existing = state.players.get(clean) || {name:clean, team, boost:0, boostKnown:false, stats:{score:0,goals:0,shots:0,assists:0,saves:0,demos:0,touches:0}};
   if(team) existing.team = team;
   state.players.set(clean, existing);
   return existing;
+}
+function normalizeBoostValue(value){
+  const n = Number(value);
+  if(!Number.isFinite(n)) return null;
+  if(n > 100 && n <= 255) return Math.max(0, Math.min(100, Math.round(n / 2.55)));
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+function boostValueFromPlayer(player){
+  const direct = firstDefined(
+    valueByKey(player,["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost","BoostCurrent","boostCurrent"]),
+    valueByKey(player?.Car,["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost"]),
+    valueByKey(player?.car,["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost"]),
+    valueByKey(player?.State,["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost"]),
+    valueByKey(player?.state,["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost"]),
+    valueByKey(player?.ReplicatedBoost,["boost","Boost","boostAmount","BoostAmount","boost_amount"]),
+    valueByKey(player?.replicatedBoost,["boost","Boost","boostAmount","BoostAmount","boost_amount"])
+  );
+  return direct === undefined ? null : normalizeBoostValue(direct);
 }
 function gameClock(payload){
   const direct = firstDefined(
@@ -1087,13 +1109,16 @@ function normalizeMessage(raw){
   }
   return {event:String(event || "").toLowerCase(), payload};
 }
+function compactEventName(event){
+  return String(event || "").toLowerCase().replace(/[^a-z]/g, "");
+}
 function renderBoostRows(team){
   return Array.from(state.players.values())
     .filter(player=>player.team === team)
     .sort((a,b)=>a.name.localeCompare(b.name))
     .slice(0, 4)
     .map(player=>{
-      const boost = Math.max(0, Math.min(100, Math.round(player.boost || 0)));
+      const boost = player.boostKnown ? Math.max(0, Math.min(100, Math.round(player.boost))) : 0;
       const name = escapeHtml(player.name);
       return `<div class="boostRow">
         ${team === "Orange" ? `<span class="boostValue">${boost}</span><span class="name">${name}</span>` : `<span class="name">${name}</span><span class="boostValue">${boost}</span>`}
@@ -1119,7 +1144,7 @@ function renderLiveStatCard(){
   }
   $("liveStatPlayers").innerHTML = players.map(player=>{
     const stats = player.stats || {};
-    const boost = Math.max(0, Math.min(100, Math.round(player.boost || 0)));
+    const boost = player.boostKnown ? Math.max(0, Math.min(100, Math.round(player.boost))) : 0;
     const focused = focusName && player.name === focusName;
     return `<div class="liveStatPlayer ${player.team.toLowerCase()} ${focused ? "focused" : ""}" style="--boost:${boost}%">
       <div class="liveStatName">${escapeHtml(player.name)}</div>
@@ -1252,7 +1277,8 @@ function handleMessage(raw){
   updatePlayers(msg.payload);
   const focusName = focusNameFromPayload(msg.payload);
   if(focusName) state.focusedPlayerName = focusName;
-  if(msg.event.includes("ballhit") || msg.event.includes("ball_hit")){
+  const eventName = compactEventName(msg.event);
+  if(eventName.includes("ballhit")){
     const hitPlayer = playerNameFromValue(firstDefined(valueByKey(msg.payload,["Player","player","playerName","PlayerName","lastTouchPlayer","LastTouchPlayer"]), msg.payload?.BallLastTouch?.Player, msg.payload?.ballLastTouch?.player));
     const team = normalizeTeam(valueByKey(msg.payload,["team","Team"]));
     const p = ensurePlayer(hitPlayer, team);
@@ -1260,7 +1286,7 @@ function handleMessage(raw){
       p.stats.touches = (p.stats.touches || 0) + 1;
     }
   }
-  if(msg.event.includes("statfeed")){
+  if(eventName.includes("statfeed")){
     const statPlayer = playerNameFromValue(firstDefined(msg.payload?.MainTarget, msg.payload?.mainTarget, msg.payload?.Player, msg.payload?.player));
     const statType = String(firstDefined(valueByKey(msg.payload,["Type","type","EventName","eventName"]), "")).toLowerCase();
     const team = normalizeTeam(valueByKey(msg.payload,["team","Team"]));
@@ -1277,7 +1303,7 @@ function handleMessage(raw){
   if(clock !== null) state.clock = clock;
   const replay = replayFlag(msg.payload);
   if(replay !== null) state.replay = replay;
-  if(msg.event.includes("goalreplay")) state.replay = !msg.event.includes("ended") && !msg.event.includes("end");
+  if(eventName.includes("goalreplay")) state.replay = !(eventName.includes("ended") || eventName.endsWith("end") || eventName.includes("willend"));
   if(matchEndedFlag(msg.payload, msg.event)){
     const config = readConfig();
     state.replay = false;
