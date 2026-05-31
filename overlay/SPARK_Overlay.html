@@ -1044,10 +1044,8 @@ function updatePlayers(payload){
     const existing = state.players.get(name) || {name, team, boost:0, boostKnown:false, stats:{score:0,goals:0,shots:0,assists:0,saves:0,demos:0,touches:0}};
     existing.team = team;
     const boost = boostValueFromPlayer(player);
-    if(boost !== null){
-      existing.boost = boost;
-      existing.boostKnown = true;
-    }
+    existing.boost = boost !== null ? boost : 0;
+    existing.boostKnown = true;
     existing.stats.score = toNumber(firstDefined(valueByKey(player,["Score","score","points","Points"]), existing.stats.score), existing.stats.score);
     existing.stats.goals = toNumber(firstDefined(valueByKey(player,["Goals","goals"]), existing.stats.goals), existing.stats.goals);
     existing.stats.shots = toNumber(firstDefined(valueByKey(player,["Shots","shots"]), existing.stats.shots), existing.stats.shots);
@@ -1098,7 +1096,6 @@ function normalizeBoostValue(value){
   const n = Number(value);
   if(!Number.isFinite(n)) return null;
   if(n > 100 && n <= 255) return Math.max(0, Math.min(100, Math.round(n / 2.55)));
-  if(n > 0 && n <= 1) return Math.max(0, Math.min(100, Math.round(n * 100)));
   return Math.max(0, Math.min(100, Math.round(n)));
 }
 function boostValueFromObject(obj){
@@ -1114,9 +1111,7 @@ function boostValueFromObject(obj){
     "currentBoost",
     "CurrentBoost",
     "BoostCurrent",
-    "boostCurrent",
-    "Amount",
-    "amount"
+    "boostCurrent"
   ];
   for(const key of keys){
     if(Object.prototype.hasOwnProperty.call(obj, key)){

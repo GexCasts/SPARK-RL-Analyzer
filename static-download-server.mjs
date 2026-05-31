@@ -66,6 +66,8 @@ let liveApiStreamBuffer = "";
 let liveApiLatestMessage = null;
 let liveApiLatestStateMessage = null;
 let liveApiStateBroadcastTimer = null;
+const liveApiSampleLimit = 160;
+const liveApiSamples = [];
 
 function clearShutdownTimer(){
   if(shutdownTimer){
@@ -124,6 +126,18 @@ function broadcastLiveApiMessage(text){
   for(const client of liveApiClients) sendLiveApiWebSocketText(client, text);
 }
 
+function rememberLiveApiSample(text){
+  let eventName = "";
+  let preview = null;
+  try{
+    const msg = JSON.parse(text);
+    eventName = String(msg.event ?? msg.Event ?? msg.type ?? msg.Type ?? msg.name ?? msg.Name ?? "");
+    preview = msg;
+  }catch{}
+  liveApiSamples.push({time:new Date().toISOString(), event:eventName, message:preview || text});
+  while(liveApiSamples.length > liveApiSampleLimit) liveApiSamples.shift();
+}
+
 function liveApiMessageEventName(text){
   try{
     const msg = JSON.parse(text);
@@ -134,6 +148,7 @@ function liveApiMessageEventName(text){
 }
 
 function broadcastLiveApiFeedMessage(text){
+  rememberLiveApiSample(text);
   const eventName = liveApiMessageEventName(text);
   const compactEventName = eventName.replace(/[^a-z]/g, "");
   if(compactEventName.includes("updatestate")){
@@ -2734,6 +2749,11 @@ function handleServerInfo(req, res){
   }));
 }
 
+function handleLiveApiSamples(req, res){
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify({ok:true, count:liveApiSamples.length, samples:liveApiSamples.slice(-liveApiSampleLimit)}));
+}
+
 function parseLivePacketRate(text){
   const match = String(text || "").match(/^\s*PacketSendRate\s*=\s*(-?\d+(?:\.\d+)?)\s*$/mi);
   if(!match) return null;
@@ -3071,6 +3091,10 @@ server = http.createServer(async (req,res)=>{
     }
     if(url.pathname === "/api/live-packet-rate"){
       await handleLivePacketRate(req, res);
+      return;
+    }
+    if(url.pathname === "/api/live-api-samples"){
+      handleLiveApiSamples(req, res);
       return;
     }
     if(url.pathname === "/api/tile-layout"){

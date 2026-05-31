@@ -10468,13 +10468,12 @@ function liveNormalizeBoostValue(value){
   const n = Number(value);
   if(!Number.isFinite(n)) return null;
   if(n > 100 && n <= 255) return Math.max(0, Math.min(100, Math.round(n / 2.55)));
-  if(n > 0 && n <= 1) return Math.max(0, Math.min(100, Math.round(n * 100)));
   return Math.max(0, Math.min(100, Math.round(n)));
 }
 
 function liveBoostValueFromObject(obj){
   if(!obj || typeof obj !== "object") return null;
-  const keys = ["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost","BoostCurrent","boostCurrent","Amount","amount"];
+  const keys = ["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost","BoostCurrent","boostCurrent"];
   for(const key of keys){
     if(Object.prototype.hasOwnProperty.call(obj, key)){
       const value = liveNormalizeBoostValue(obj[key]);
@@ -10563,16 +10562,14 @@ function updateLivePlayerFromApi(player){
   const speed = valueByKey(player,["speed","Speed","velocity","Velocity"]);
   const speedNumber = speed !== undefined ? Math.abs(toNumber(speed, 0)) : null;
   const boost = liveBoostValueFromPlayer(player);
-  if(boost !== null){
-    const currentBoost = boost;
-    const atMaxSpeed = isSupersonic && (speedNumber === null || speedNumber >= 2280);
-    if(isBoosting && atMaxSpeed && currentBoost < p.currentBoost){
-      p.supersonicBoostUsed += p.currentBoost - currentBoost;
-    }
-    p.currentBoost = currentBoost;
-    p.boostSum += currentBoost;
-    p.boostSamples++;
+  const currentBoost = boost !== null ? boost : 0;
+  const atMaxSpeed = isSupersonic && (speedNumber === null || speedNumber >= 2280);
+  if(isBoosting && atMaxSpeed && currentBoost < p.currentBoost){
+    p.supersonicBoostUsed += p.currentBoost - currentBoost;
   }
+  p.currentBoost = currentBoost;
+  p.boostSum += currentBoost;
+  p.boostSamples++;
   if(speedNumber !== null){
     p.speedSum += speedNumber;
     p.speedSamples++;
