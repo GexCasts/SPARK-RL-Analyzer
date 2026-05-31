@@ -8491,17 +8491,18 @@ function renderShootingHeatmap(a){
     unavailable.className = "heatmapUnavailable";
     unavailable.innerHTML = `
       <b>Live shooting summary</b><br>
-      Goal and crossbar placement appears when the live feed reports it.
+      Goal placement appears when the live feed reports GoalScored data.
       <div class="heatmapStats">
         <span><strong>${shots}</strong>shots</span>
         <span><strong>${goals}</strong>goals</span>
         <span><strong>${saves}</strong>saves</span>
         <span><strong>${nearMisses}</strong>near misses</span>
       </div>
+      <span class="muted">Live data will not contain accurate locations for misses and saves.</span>
     `;
     el.appendChild(unavailable);
     $("shootingHeatmapNote").textContent =
-      `${a.label}: live shooting totals. Goal and crossbar placement appears as events arrive.`;
+      `${a.label}: live shooting totals. Goal locations appear from GoalScored data as they arrive. Live data will not contain accurate locations for misses and saves.`;
     return;
     }
   }
@@ -8649,8 +8650,11 @@ function renderShootingHeatmap(a){
   const posts = samples.filter(s=>s.result==="post").length;
   const misses = samples.filter(s=>s.result==="miss").length;
 
+  const liveNotice = liveApiDashboardActive()
+    ? " Live data will not contain accurate locations for misses and saves."
+    : "";
   $("shootingHeatmapNote").textContent =
-    `${a.label}: ${samples.length} shot attempt${samples.length===1?"":"s"} - ${goals} goal${goals===1?"":"s"}, ${saves} saved shot${saves===1?"":"s"}, ${posts} post/crossbar hit${posts===1?"":"s"}, ${misses} miss${misses===1?"":"es"}.`;
+    `${a.label}: ${samples.length} shot attempt${samples.length===1?"":"s"} - ${goals} goal${goals===1?"":"s"}, ${saves} saved shot${saves===1?"":"s"}, ${posts} post/crossbar hit${posts===1?"":"s"}, ${misses} miss${misses===1?"":"es"}.${liveNotice}`;
 }
 function inferGamePhase(a){
   const attack = Math.min(100, Math.round(a.pressure + (a.stolen/12) + a.goals*8));
@@ -10576,7 +10580,7 @@ function vectorFromApi(value){
 
 function goalFaceFromImpactLocation(location, team=null){
   const v = vectorFromApi(location);
-  if(!v || !Number.isFinite(v.x)) return {xPercent:50,yPercent:50};
+  if(!v || !Number.isFinite(v.x) || !Number.isFinite(v.z)) return null;
   const rawX = Math.max(0, Math.min(100, ((v.x + 900) / 1800) * 100));
   const teamName = typeof team === "string" ? team : normalizeLiveTeam(team);
   const xPercent = teamName === "Blue" ? 100 - rawX : rawX;
@@ -11519,30 +11523,35 @@ function handleLiveGoal(payload){
   const sampledGoalCount = p.shotSamples.filter(s=>s.result === "goal").length + 1;
   p.stats.goals = Math.max(p.stats.goals, toNumber(valueByKey(payload,["goals","Goals"]), p.stats.goals), sampledGoalCount);
   p.stats.shots = Math.max(p.stats.shots, p.stats.goals);
-  const impact = firstDefined(valueByKey(payload,["impactLocation","ImpactLocation","location","Location"]), valueByKey(payload?.ball,["location","Location"]));
+  const impact = valueByKey(payload,["ImpactLocation","impactLocation"]);
   const face = goalFaceFromImpactLocation(impact, p.team);
   const lastHit = lastLiveHitForPlayer(scorer);
   const elapsed = toNumber(valueByKey(payload,["GoalTime","goalTime","elapsedSeconds","ElapsedSeconds","seconds","Seconds"]), liveElapsedSeconds());
-  const sample = {
-    result:"goal",
-    elapsedSeconds:elapsed,
-    xPercent:face.xPercent,
-    yPercent:face.yPercent,
-    target:targetFromGoalFacePosition(face.xPercent, face.yPercent, "goal"),
-    nearestOpponentDistanceUU:null,
-    lastTouchDistanceToNetUU:lastHit ? distanceFromHitToOpponentNet(lastHit.location, p.team) : null,
-    ballSpeed:toNumber(firstDefined(valueByKey(payload,["Speed","speed","BallSpeed","ballSpeed","GoalSpeed","goalSpeed"]), liveApiState.lastBallSpeed), null),
-    ballSpeedSource:"live-api"
-  };
-  p.shotSamples.push(sample);
-  liveApiState.shotSamples.push({...sample, player:scorer, team:p.team});
+  const goalSpeed = toNumber(firstDefined(valueByKey(payload,["GoalSpeed","goalSpeed"]), liveApiState.lastBallSpeed), null);
+  if(face){
+    const sample = {
+      result:"goal",
+      elapsedSeconds:elapsed,
+      xPercent:face.xPercent,
+      yPercent:face.yPercent,
+      target:targetFromGoalFacePosition(face.xPercent, face.yPercent, "goal"),
+      nearestOpponentDistanceUU:null,
+      lastTouchDistanceToNetUU:lastHit ? distanceFromHitToOpponentNet(lastHit.location, p.team) : null,
+      ballSpeed:goalSpeed,
+      ballSpeedSource:"live-api goal speed",
+      placementSource:"live-api impact location",
+      goalTimeSource:"live-api goal time"
+    };
+    p.shotSamples.push(sample);
+    liveApiState.shotSamples.push({...sample, player:scorer, team:p.team});
+  }
   addLiveTimelineEvent("shot", scorer, p.team, {elapsedSeconds:elapsed, dedupeMs:650});
   addLiveTimelineEvent("goal", scorer, p.team, {elapsedSeconds:elapsed, dedupeMs:650});
   liveApiState.lastGoal = {
     player: scorer,
     team: p.team,
     clock: liveApiState.lastKnownClock,
-    speed: toNumber(firstDefined(valueByKey(payload,["Speed","speed","BallSpeed","ballSpeed","GoalSpeed","goalSpeed"]), liveApiState.lastBallSpeed), null)
+    speed: goalSpeed
   };
 }
 
@@ -11555,6 +11564,7 @@ function handleLiveCrossbar(payload){
   p.stats.shots = Math.max(p.stats.shots, p.stats.goals + p.shotSamples.length + 1);
   const location = firstDefined(valueByKey(payload,["ballLocation","BallLocation","location","Location"]), valueByKey(payload?.ball,["location","Location"]));
   const face = goalFaceFromImpactLocation(location, p.team);
+  if(!face) return;
   const lastHit = lastLiveHitForPlayer(player);
   const sample = {
     result:"post",
