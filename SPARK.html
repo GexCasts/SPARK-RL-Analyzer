@@ -10418,13 +10418,13 @@ function distanceFromHitToOpponentNet(hit, team){
 }
 
 function livePlayerKeyFromApi(player){
-  return cleanReplayName(firstDefined(valueByKey(player,["name","Name","player","Player","PlayerName","playerName","id","Id","PlayerID","player_id"]),"Unknown"));
+  return cleanReplayName(firstDefined(valueByKey(player,["name","Name","player","Player","PlayerName","playerName","id","Id","PlayerID","player_id","__playerKey"]),"Unknown"));
 }
 
 function liveApiPlayerName(player){
   if(!player) return "";
   if(typeof player === "string") return cleanReplayName(player);
-  return cleanReplayName(firstDefined(valueByKey(player,["Name","name","PlayerName","playerName","Player","player"]),""));
+  return cleanReplayName(firstDefined(valueByKey(player,["Name","name","PlayerName","playerName","Player","player","Target","target","Id","id","__playerKey"]),""));
 }
 
 function ensureLivePlayer(name, team=null){
@@ -10460,6 +10460,56 @@ function ensureLivePlayer(name, team=null){
     p.stats.team = team;
   }
   return p;
+}
+
+function liveNormalizeBoostValue(value){
+  if(value && typeof value === "object") return liveBoostValueFromObject(value);
+  if(typeof value === "boolean") return null;
+  const n = Number(value);
+  if(!Number.isFinite(n)) return null;
+  if(n > 100 && n <= 255) return Math.max(0, Math.min(100, Math.round(n / 2.55)));
+  if(n > 0 && n <= 1) return Math.max(0, Math.min(100, Math.round(n * 100)));
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function liveBoostValueFromObject(obj){
+  if(!obj || typeof obj !== "object") return null;
+  const keys = ["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost","BoostCurrent","boostCurrent","Amount","amount"];
+  for(const key of keys){
+    if(Object.prototype.hasOwnProperty.call(obj, key)){
+      const value = liveNormalizeBoostValue(obj[key]);
+      if(value !== null) return value;
+    }
+  }
+  return null;
+}
+
+function liveBoostValueFromPlayer(player){
+  const sources = [player, player?.Car, player?.car, player?.State, player?.state, player?.ReplicatedBoost, player?.replicatedBoost];
+  for(const source of sources){
+    const value = liveBoostValueFromObject(source);
+    if(value !== null) return value;
+  }
+  return null;
+}
+
+function liveFocusedPlayerNameFromPayload(payload){
+  const game = livePayloadGame(payload);
+  const direct = firstDefined(
+    valueByKey(payload,["FocusedPlayer","focusedPlayer","FocusPlayer","focusPlayer","CameraPlayer","cameraPlayer","CameraTarget","cameraTarget","GameCameraPlayer","gameCameraPlayer","TargetPlayer","targetPlayer","Target","target","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"]),
+    valueByKey(game,["FocusedPlayer","focusedPlayer","FocusPlayer","focusPlayer","CameraPlayer","cameraPlayer","CameraTarget","cameraTarget","TargetPlayer","targetPlayer","MainTarget","mainTarget","Target","target","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"])
+  );
+  const rawName = liveApiPlayerName(direct);
+  if(!rawName) return "";
+  const match = extractLivePlayers(payload).find(player=>{
+    if(!player || typeof player !== "object") return false;
+    const ids = [
+      valueByKey(player,["Name","name","PlayerName","playerName"]),
+      valueByKey(player,["Id","id","PlayerID","player_id","__playerKey"])
+    ].map(cleanReplayName).filter(Boolean);
+    return ids.some(value=>value.toLowerCase() === rawName.toLowerCase());
+  });
+  return match ? cleanReplayName(firstDefined(valueByKey(match,["Name","name","PlayerName","playerName"]), rawName)) : rawName;
 }
 
 function updateLivePlayerFromApi(player){
@@ -10512,9 +10562,9 @@ function updateLivePlayerFromApi(player){
   const isSupersonic = valueByKey(player,["bSupersonic","supersonic","Supersonic","isSupersonic","IsSupersonic"]) === true;
   const speed = valueByKey(player,["speed","Speed","velocity","Velocity"]);
   const speedNumber = speed !== undefined ? Math.abs(toNumber(speed, 0)) : null;
-  const boost = valueByKey(player,["boost","Boost","boostAmount","BoostAmount"]);
-  if(boost !== undefined){
-    const currentBoost = Math.max(0, Math.min(100, toNumber(boost, 0)));
+  const boost = liveBoostValueFromPlayer(player);
+  if(boost !== null){
+    const currentBoost = boost;
     const atMaxSpeed = isSupersonic && (speedNumber === null || speedNumber >= 2280);
     if(isBoosting && atMaxSpeed && currentBoost < p.currentBoost){
       p.supersonicBoostUsed += p.currentBoost - currentBoost;
@@ -10535,9 +10585,18 @@ function updateLivePlayerFromApi(player){
 }
 
 function extractLivePlayers(payload){
-  const players = valueByKey(payload,["players","Players"]);
+  const players = firstDefined(
+    valueByKey(payload,["players","Players"]),
+    valueByKey(payload?.Game,["players","Players"]),
+    valueByKey(payload?.game,["players","Players"])
+  );
   if(Array.isArray(players)) return players;
-  if(players && typeof players === "object") return Object.values(players);
+  if(players && typeof players === "object"){
+    return Object.entries(players).map(([id, player])=>{
+      if(player && typeof player === "object" && !Array.isArray(player)) return {...player, __playerKey:id};
+      return player;
+    });
+  }
   return [];
 }
 
@@ -11040,6 +11099,11 @@ function handleLiveUpdateState(payload){
   const ball = firstDefined(valueByKey(payload,["ball","Ball"]), valueByKey(payload?.Game,["Ball","ball"]));
   if(ball) liveApiState.lastBallSpeed = toNumber(valueByKey(ball,["speed","Speed"]), liveApiState.lastBallSpeed);
   extractLivePlayers(payload).forEach(updateLivePlayerFromApi);
+  const focusName = liveFocusedPlayerNameFromPayload(payload);
+  if(focusName){
+    const focusPlayer = ensureLivePlayer(focusName, null);
+    liveApiState.focusedPlayerName = focusPlayer.name;
+  }
 }
 
 function handleLiveBallHit(payload){

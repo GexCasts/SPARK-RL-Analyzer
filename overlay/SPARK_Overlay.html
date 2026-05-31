@@ -1001,9 +1001,18 @@ function renderCustomScoreboard(config){
   renderMaskDots("maskOrangeSeries", "Orange", config);
 }
 function extractPlayers(payload){
-  const players = valueByKey(payload,["players","Players"]);
+  const players = firstDefined(
+    valueByKey(payload,["players","Players"]),
+    valueByKey(payload?.Game,["players","Players"]),
+    valueByKey(payload?.game,["players","Players"])
+  );
   if(Array.isArray(players)) return players;
-  if(players && typeof players === "object") return Object.values(players);
+  if(players && typeof players === "object"){
+    return Object.entries(players).map(([id, player])=>{
+      if(player && typeof player === "object" && !Array.isArray(player)) return {...player, __playerKey:id};
+      return player;
+    });
+  }
   return [];
 }
 function updateTeams(payload){
@@ -1026,7 +1035,7 @@ function updateTeams(payload){
 }
 function updatePlayers(payload){
   extractPlayers(payload).forEach(player=>{
-    const name = cleanName(firstDefined(valueByKey(player,["Name","name","PlayerName","playerName","Id","id"]), ""));
+    const name = cleanName(firstDefined(valueByKey(player,["Name","name","PlayerName","playerName","Id","id","__playerKey"]), ""));
     if(!name) return;
     const team = normalizeTeam(firstDefined(valueByKey(player,["TeamNum","teamNum","Team","team"]), valueByKey(player,["Team"])));
     if(!team) return;
@@ -1050,14 +1059,26 @@ function updatePlayers(payload){
 function playerNameFromValue(value){
   if(!value) return "";
   if(typeof value === "string") return cleanName(value);
-  return cleanName(firstDefined(valueByKey(value,["Name","name","PlayerName","playerName","Player","player","Id","id"]), ""));
+  return cleanName(firstDefined(valueByKey(value,["Name","name","PlayerName","playerName","Player","player","Id","id","target","Target","__playerKey"]), ""));
 }
 function focusNameFromPayload(payload){
+  const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
   const direct = firstDefined(
-    valueByKey(payload,["FocusedPlayer","focusedPlayer","FocusPlayer","focusPlayer","CameraPlayer","cameraPlayer","CameraTarget","cameraTarget","GameCameraPlayer","gameCameraPlayer","TargetPlayer","targetPlayer"]),
-    valueByKey(payload?.Game,["FocusedPlayer","focusedPlayer","CameraPlayer","cameraPlayer","CameraTarget","cameraTarget","TargetPlayer","targetPlayer","MainTarget","mainTarget"])
+    valueByKey(payload,["FocusedPlayer","focusedPlayer","FocusPlayer","focusPlayer","CameraPlayer","cameraPlayer","CameraTarget","cameraTarget","GameCameraPlayer","gameCameraPlayer","TargetPlayer","targetPlayer","Target","target","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"]),
+    valueByKey(game,["FocusedPlayer","focusedPlayer","FocusPlayer","focusPlayer","CameraPlayer","cameraPlayer","CameraTarget","cameraTarget","TargetPlayer","targetPlayer","MainTarget","mainTarget","Target","target","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"])
   );
-  return playerNameFromValue(direct);
+  const rawName = playerNameFromValue(direct);
+  if(!rawName) return "";
+  const players = extractPlayers(payload);
+  const match = players.find(player=>{
+    if(!player || typeof player !== "object") return false;
+    const names = [
+      valueByKey(player,["Name","name","PlayerName","playerName"]),
+      valueByKey(player,["Id","id","PlayerID","player_id","__playerKey"])
+    ].map(cleanName).filter(Boolean);
+    return names.some(name=>name.toLowerCase() === rawName.toLowerCase());
+  });
+  return match ? cleanName(firstDefined(valueByKey(match,["Name","name","PlayerName","playerName"]), rawName)) : rawName;
 }
 function ensurePlayer(name, team=null){
   const clean = cleanName(name);
@@ -1068,22 +1089,56 @@ function ensurePlayer(name, team=null){
   return existing;
 }
 function normalizeBoostValue(value){
+  if(value && typeof value === "object"){
+    return boostValueFromObject(value);
+  }
+  if(typeof value === "boolean") return null;
   const n = Number(value);
   if(!Number.isFinite(n)) return null;
   if(n > 100 && n <= 255) return Math.max(0, Math.min(100, Math.round(n / 2.55)));
+  if(n > 0 && n <= 1) return Math.max(0, Math.min(100, Math.round(n * 100)));
   return Math.max(0, Math.min(100, Math.round(n)));
 }
+function boostValueFromObject(obj){
+  if(!obj || typeof obj !== "object") return null;
+  const keys = [
+    "boost",
+    "Boost",
+    "boostAmount",
+    "BoostAmount",
+    "boost_amount",
+    "BoostPercent",
+    "boostPercent",
+    "currentBoost",
+    "CurrentBoost",
+    "BoostCurrent",
+    "boostCurrent",
+    "Amount",
+    "amount"
+  ];
+  for(const key of keys){
+    if(Object.prototype.hasOwnProperty.call(obj, key)){
+      const value = normalizeBoostValue(obj[key]);
+      if(value !== null) return value;
+    }
+  }
+  return null;
+}
 function boostValueFromPlayer(player){
-  const direct = firstDefined(
-    valueByKey(player,["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost","BoostCurrent","boostCurrent"]),
-    valueByKey(player?.Car,["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost"]),
-    valueByKey(player?.car,["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost"]),
-    valueByKey(player?.State,["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost"]),
-    valueByKey(player?.state,["boost","Boost","boostAmount","BoostAmount","boost_amount","BoostPercent","boostPercent","currentBoost","CurrentBoost"]),
-    valueByKey(player?.ReplicatedBoost,["boost","Boost","boostAmount","BoostAmount","boost_amount"]),
-    valueByKey(player?.replicatedBoost,["boost","Boost","boostAmount","BoostAmount","boost_amount"])
-  );
-  return direct === undefined ? null : normalizeBoostValue(direct);
+  const sources = [
+    player,
+    player?.Car,
+    player?.car,
+    player?.State,
+    player?.state,
+    player?.ReplicatedBoost,
+    player?.replicatedBoost
+  ];
+  for(const source of sources){
+    const value = boostValueFromObject(source);
+    if(value !== null) return value;
+  }
+  return null;
 }
 function gameClock(payload){
   const direct = firstDefined(
