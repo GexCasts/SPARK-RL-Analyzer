@@ -2700,10 +2700,10 @@ body.obsOverlayMode #obsOverlayRoot{
   position:absolute;
   left:34px;
   bottom:34px;
-  min-width:302px;
+  width:268px;
   height:44px;
   display:grid;
-  grid-template-columns:126px repeat(4,44px);
+  grid-template-columns:96px repeat(4,43px);
   align-items:center;
   background:#050607;
   border-bottom:3px solid var(--spark-yellow);
@@ -2714,8 +2714,8 @@ body.obsOverlayMode #obsOverlayRoot{
   height:100%;
   display:flex;
   align-items:center;
-  padding:0 9px;
-  font-size:14px;
+  padding:0 7px;
+  font-size:13px;
   font-weight:1000;
   background:#f5f5f5;
   color:#050607;
@@ -2729,10 +2729,10 @@ body.obsOverlayMode #obsOverlayRoot{
   gap:1px;
   font-weight:900;
   color:#fff;
-  font-size:11px;
+  font-size:10px;
 }
-.obsStat b{color:var(--spark-yellow);font-size:14px;line-height:1}
-.obsStat span{font-size:8px;line-height:1}
+.obsStat b{color:var(--spark-yellow);font-size:13px;line-height:1}
+.obsStat span{font-size:7px;line-height:1}
 .obsFocusBoost{
   position:absolute;
   right:44px;
@@ -3159,6 +3159,27 @@ body.obsOverlayMode #obsOverlayRoot{
   transform:none;
   opacity:.8;
 }
+.obsFinalScreen::after{
+  content:"";
+  position:absolute;
+  inset:-80px;
+  z-index:0;
+  background:
+    repeating-radial-gradient(circle at 18% 24%,rgba(255,208,0,.12) 0 1px,transparent 1px 5px),
+    repeating-linear-gradient(97deg,rgba(255,182,23,.055) 0 1px,transparent 1px 9px),
+    radial-gradient(circle at 52% 46%,rgba(255,208,0,.10),transparent 32%);
+  mix-blend-mode:screen;
+  opacity:.28;
+  animation:obsAmberStatic 1.5s steps(5,end) infinite;
+  pointer-events:none;
+}
+@keyframes obsAmberStatic{
+  0%{transform:translate3d(0,0,0)}
+  25%{transform:translate3d(-18px,9px,0)}
+  50%{transform:translate3d(12px,-14px,0)}
+  75%{transform:translate3d(21px,6px,0)}
+  100%{transform:translate3d(0,0,0)}
+}
 .obsFinalWatermark{
   left:18px;
   top:34px;
@@ -3172,6 +3193,7 @@ body.obsOverlayMode #obsOverlayRoot{
   padding:0 118px 64px;
   grid-template-rows:142px 1fr auto;
   gap:0;
+  z-index:1;
 }
 .obsFinalHeader{display:none}
 .obsFinalScore{
@@ -3210,6 +3232,26 @@ body.obsOverlayMode #obsOverlayRoot{
   white-space:nowrap;
   text-overflow:ellipsis;
 }
+.obsFinalTopTeamText{
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+.obsFinalTopLogo{
+  position:absolute;
+  top:50%;
+  width:34px;
+  height:34px;
+  object-fit:contain;
+  transform:translateY(-50%);
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.45));
+}
+.obsFinalTopTeam.left{padding-right:64px}
+.obsFinalTopTeam.right{padding-left:64px}
+.obsFinalTopTeam.left .obsFinalTopLogo{right:50px}
+.obsFinalTopTeam.right .obsFinalTopLogo{left:50px}
+.obsFinalTopLogo.empty{display:none}
 .obsFinalTopTeam.left{left:0;clip-path:polygon(0 0,100% 0,86% 100%,0 100%)}
 .obsFinalTopTeam.right{right:0;clip-path:polygon(14% 0,100% 0,100% 100%,0 100%)}
 .obsFinalTopCenter{
@@ -10920,7 +10962,10 @@ function updateLiveTeamsFromPayload(payload){
     const teamKey = normalizeLiveTeam(firstDefined(valueByKey(team,["TeamNum","teamNum","Index","index","Team"]), name));
     if(!teamKey || !liveApiState.teams[teamKey]) return;
     if(name) liveApiState.teams[teamKey].name = name;
-    liveApiState.teams[teamKey].score = toNumber(valueByKey(team,["Score","score","Goals","goals"]), liveApiState.teams[teamKey].score);
+    const incomingScore = toNumber(valueByKey(team,["Score","score","Goals","goals"]), liveApiState.teams[teamKey].score);
+    liveApiState.teams[teamKey].score = liveApiState.matchEnded
+      ? Math.max(liveApiState.teams[teamKey].score || 0, incomingScore || 0)
+      : incomingScore;
   });
 }
 
@@ -11159,14 +11204,12 @@ function renderObsFinalScreen(){
   screen.classList.toggle("active", showFinalScreen);
   if(!showFinalScreen) return;
 
-  document.querySelectorAll(".obsFinalScreen img").forEach(img=>{
-    img.src = oneNeLogoUrl;
-  });
-
   const blueTeam = liveApiState.teams?.Blue || {name:"Blue",score:0};
   const orangeTeam = liveApiState.teams?.Orange || {name:"Orange",score:0};
   const blueDisplayName = overlayTeamName("Blue", blueTeam.name || "Blue");
   const orangeDisplayName = overlayTeamName("Orange", orangeTeam.name || "Orange");
+  const blueLogo = overlayLogoFor("Blue");
+  const orangeLogo = overlayLogoFor("Orange");
   const blue = liveTeamTotals("Blue");
   const orange = liveTeamTotals("Orange");
   const bluePlayers = livePlayersByTeam("Blue");
@@ -11191,14 +11234,20 @@ function renderObsFinalScreen(){
   if($("obsFinalScore")){
     $("obsFinalScore").innerHTML = `
       <div class="obsFinalTopbar">
-        <div class="obsFinalTopTeam left">${escapeHtml(blueDisplayName)}</div>
+        <div class="obsFinalTopTeam left">
+          <span class="obsFinalTopTeamText">${escapeHtml(blueDisplayName)}</span>
+          <img class="obsFinalTopLogo ${blueLogo ? "" : "empty"}" src="${escapeHtml(blueLogo || "")}" alt="">
+        </div>
         <div class="obsFinalTopCenter"></div>
         <div class="obsSeriesPlate left"><div class="obsSeriesDots left">${renderObsSeriesDots("Blue")}</div></div>
         <div class="obsSeriesPlate right"><div class="obsSeriesDots right">${renderObsSeriesDots("Orange")}</div></div>
         <div class="obsFinalTopScore blue">${blueScore}</div>
         <div class="obsFinalTopClock">${formatGameClock(liveApiState.lastKnownClock ?? 0)}<span>${Number(liveApiState.lastKnownClock) < 0 ? "OVERTIME" : ""}</span></div>
         <div class="obsFinalTopScore orange">${orangeScore}</div>
-        <div class="obsFinalTopTeam right">${escapeHtml(orangeDisplayName)}</div>
+        <div class="obsFinalTopTeam right">
+          <img class="obsFinalTopLogo ${orangeLogo ? "" : "empty"}" src="${escapeHtml(orangeLogo || "")}" alt="">
+          <span class="obsFinalTopTeamText">${escapeHtml(orangeDisplayName)}</span>
+        </div>
         <div class="obsFinalTopSub">${overlayGameLabel()} &nbsp;&nbsp; ${overlaySeriesLabel()}</div>
         <img class="obsFinalTopBolt" src="${oneNeLogoUrl}" alt="">
       </div>`;
@@ -11311,8 +11360,8 @@ function handleLiveUpdateState(payload){
   syncLiveApiMatchBoundary(payload);
   clearLivePostGameIfNextFieldState(payload);
   liveApiState.updateCount++;
-  updateLiveTeamsFromPayload(payload);
   if(liveApiGameEnded(payload, "updatestate")) markLiveMatchEnded();
+  updateLiveTeamsFromPayload(payload);
   const replayFlag = liveApiReplayFlag(payload);
   if(replayFlag !== null) setLiveReplayActive(replayFlag);
   const clock = liveGameClockSeconds(payload);

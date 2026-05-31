@@ -374,9 +374,9 @@ html,body{
   position:absolute;
   left:42px;
   bottom:42px;
-  width:348px;
+  width:270px;
   min-height:0;
-  padding:8px;
+  padding:7px;
   background:
     linear-gradient(180deg,rgba(255,255,255,.08),transparent 34%),
     rgba(5,6,9,.94);
@@ -408,12 +408,12 @@ html,body{
 .liveStatPlayer{
   --team:var(--spark-gold);
   display:grid;
-  grid-template-columns:96px repeat(4,38px);
+  grid-template-columns:86px repeat(4,34px);
   grid-template-rows:20px 0fr;
   align-items:center;
-  column-gap:3px;
+  column-gap:2px;
   min-height:20px;
-  padding:0 5px;
+  padding:0 4px;
   border:1px solid rgba(255,255,255,.10);
   background:rgba(255,255,255,.045);
   color:rgba(247,247,244,.84);
@@ -438,13 +438,13 @@ html,body{
   overflow:hidden;
   white-space:nowrap;
   text-overflow:ellipsis;
-  font-size:10px;
+  font-size:9px;
   font-weight:950;
   color:inherit;
   transition:font-size .22s cubic-bezier(.16,1,.3,1), font-weight .18s ease;
 }
 .liveStatPlayer.focused .liveStatName{
-  font-size:12px;
+  font-size:11px;
   font-weight:1000;
 }
 .liveStatValue{
@@ -455,16 +455,16 @@ html,body{
 }
 .liveStatValue b{
   color:#fffdf3;
-  font-size:10px;
+  font-size:9px;
   transition:font-size .22s cubic-bezier(.16,1,.3,1), color .18s ease;
 }
 .liveStatPlayer.focused .liveStatValue b{
   color:var(--spark-gold);
-  font-size:12px;
+  font-size:11px;
 }
 .liveStatValue span{
   color:rgba(247,247,244,.54);
-  font-size:7px;
+  font-size:6px;
   font-weight:950;
   letter-spacing:.02em;
 }
@@ -531,12 +531,15 @@ html,body{
   content:"";
   position:absolute;
   inset:-80px;
+  z-index:0;
   background:
     repeating-radial-gradient(circle at 18% 24%,rgba(255,208,0,.13) 0 1px,transparent 1px 5px),
-    repeating-linear-gradient(97deg,rgba(255,182,23,.055) 0 1px,transparent 1px 9px);
+    repeating-linear-gradient(97deg,rgba(255,182,23,.055) 0 1px,transparent 1px 9px),
+    radial-gradient(circle at 52% 46%,rgba(255,208,0,.10),transparent 32%);
   mix-blend-mode:screen;
   opacity:.24;
   animation:amberStatic 1.7s steps(5,end) infinite;
+  pointer-events:none;
 }
 @keyframes amberStatic{
   0%{transform:translate3d(0,0,0)}
@@ -589,20 +592,35 @@ html,body{
   font-weight:1000;
   text-transform:uppercase;
   display:grid;
+  grid-template-columns:minmax(0,1fr) 54px;
   align-content:center;
+  align-items:center;
   gap:10px;
 }
-.finalTeam.right{text-align:right}
+.finalTeam.right{
+  grid-template-columns:54px minmax(0,1fr);
+  text-align:right;
+}
 .finalTeamName{
   min-width:0;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
 }
+.finalTeamLogo{
+  width:42px;
+  height:42px;
+  object-fit:contain;
+  justify-self:end;
+  filter:drop-shadow(0 3px 5px rgba(0,0,0,.45));
+}
+.finalTeam.right .finalTeamLogo{justify-self:start}
+.finalTeamLogo.empty{display:none}
 .finalTeamSeries{
   display:flex;
   gap:10px;
   align-items:center;
+  grid-column:1 / -1;
 }
 .finalTeam.right .finalTeamSeries{justify-content:flex-end}
 .finalTeamSeries .dot{
@@ -1080,14 +1098,20 @@ function updateTeams(payload){
       const key = normalizeTeam(team);
       if(!key) return;
       state.teams[key].name = cleanName(firstDefined(valueByKey(team,["Name","name","TeamName","teamName"]), state.teams[key].name));
-      state.teams[key].score = toNumber(valueByKey(team,["Score","score","Goals","goals"]), state.teams[key].score);
+      const incomingScore = toNumber(valueByKey(team,["Score","score","Goals","goals"]), state.teams[key].score);
+      state.teams[key].score = state.matchEnded
+        ? Math.max(state.teams[key].score || 0, incomingScore || 0)
+        : incomingScore;
     });
   }else if(teams && typeof teams === "object"){
     Object.entries(teams).forEach(([name, team])=>{
       const key = normalizeTeam(firstDefined(valueByKey(team,["TeamNum","teamNum","team","Team"]), name));
       if(!key) return;
       state.teams[key].name = cleanName(firstDefined(valueByKey(team,["Name","name","TeamName","teamName"]), state.teams[key].name));
-      state.teams[key].score = toNumber(valueByKey(team,["Score","score","Goals","goals"]), state.teams[key].score);
+      const incomingScore = toNumber(valueByKey(team,["Score","score","Goals","goals"]), state.teams[key].score);
+      state.teams[key].score = state.matchEnded
+        ? Math.max(state.teams[key].score || 0, incomingScore || 0)
+        : incomingScore;
     });
   }
 }
@@ -1315,14 +1339,18 @@ function renderFinalScreen(config){
   if(!screen) return;
   const blueName = config.blueTeamName || state.teams.Blue.name || "Blue";
   const orangeName = config.orangeTeamName || state.teams.Orange.name || "Orange";
+  const blueLogo = teamLogoFor("Blue", config);
+  const orangeLogo = teamLogoFor("Orange", config);
   $("finalSeries").textContent = `Best of ${Number(config.seriesBestOf) || 5}`;
   $("finalScore").innerHTML = `
     <div class="finalTeam">
       <div class="finalTeamName">${escapeHtml(blueName)}</div>
+      <img class="finalTeamLogo ${blueLogo ? "" : "empty"}" src="${escapeHtml(blueLogo || "")}" alt="">
       <div class="finalTeamSeries">${renderDots("Blue", config)}</div>
     </div>
     <div class="finalScoreCenter"><span class="blue">${scoreText(state.teams.Blue.score)}</span><span class="orange">${scoreText(state.teams.Orange.score)}</span></div>
     <div class="finalTeam right">
+      <img class="finalTeamLogo ${orangeLogo ? "" : "empty"}" src="${escapeHtml(orangeLogo || "")}" alt="">
       <div class="finalTeamName">${escapeHtml(orangeName)}</div>
       <div class="finalTeamSeries">${renderDots("Orange", config)}</div>
     </div>`;
@@ -1438,6 +1466,11 @@ function handleMessage(raw){
     && incomingClock >= 250
     && hasFieldPlayers(msg.payload);
   if(nextMatchLooksReady) resetForNextMatch();
+  const messageEndsMatch = matchEndedFlag(msg.payload, msg.event);
+  if(messageEndsMatch){
+    state.replay = false;
+    state.matchEnded = true;
+  }
   updateTeams(msg.payload);
   updatePlayers(msg.payload);
   const focusName = focusNameFromPayload(msg.payload);
@@ -1472,10 +1505,8 @@ function handleMessage(raw){
   const replay = replayFlag(msg.payload);
   if(replay !== null) state.replay = replay;
   if(eventName.includes("goalreplay")) state.replay = !(eventName.includes("ended") || eventName.endsWith("end") || eventName.includes("willend"));
-  if(matchEndedFlag(msg.payload, msg.event)){
+  if(messageEndsMatch){
     const config = readConfig();
-    state.replay = false;
-    state.matchEnded = true;
     if(!state.finalVisible) playFinalTransition(config);
     state.finalVisible = true;
   }
