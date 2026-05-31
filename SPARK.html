@@ -1127,7 +1127,8 @@ canvas{width:100%!important;height:100%!important}
   text-transform:uppercase;
 }
 .overlayInput,
-.overlaySelect{
+.overlaySelect,
+.overlayColorInput{
   display:block;
   width:100%;
   min-height:38px;
@@ -1142,10 +1143,15 @@ canvas{width:100%!important;height:100%!important}
   transition:border-color .16s var(--spark-ease),box-shadow .16s var(--spark-ease),background .16s var(--spark-ease);
 }
 .overlayInput:focus,
-.overlaySelect:focus{
+.overlaySelect:focus,
+.overlayColorInput:focus{
   outline:0;
   border-color:var(--spark-yellow);
   box-shadow:var(--spark-focus);
+}
+.overlayColorInput{
+  padding:5px;
+  cursor:pointer;
 }
 .overlaySeriesControls{
   display:grid;
@@ -2408,6 +2414,8 @@ body.obsOverlayMode #obsOverlayRoot{
   width:100%;
   height:100%;
   background:transparent;
+  color:var(--overlay-text,#f7f7f7);
+  font-family:var(--overlay-font,Inter,Segoe UI,Arial,sans-serif);
   text-transform:uppercase;
 }
 .obsStage.finalActive{
@@ -2621,32 +2629,36 @@ body.obsOverlayMode #obsOverlayRoot{
 }
 .obsBoostStacks{
   position:absolute;
-  top:112px;
-  left:28px;
-  right:28px;
+  top:96px;
+  left:30px;
+  right:30px;
   display:flex;
   justify-content:space-between;
-  gap:24px;
+  gap:34px;
   z-index:2;
 }
 .obsBoostColumn{
-  width:265px;
+  width:286px;
   display:grid;
-  gap:6px;
+  gap:5px;
 }
 .obsBoostRow{
+  --boostTeam:var(--overlay-boost-blue,#1b8cff);
   display:grid;
-  grid-template-columns:1fr 42px;
+  position:relative;
+  grid-template-columns:minmax(0,1fr) 38px;
   align-items:center;
-  height:24px;
-  background:rgba(5,6,7,.92);
-  border-left:3px solid var(--spark-yellow);
-  box-shadow:0 4px 12px rgba(0,0,0,.45);
+  height:22px;
+  overflow:hidden;
+  background:linear-gradient(180deg,rgba(9,11,16,.94),rgba(3,4,7,.98));
+  border:1px solid color-mix(in srgb,var(--boostTeam) 45%,rgba(255,255,255,.2));
+  box-shadow:0 5px 12px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.12);
+  clip-path:polygon(0 0,96% 0,100% 50%,96% 100%,0 100%);
 }
+.obsBoostColumn.right .obsBoostRow{--boostTeam:var(--overlay-boost-orange,#ff8400)}
 .obsBoostColumn.right .obsBoostRow{
-  grid-template-columns:42px 1fr;
-  border-left:0;
-  border-right:3px solid var(--spark-yellow);
+  grid-template-columns:38px minmax(0,1fr);
+  clip-path:polygon(4% 0,100% 0,100% 100%,4% 100%,0 50%);
 }
 .obsBoostName{
   position:relative;
@@ -2654,22 +2666,34 @@ body.obsOverlayMode #obsOverlayRoot{
   display:flex;
   align-items:center;
   padding:0 8px;
-  font-size:13px;
+  font-size:12px;
   font-weight:900;
   overflow:hidden;
+  color:var(--overlay-text,#f7f7f7);
 }
 .obsBoostName span{position:relative;z-index:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .obsBoostFill{
   position:absolute;
   inset:0 auto 0 0;
-  background:linear-gradient(90deg,rgba(255,208,0,.95),rgba(240,160,32,.75));
-  opacity:.72;
+  width:var(--boost,0%);
+  background:
+    linear-gradient(90deg,color-mix(in srgb,var(--boostTeam) 90%,#fff 6%),var(--overlay-accent,#ffd000)),
+    linear-gradient(180deg,rgba(255,255,255,.28),transparent);
+  opacity:.78;
+  box-shadow:0 0 16px color-mix(in srgb,var(--boostTeam) 72%,transparent);
+  transition:width .18s cubic-bezier(.22,1,.36,1);
 }
 .obsBoostColumn.right .obsBoostFill{left:auto;right:0}
 .obsBoostValue{
-  color:var(--spark-yellow);
+  position:relative;
+  z-index:1;
+  height:100%;
+  display:grid;
+  place-items:center;
+  color:var(--overlay-accent,#ffd000);
+  background:rgba(0,0,0,.48);
   text-align:center;
-  font-size:14px;
+  font-size:13px;
   font-weight:1000;
 }
 .obsPlayerCard{
@@ -3750,10 +3774,16 @@ const overlayDefaultConfig = {
   seriesBestOf:5,
   blueSeriesScore:0,
   orangeSeriesScore:0,
+  overlayTextColor:"#f7f7f7",
+  overlayAccentColor:"#ffd000",
+  overlayBlueBoostColor:"#1b8cff",
+  overlayOrangeBoostColor:"#ff8400",
+  overlayFontFamily:"Inter, Segoe UI, Arial, sans-serif",
   testFinalStatsPreview:false
 };
 let overlayServerConfig = {};
 let overlayConfig = readOverlayConfig();
+let overlayConfigRefreshStartedAt = 0;
 let obsFinalScreenVisible = false;
 let obsStingerTimer = null;
 
@@ -5517,7 +5547,9 @@ window.selectScope=id=>{
   render();
 };
 
-function setOverlaySeriesScore(side, delta){
+async function setOverlaySeriesScore(side, delta){
+  await refreshOverlayConfigFromServer();
+  overlayConfig = readOverlayConfig();
   const maxWins = overlayMaxSeriesWins();
   const key = side === "Blue" ? "blueSeriesScore" : "orangeSeriesScore";
   updateOverlayConfigField(key, Math.max(0, Math.min(maxWins, Number(overlayConfig[key] || 0) + delta)));
@@ -5713,6 +5745,12 @@ function bindOverlayTournamentEditor(){
 function renderOverlayControl(){
   const panel = $("overlayControlPanel");
   if(!panel) return;
+  if(location.protocol.startsWith("http") && Date.now() - overlayConfigRefreshStartedAt > 1400){
+    overlayConfigRefreshStartedAt = Date.now();
+    refreshOverlayConfigFromServer().then(()=>{
+      if(activeView === "overlay" || selected === "overlayControl") renderOverlayControl();
+    });
+  }
   overlayConfig = readOverlayConfig();
   const blueLogo = overlayLogoFor("Blue");
   const orangeLogo = overlayLogoFor("Orange");
@@ -5748,6 +5786,31 @@ function renderOverlayControl(){
               </label>
               <label class="overlayField">Right / Orange Team Name
                 <input class="overlayInput" id="overlayOrangeNameInput" value="${escapeHtml(overlayConfig.orangeTeamName)}" placeholder="Leave blank to use live API team name">
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <details class="overlayCategory" open>
+          <summary>Appearance</summary>
+          <div class="overlayCategoryBody">
+            <div class="overlayControlGrid">
+              <label class="overlayField">Text Color
+                <input class="overlayColorInput" id="overlayTextColorInput" type="color" value="${escapeHtml(overlayConfig.overlayTextColor)}">
+              </label>
+              <label class="overlayField">Accent Color
+                <input class="overlayColorInput" id="overlayAccentColorInput" type="color" value="${escapeHtml(overlayConfig.overlayAccentColor)}">
+              </label>
+              <label class="overlayField">Blue Boost Bar
+                <input class="overlayColorInput" id="overlayBlueBoostColorInput" type="color" value="${escapeHtml(overlayConfig.overlayBlueBoostColor)}">
+              </label>
+              <label class="overlayField">Orange Boost Bar
+                <input class="overlayColorInput" id="overlayOrangeBoostColorInput" type="color" value="${escapeHtml(overlayConfig.overlayOrangeBoostColor)}">
+              </label>
+              <label class="overlayField">Overlay Font
+                <select class="overlaySelect" id="overlayFontInput">
+                  ${overlayFontOptions().map(option=>`<option value="${escapeHtml(option.value)}" ${overlayConfig.overlayFontFamily===option.value?"selected":""}>${escapeHtml(option.label)}</option>`).join("")}
+                </select>
               </label>
             </div>
           </div>
@@ -5912,6 +5975,11 @@ function renderOverlayControl(){
   bind("overlayOrangeLogoInput","orangeLogoUrl");
   bind("overlayBestOfInput","seriesBestOf","change");
   bind("overlaySeriesTitleInput","seriesTitle","input");
+  bind("overlayTextColorInput","overlayTextColor","input");
+  bind("overlayAccentColorInput","overlayAccentColor","input");
+  bind("overlayBlueBoostColorInput","overlayBlueBoostColor","input");
+  bind("overlayOrangeBoostColorInput","overlayOrangeBoostColor","input");
+  bind("overlayFontInput","overlayFontFamily","change");
   const tournamentBindings = [
     ["overlayTournamentXInput","tournamentLogoX"],
     ["overlayTournamentYInput","tournamentLogoY"],
@@ -10710,11 +10778,54 @@ function readOverlayConfig(){
       tournamentLogoY:Math.round(Math.max(0, Math.min(1080, Number(merged.tournamentLogoY ?? overlayDefaultConfig.tournamentLogoY) || 0))),
       tournamentLogoWidth:Math.round(Math.max(24, Math.min(900, Number(merged.tournamentLogoWidth ?? overlayDefaultConfig.tournamentLogoWidth) || 280))),
       tournamentLogoRatio:Math.max(.2, Math.min(8, Number(merged.tournamentLogoRatio ?? overlayDefaultConfig.tournamentLogoRatio) || 2.2)),
+      ...normalizeOverlayTheme(merged),
       testFinalStatsPreview:merged.testFinalStatsPreview === true || merged.testFinalStatsPreview === "true"
     };
   }catch(err){
     return {...overlayDefaultConfig};
   }
+}
+
+function sanitizeOverlayColor(value, fallback){
+  const text = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(text) ? text : fallback;
+}
+
+function overlayFontOptions(){
+  return [
+    {label:"Inter", value:"Inter, Segoe UI, Arial, sans-serif"},
+    {label:"Segoe UI", value:"Segoe UI, Inter, Arial, sans-serif"},
+    {label:"Arial", value:"Arial, Helvetica, sans-serif"},
+    {label:"Barlow Condensed", value:"Barlow Condensed, Inter, Arial, sans-serif"},
+    {label:"Impact", value:"Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"}
+  ];
+}
+
+function normalizeOverlayTheme(config){
+  const fonts = overlayFontOptions().map(option=>option.value);
+  const fallback = overlayDefaultConfig;
+  return {
+    overlayTextColor:sanitizeOverlayColor(config.overlayTextColor, fallback.overlayTextColor),
+    overlayAccentColor:sanitizeOverlayColor(config.overlayAccentColor, fallback.overlayAccentColor),
+    overlayBlueBoostColor:sanitizeOverlayColor(config.overlayBlueBoostColor, fallback.overlayBlueBoostColor),
+    overlayOrangeBoostColor:sanitizeOverlayColor(config.overlayOrangeBoostColor, fallback.overlayOrangeBoostColor),
+    overlayFontFamily:fonts.includes(config.overlayFontFamily) ? config.overlayFontFamily : fallback.overlayFontFamily
+  };
+}
+
+function applyOverlayThemeToElement(element, config=overlayConfig){
+  if(!element) return;
+  const theme = normalizeOverlayTheme(config || overlayDefaultConfig);
+  element.style.setProperty("--overlay-text", theme.overlayTextColor);
+  element.style.setProperty("--overlay-accent", theme.overlayAccentColor);
+  element.style.setProperty("--overlay-boost-blue", theme.overlayBlueBoostColor);
+  element.style.setProperty("--overlay-boost-orange", theme.overlayOrangeBoostColor);
+  element.style.setProperty("--spark-yellow", theme.overlayAccentColor);
+  element.style.setProperty("--overlay-font", theme.overlayFontFamily);
+}
+
+function applyOverlayThemeToPreview(){
+  applyOverlayThemeToElement(document.querySelector(".obsStage"), overlayConfig);
 }
 
 async function refreshOverlayConfigFromServer(){
@@ -10744,8 +10855,10 @@ function saveOverlayConfig(nextConfig){
     tournamentLogoY:Math.round(Math.max(0, Math.min(1080, Number(nextConfig.tournamentLogoY) || 0))),
     tournamentLogoWidth:Math.round(Math.max(24, Math.min(900, Number(nextConfig.tournamentLogoWidth) || 280))),
     tournamentLogoRatio:Math.max(.2, Math.min(8, Number(nextConfig.tournamentLogoRatio) || 2.2)),
+    ...normalizeOverlayTheme(nextConfig),
     testFinalStatsPreview:nextConfig.testFinalStatsPreview === true
   };
+  overlayServerConfig = {...overlayServerConfig, ...overlayConfig};
   try{ localStorage.setItem(overlayConfigKey, JSON.stringify(overlayConfig)); }
   catch(err){ console.warn("Could not save overlay config:", err); }
   syncOverlayConfigToServer(overlayConfig);
@@ -10871,7 +10984,7 @@ function overlayBoostRows(players, side){
   return players.slice(0,4).map(p=>{
     const boost = Math.round(Math.max(0, Math.min(100, p.currentBoost ?? 0)));
     const name = escapeHtml(p.name);
-    const fill = `<div class="obsBoostFill" style="width:${boost}%"></div>`;
+    const fill = `<div class="obsBoostFill" style="--boost:${boost}%"></div>`;
     const nameCell = `<div class="obsBoostName">${fill}<span>${name}</span></div>`;
     const valueCell = `<div class="obsBoostValue">${boost}</div>`;
     return `<div class="obsBoostRow">${side === "right" ? valueCell + nameCell : nameCell + valueCell}</div>`;
@@ -11124,6 +11237,7 @@ function renderObsFinalScreen(){
 function renderObsOverlay(){
   if(!isObsOverlayMode || !liveApiState) return;
   overlayConfig = readOverlayConfig();
+  applyOverlayThemeToPreview();
   renderObsReplayOverlay();
   document.querySelectorAll(".obsLogoBox img").forEach(img=>{
     const side = img.closest(".obsTeamName")?.classList.contains("right") ? "Orange" : "Blue";
@@ -12088,7 +12202,12 @@ document.addEventListener("touchmove", event=>{
 window.addEventListener("resize", ()=>updateSparkScrollThumb(sparkScrollTarget, false));
 window.addEventListener("resize", ()=>scheduleTileLayoutSettle(4));
 requestAnimationFrame(()=>updateSparkScrollThumb(window, false));
-if(!isObsOverlayMode) syncOverlayConfigToServer(overlayConfig);
+if(!isObsOverlayMode && location.protocol.startsWith("http")){
+  setInterval(()=>{
+    if(activeView !== "overlay" && selected !== "overlayControl") return;
+    refreshOverlayConfigFromServer().then(()=>renderOverlayControl());
+  }, 2500);
+}
 
 if(isObsOverlayMode){
   document.body.classList.add("obsOverlayMode");

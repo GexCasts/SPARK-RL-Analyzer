@@ -10,6 +10,11 @@
   --spark-gold:#ffd000;
   --blue:#1b8cff;
   --orange:#ff8400;
+  --overlay-text:#f7f7f4;
+  --overlay-accent:#ffd000;
+  --overlay-boost-blue:#1b8cff;
+  --overlay-boost-orange:#ff8400;
+  --overlay-font:Inter,Segoe UI,Arial,sans-serif;
   --panel:#050609;
   --text:#f7f7f4;
   --stage-scale:1;
@@ -21,8 +26,8 @@ html,body{
   height:100%;
   overflow:hidden;
   background:transparent;
-  color:var(--text);
-  font-family:Inter,Segoe UI,Arial,sans-serif;
+  color:var(--overlay-text);
+  font-family:var(--overlay-font);
 }
 .stage{
   position:relative;
@@ -271,40 +276,63 @@ html,body{
 .dot.orange.filled{background:var(--orange)}
 .boosts{
   position:absolute;
-  top:118px;
-  width:292px;
+  top:96px;
+  width:286px;
   display:flex;
   flex-direction:column;
   gap:5px;
 }
-.boosts.left{left:42px}
-.boosts.right{right:42px}
+.boosts.left{left:30px}
+.boosts.right{right:30px}
 .boostRow{
+  --boostTeam:var(--overlay-boost-blue);
   position:relative;
-  height:20px;
-  background:rgba(3,4,7,.88);
-  border:1px solid rgba(255,255,255,.18);
+  height:22px;
+  background:linear-gradient(180deg,rgba(9,11,16,.94),rgba(3,4,7,.98));
+  border:1px solid color-mix(in srgb,var(--boostTeam) 45%,rgba(255,255,255,.2));
   display:grid;
-  grid-template-columns:1fr 42px;
+  grid-template-columns:minmax(0,1fr) 38px;
   align-items:center;
   font-size:12px;
   font-weight:850;
   text-transform:uppercase;
   overflow:hidden;
+  box-shadow:0 5px 12px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.12);
+  clip-path:polygon(0 0,96% 0,100% 50%,96% 100%,0 100%);
 }
-.boosts.right .boostRow{grid-template-columns:42px 1fr;text-align:right}
+.boosts.right .boostRow{
+  --boostTeam:var(--overlay-boost-orange);
+  grid-template-columns:38px minmax(0,1fr);
+  text-align:right;
+  clip-path:polygon(4% 0,100% 0,100% 100%,4% 100%,0 50%);
+}
 .bar{
   position:absolute;
-  inset:auto 42px 1px 0;
-  height:3px;
-  background:linear-gradient(90deg,var(--spark-gold),#fff3a3);
+  inset:0 auto 0 0;
+  height:100%;
+  width:var(--boost,0%);
+  background:
+    linear-gradient(90deg,color-mix(in srgb,var(--boostTeam) 90%,#fff 6%),var(--overlay-accent)),
+    linear-gradient(180deg,rgba(255,255,255,.28),transparent);
+  opacity:.78;
+  box-shadow:0 0 16px color-mix(in srgb,var(--boostTeam) 72%,transparent);
   transform-origin:left;
+  transition:width .18s cubic-bezier(.22,1,.36,1);
 }
 .boosts.right .bar{
-  inset:auto 0 1px 42px;
+  inset:0 0 0 auto;
   transform-origin:right;
 }
-.name,.boostValue{position:relative;padding:0 6px;z-index:1}
+.name,.boostValue{position:relative;padding:0 8px;z-index:1;color:var(--overlay-text)}
+.boostValue{
+  height:100%;
+  display:grid;
+  place-items:center;
+  color:var(--overlay-accent);
+  background:rgba(0,0,0,.48);
+  font-size:13px;
+  font-weight:1000;
+}
 .replay{
   position:absolute;
   left:0;
@@ -721,7 +749,12 @@ const defaultConfig = {
   stingerTransitionName:"",
   seriesBestOf:5,
   blueSeriesScore:0,
-  orangeSeriesScore:0
+  orangeSeriesScore:0,
+  overlayTextColor:"#f7f7f4",
+  overlayAccentColor:"#ffd000",
+  overlayBlueBoostColor:"#1b8cff",
+  overlayOrangeBoostColor:"#ff8400",
+  overlayFontFamily:"Inter, Segoe UI, Arial, sans-serif"
 };
 const state = {
   connected:false,
@@ -775,6 +808,23 @@ function readConfig(){
   try{ localConfig = JSON.parse(localStorage.getItem(overlayConfigKey) || "{}"); }
   catch{ localConfig = {}; }
   return {...defaultConfig, ...localConfig, ...(serverConfig || {})};
+}
+function applyOverlayTheme(config){
+  const root = document.documentElement;
+  const color = (value, fallback)=>/^#[0-9a-f]{6}$/i.test(String(value || "")) ? value : fallback;
+  const fonts = [
+    "Inter, Segoe UI, Arial, sans-serif",
+    "Segoe UI, Inter, Arial, sans-serif",
+    "Arial, Helvetica, sans-serif",
+    "Barlow Condensed, Inter, Arial, sans-serif",
+    "Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"
+  ];
+  root.style.setProperty("--overlay-text", color(config.overlayTextColor, defaultConfig.overlayTextColor));
+  root.style.setProperty("--overlay-accent", color(config.overlayAccentColor, defaultConfig.overlayAccentColor));
+  root.style.setProperty("--overlay-boost-blue", color(config.overlayBlueBoostColor, defaultConfig.overlayBlueBoostColor));
+  root.style.setProperty("--overlay-boost-orange", color(config.overlayOrangeBoostColor, defaultConfig.overlayOrangeBoostColor));
+  root.style.setProperty("--spark-gold", color(config.overlayAccentColor, defaultConfig.overlayAccentColor));
+  root.style.setProperty("--overlay-font", fonts.includes(config.overlayFontFamily) ? config.overlayFontFamily : defaultConfig.overlayFontFamily);
 }
 async function refreshServerConfig(){
   try{
@@ -1218,7 +1268,7 @@ function renderBoostRows(team){
       const name = escapeHtml(player.name);
       return `<div class="boostRow">
         ${team === "Orange" ? `<span class="boostValue">${boost}</span><span class="name">${name}</span>` : `<span class="name">${name}</span><span class="boostValue">${boost}</span>`}
-        <span class="bar" style="transform:scaleX(${boost / 100})"></span>
+        <span class="bar" style="--boost:${boost}%"></span>
       </div>`;
     }).join("");
 }
@@ -1341,6 +1391,7 @@ function playFinalTransition(config){
 }
 function render(){
   const config = readConfig();
+  applyOverlayTheme(config);
   const stage = $("stage");
   stage.classList.toggle("live", state.connected && state.updates > 0);
   stage.classList.toggle("replayActive", !!state.replay);
