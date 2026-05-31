@@ -497,8 +497,27 @@ html,body{
     linear-gradient(76deg,rgba(255,255,255,.14) 0 2px,transparent 2px 100%) right 0 top 0 / 90px 100% no-repeat;
   opacity:.76;
 }
+.finalScreen::after{
+  content:"";
+  position:absolute;
+  inset:-80px;
+  background:
+    repeating-radial-gradient(circle at 18% 24%,rgba(255,208,0,.13) 0 1px,transparent 1px 5px),
+    repeating-linear-gradient(97deg,rgba(255,182,23,.055) 0 1px,transparent 1px 9px);
+  mix-blend-mode:screen;
+  opacity:.24;
+  animation:amberStatic 1.7s steps(5,end) infinite;
+}
+@keyframes amberStatic{
+  0%{transform:translate3d(0,0,0)}
+  25%{transform:translate3d(-18px,9px,0)}
+  50%{transform:translate3d(12px,-14px,0)}
+  75%{transform:translate3d(21px,6px,0)}
+  100%{transform:translate3d(0,0,0)}
+}
 .finalContent{
   position:relative;
+  z-index:1;
   width:1500px;
   margin:86px auto 0;
 }
@@ -510,14 +529,9 @@ html,body{
 }
 .finalKicker{
   color:var(--spark-gold);
-  font-size:22px;
+  font-size:58px;
   font-weight:1000;
-  letter-spacing:.18em;
-  text-transform:uppercase;
-}
-.finalTitle{
-  font-size:68px;
-  font-weight:1000;
+  letter-spacing:.06em;
   line-height:1;
   text-transform:uppercase;
 }
@@ -535,14 +549,39 @@ html,body{
   margin-bottom:28px;
 }
 .finalTeam{
-  padding:20px 24px;
+  min-height:92px;
+  padding:15px 24px 12px;
   background:rgba(255,255,255,.075);
   border:1px solid rgba(255,255,255,.16);
   font-size:34px;
   font-weight:1000;
   text-transform:uppercase;
+  display:grid;
+  align-content:center;
+  gap:10px;
 }
 .finalTeam.right{text-align:right}
+.finalTeamName{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.finalTeamSeries{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+.finalTeam.right .finalTeamSeries{justify-content:flex-end}
+.finalTeamSeries .dot{
+  width:22px;
+  height:12px;
+  border-radius:3px;
+  background:rgba(5,6,9,.88);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);
+}
+.finalTeamSeries .dot.blue.filled{background:var(--blue)}
+.finalTeamSeries .dot.orange.filled{background:var(--orange)}
 .finalScoreCenter{
   display:grid;
   grid-template-columns:1fr 1fr;
@@ -574,14 +613,14 @@ html,body{
   min-height:42px;
   background:rgba(255,208,0,.16);
   color:var(--spark-gold);
-  font-size:14px;
+  font-size:13px;
   font-weight:1000;
   letter-spacing:.12em;
   text-transform:uppercase;
 }
 .finalRow > div{
-  padding:0 16px;
-  font-size:22px;
+  padding:0 12px;
+  font-size:21px;
   font-weight:900;
   text-align:center;
 }
@@ -648,7 +687,6 @@ html,body{
       <div class="finalHeader">
         <div>
           <div class="finalKicker">Post Game Report</div>
-          <div class="finalTitle">Stats</div>
         </div>
         <div class="finalSeries" id="finalSeries">Best of 5</div>
       </div>
@@ -1171,13 +1209,19 @@ function renderFinalScreen(config){
   const orangeName = config.orangeTeamName || state.teams.Orange.name || "Orange";
   $("finalSeries").textContent = `Best of ${Number(config.seriesBestOf) || 5}`;
   $("finalScore").innerHTML = `
-    <div class="finalTeam">${escapeHtml(blueName)}</div>
+    <div class="finalTeam">
+      <div class="finalTeamName">${escapeHtml(blueName)}</div>
+      <div class="finalTeamSeries">${renderDots("Blue", config)}</div>
+    </div>
     <div class="finalScoreCenter"><span class="blue">${scoreText(state.teams.Blue.score)}</span><span class="orange">${scoreText(state.teams.Orange.score)}</span></div>
-    <div class="finalTeam right">${escapeHtml(orangeName)}</div>`;
+    <div class="finalTeam right">
+      <div class="finalTeamName">${escapeHtml(orangeName)}</div>
+      <div class="finalTeamSeries">${renderDots("Orange", config)}</div>
+    </div>`;
   const players = sortedFinalPlayers();
   $("finalBoard").innerHTML = `
     <div class="finalRow header">
-      <div class="name">Player</div><div>Score</div><div>G</div><div>SH</div><div>A</div><div>SV</div><div>Demos</div>
+      <div class="name">Player</div><div>Score</div><div>Goals</div><div>Shots</div><div>Assists</div><div>Saves</div><div>Demos</div>
     </div>
     ${players.map(player=>{
       const stats = player.stats || {};
