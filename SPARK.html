@@ -3829,6 +3829,7 @@ let overlayConfigRefreshStartedAt = 0;
 let overlayControlInteractionUntil = 0;
 let obsFinalScreenVisible = false;
 let obsStingerTimer = null;
+let obsStingerFallbackTimer = null;
 
 const playerColors=["#ffd000","#f0a020","#f2f2f2","#a0a0a0","#ff6555","#ffe060","#707070","#c7c7c7"];
 
@@ -11176,18 +11177,49 @@ function obsFinalCompareBar(left, right){
   return `<div class="obsFinalStatCompare" style="--blue:${blue}fr;--orange:${orange}fr"><i></i><i></i></div>`;
 }
 
+function overlayStingerExtension(config){
+  const source = String(config?.stingerTransitionName || config?.stingerTransitionUrl || "").split("?")[0].toLowerCase();
+  const match = source.match(/\.([a-z0-9]+)$/);
+  return match ? `.${match[1]}` : "";
+}
+
+function overlayStingerBrowserPlayable(config){
+  const ext = overlayStingerExtension(config);
+  if(!ext) return true;
+  if([".avi",".mkv",".flv",".ts"].includes(ext)) return false;
+  const mimeByExt = {
+    ".webm":"video/webm",
+    ".mp4":"video/mp4",
+    ".m4v":"video/mp4",
+    ".mov":"video/quicktime",
+    ".gif":"image/gif"
+  };
+  const mime = mimeByExt[ext];
+  if(!mime) return true;
+  const probe = document.createElement("video");
+  return ext === ".gif" || !!probe.canPlayType(mime);
+}
+
+function triggerObsStatsFade(stage){
+  if(!stage) return;
+  stage.classList.remove("fadeTransition");
+  void stage.offsetWidth;
+  stage.classList.add("fadeTransition");
+}
+
 function playObsStatsTransition(showFinalScreen){
   const stage = document.querySelector(".obsStage");
   const stinger = $("obsStingerTransition");
-  const src = String((overlayConfig || overlayDefaultConfig).stingerTransitionUrl || "");
-  if(stage){
-    stage.classList.remove("fadeTransition");
-    void stage.offsetWidth;
-    if(!src) stage.classList.add("fadeTransition");
-  }
+  const cfg = overlayConfig || overlayDefaultConfig;
+  const src = String(cfg.stingerTransitionUrl || "");
+  stage?.classList.remove("fadeTransition");
   if(obsStingerTimer){
     clearTimeout(obsStingerTimer);
     obsStingerTimer = null;
+  }
+  if(obsStingerFallbackTimer){
+    clearTimeout(obsStingerFallbackTimer);
+    obsStingerFallbackTimer = null;
   }
   if(!stinger) return;
   stinger.classList.remove("active");
@@ -11195,8 +11227,9 @@ function playObsStatsTransition(showFinalScreen){
   stinger.oncanplay = null;
   stinger.onerror = null;
   try{ stinger.pause(); }catch{}
-  if(!src){
+  if(!src || !overlayStingerBrowserPlayable(cfg)){
     stinger.removeAttribute("src");
+    if(showFinalScreen) triggerObsStatsFade(stage);
     return;
   }
   if(stinger.getAttribute("src") !== src) stinger.src = src;
@@ -11205,22 +11238,36 @@ function playObsStatsTransition(showFinalScreen){
   stinger.preload = "auto";
   stinger.classList.add("active");
   const cleanup = ()=>{
+    if(obsStingerFallbackTimer){
+      clearTimeout(obsStingerFallbackTimer);
+      obsStingerFallbackTimer = null;
+    }
     stinger.classList.remove("active");
     try{ stinger.pause(); }catch{}
   };
   stinger.onended = cleanup;
-  stinger.onerror = cleanup;
+  stinger.onerror = ()=>{
+    cleanup();
+    if(showFinalScreen) triggerObsStatsFade(stage);
+  };
   const start = ()=>{
     try{ stinger.currentTime = 0; }catch{}
     const played = stinger.play?.();
     if(played?.catch) played.catch(error=>{
       console.warn("Could not play OBS stinger transition:", error);
       cleanup();
+      if(showFinalScreen) triggerObsStatsFade(stage);
     });
   };
   if(stinger.readyState >= 2) start();
   else stinger.addEventListener("canplay", start, {once:true});
   stinger.load?.();
+  obsStingerFallbackTimer = setTimeout(()=>{
+    if(stinger.readyState < 2){
+      cleanup();
+      if(showFinalScreen) triggerObsStatsFade(stage);
+    }
+  }, 900);
   obsStingerTimer = setTimeout(cleanup, showFinalScreen ? 4500 : 2400);
 }
 

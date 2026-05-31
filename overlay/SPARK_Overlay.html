@@ -787,6 +787,7 @@ const state = {
 };
 let serverConfig = null;
 let stingerTimer = null;
+let stingerFallbackTimer = null;
 const $ = id=>document.getElementById(id);
 function firstDefined(...values){
   for(const value of values) if(value !== undefined && value !== null && value !== "") return value;
@@ -1263,6 +1264,10 @@ function resetForNextMatch(){
     clearTimeout(stingerTimer);
     stingerTimer = null;
   }
+  if(stingerFallbackTimer){
+    clearTimeout(stingerFallbackTimer);
+    stingerFallbackTimer = null;
+  }
   const stinger = $("stingerTransition");
   stinger?.classList.remove("active");
   try{ stinger?.pause(); }catch{}
@@ -1372,13 +1377,42 @@ function renderFinalScreen(config){
       </div>`;
     }).join("") || `<div class="finalRow"><div class="name">Waiting for final stats</div><div>0</div><div>0</div><div>0</div><div>0</div><div>0</div><div>0</div></div>`}`;
 }
+
+function stingerExtension(config){
+  const source = String(config?.stingerTransitionName || config?.stingerTransitionUrl || "").split("?")[0].toLowerCase();
+  const match = source.match(/\.([a-z0-9]+)$/);
+  return match ? `.${match[1]}` : "";
+}
+
+function stingerBrowserPlayable(config){
+  const ext = stingerExtension(config);
+  if(!ext) return true;
+  if([".avi",".mkv",".flv",".ts"].includes(ext)) return false;
+  const mimeByExt = {
+    ".webm":"video/webm",
+    ".mp4":"video/mp4",
+    ".m4v":"video/mp4",
+    ".mov":"video/quicktime",
+    ".gif":"image/gif"
+  };
+  const mime = mimeByExt[ext];
+  if(!mime) return true;
+  const probe = document.createElement("video");
+  return ext === ".gif" || !!probe.canPlayType(mime);
+}
+
+function triggerFinalFade(stage){
+  if(!stage) return;
+  stage.classList.remove("fadeTransition");
+  void stage.offsetWidth;
+  stage.classList.add("fadeTransition");
+}
+
 function playFinalTransition(config){
   const stage = $("stage");
   const stinger = $("stingerTransition");
   const src = String(config.stingerTransitionUrl || "");
   stage?.classList.remove("fadeTransition");
-  void stage?.offsetWidth;
-  if(!src) stage?.classList.add("fadeTransition");
   if(stingerTimer){
     clearTimeout(stingerTimer);
     stingerTimer = null;
@@ -1389,8 +1423,9 @@ function playFinalTransition(config){
   stinger.oncanplay = null;
   stinger.onerror = null;
   try{ stinger.pause(); }catch{}
-  if(!src){
+  if(!src || !stingerBrowserPlayable(config)){
     stinger.removeAttribute("src");
+    triggerFinalFade(stage);
     return;
   }
   if(stinger.getAttribute("src") !== src) stinger.src = src;
@@ -1399,22 +1434,36 @@ function playFinalTransition(config){
   stinger.preload = "auto";
   stinger.classList.add("active");
   const cleanup = ()=>{
+    if(stingerFallbackTimer){
+      clearTimeout(stingerFallbackTimer);
+      stingerFallbackTimer = null;
+    }
     stinger.classList.remove("active");
     try{ stinger.pause(); }catch{}
   };
   stinger.onended = cleanup;
-  stinger.onerror = cleanup;
+  stinger.onerror = ()=>{
+    cleanup();
+    triggerFinalFade(stage);
+  };
   const start = ()=>{
     try{ stinger.currentTime = 0; }catch{}
     const played = stinger.play?.();
     if(played?.catch) played.catch(error=>{
       console.warn("Could not play stinger transition:", error);
       cleanup();
+      triggerFinalFade(stage);
     });
   };
   if(stinger.readyState >= 2) start();
   else stinger.addEventListener("canplay", start, {once:true});
   stinger.load?.();
+  stingerFallbackTimer = setTimeout(()=>{
+    if(stinger.readyState < 2){
+      cleanup();
+      triggerFinalFade(stage);
+    }
+  }, 900);
   stingerTimer = setTimeout(cleanup, 4500);
 }
 function render(){
