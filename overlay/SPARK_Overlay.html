@@ -8,10 +8,11 @@
 :root{
   --spark-amber:#ffb617;
   --spark-gold:#ffd000;
-  --blue:#1da7ff;
-  --orange:#ff7a20;
+  --blue:#1b8cff;
+  --orange:#ff8400;
   --panel:#050609;
   --text:#f7f7f4;
+  --stage-scale:1;
 }
 *{box-sizing:border-box}
 html,body{
@@ -25,8 +26,10 @@ html,body{
 }
 .stage{
   position:relative;
-  width:100vw;
-  height:100vh;
+  width:1920px;
+  height:1080px;
+  transform:scale(var(--stage-scale));
+  transform-origin:top left;
 }
 .scorebug{
   position:absolute;
@@ -228,6 +231,123 @@ html,body{
   font-weight:700;
 }
 .stage.live .status{display:none}
+.liveStatCard{
+  position:absolute;
+  left:42px;
+  bottom:42px;
+  width:520px;
+  min-height:176px;
+  padding:14px 16px 16px;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.08),transparent 34%),
+    rgba(5,6,9,.94);
+  border:1px solid rgba(255,208,0,.72);
+  box-shadow:0 18px 30px rgba(0,0,0,.48), inset 0 1px rgba(255,255,255,.12);
+  display:grid;
+  gap:10px;
+  overflow:hidden;
+}
+.liveStatHeader{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  color:rgba(247,247,244,.72);
+  font-size:12px;
+  font-weight:950;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.liveStatHeader b{
+  color:var(--spark-gold);
+  font-size:13px;
+}
+.liveStatPlayers{
+  display:grid;
+  gap:6px;
+}
+.liveStatPlayer{
+  --team:var(--spark-gold);
+  display:grid;
+  grid-template-columns:minmax(126px,1fr) repeat(4,48px);
+  grid-template-rows:30px 0fr;
+  align-items:center;
+  column-gap:8px;
+  min-height:30px;
+  padding:0 8px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.045);
+  color:rgba(247,247,244,.84);
+  font-size:12px;
+  font-weight:850;
+  transition:grid-template-rows .22s cubic-bezier(.16,1,.3,1), min-height .22s cubic-bezier(.16,1,.3,1), padding .22s cubic-bezier(.16,1,.3,1), background .18s ease, border-color .18s ease, color .18s ease;
+}
+.liveStatPlayer.blue{--team:var(--blue)}
+.liveStatPlayer.orange{--team:var(--orange)}
+.liveStatPlayer.focused{
+  grid-template-rows:35px 17px;
+  min-height:58px;
+  padding:4px 9px 7px;
+  border-color:color-mix(in srgb,var(--team) 74%,#f7f7f4);
+  background:linear-gradient(90deg,color-mix(in srgb,var(--team) 26%,transparent),rgba(255,255,255,.06));
+  color:#fffdf3;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.liveStatName{
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  font-size:13px;
+  font-weight:950;
+  color:inherit;
+  transition:font-size .22s cubic-bezier(.16,1,.3,1), font-weight .18s ease;
+}
+.liveStatPlayer.focused .liveStatName{
+  font-size:16px;
+  font-weight:1000;
+}
+.liveStatValue{
+  display:grid;
+  gap:1px;
+  justify-items:center;
+  line-height:1;
+}
+.liveStatValue b{
+  color:#fffdf3;
+  font-size:14px;
+  transition:font-size .22s cubic-bezier(.16,1,.3,1), color .18s ease;
+}
+.liveStatPlayer.focused .liveStatValue b{
+  color:var(--spark-gold);
+  font-size:16px;
+}
+.liveStatValue span{
+  color:rgba(247,247,244,.54);
+  font-size:8px;
+  font-weight:950;
+  letter-spacing:.06em;
+}
+.liveStatBoost{
+  grid-column:1 / -1;
+  grid-row:2;
+  align-self:end;
+  height:9px;
+  overflow:hidden;
+  opacity:0;
+  background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.12);
+  transition:opacity .18s ease;
+}
+.liveStatPlayer.focused .liveStatBoost{opacity:1}
+.liveStatBoost i{
+  display:block;
+  width:var(--boost,0%);
+  height:100%;
+  background:linear-gradient(90deg,var(--team),var(--spark-gold));
+  box-shadow:0 0 14px color-mix(in srgb,var(--team) 72%,transparent);
+  transition:width .22s cubic-bezier(.16,1,.3,1);
+}
 </style>
 </head>
 <body>
@@ -247,6 +367,10 @@ html,body{
   </div>
   <div class="boosts left" id="blueBoosts"></div>
   <div class="boosts right" id="orangeBoosts"></div>
+  <div class="liveStatCard" id="liveStatCard">
+    <div class="liveStatHeader"><span>Live Stats</span><b id="liveStatFocus">No focused view</b></div>
+    <div class="liveStatPlayers" id="liveStatPlayers"></div>
+  </div>
   <div class="replay">Replay</div>
   <div class="status" id="status">Waiting for SPARK live feed</div>
 </div>
@@ -265,7 +389,8 @@ const state = {
   replay:false,
   clock:300,
   teams:{Blue:{name:"Blue",score:0},Orange:{name:"Orange",score:0}},
-  players:new Map()
+  players:new Map(),
+  focusedPlayerName:null
 };
 const $ = id=>document.getElementById(id);
 function firstDefined(...values){
@@ -354,11 +479,38 @@ function updatePlayers(payload){
     if(!name) return;
     const team = normalizeTeam(firstDefined(valueByKey(player,["TeamNum","teamNum","Team","team"]), valueByKey(player,["Team"])));
     if(!team) return;
-    const existing = state.players.get(name) || {name, team, boost:0};
+    const existing = state.players.get(name) || {name, team, boost:0, stats:{score:0,goals:0,shots:0,assists:0,saves:0,demos:0,touches:0}};
     existing.team = team;
     existing.boost = toNumber(firstDefined(valueByKey(player,["Boost","boost","BoostAmount","boostAmount"]), existing.boost), existing.boost);
+    existing.stats.score = toNumber(firstDefined(valueByKey(player,["Score","score","points","Points"]), existing.stats.score), existing.stats.score);
+    existing.stats.goals = toNumber(firstDefined(valueByKey(player,["Goals","goals"]), existing.stats.goals), existing.stats.goals);
+    existing.stats.shots = toNumber(firstDefined(valueByKey(player,["Shots","shots"]), existing.stats.shots), existing.stats.shots);
+    existing.stats.assists = toNumber(firstDefined(valueByKey(player,["Assists","assists"]), existing.stats.assists), existing.stats.assists);
+    existing.stats.saves = toNumber(firstDefined(valueByKey(player,["Saves","saves"]), existing.stats.saves), existing.stats.saves);
+    existing.stats.demos = toNumber(firstDefined(valueByKey(player,["Demos","demos","Demolitions","demolitions"]), existing.stats.demos), existing.stats.demos);
+    existing.stats.touches = toNumber(firstDefined(valueByKey(player,["Touches","touches"]), existing.stats.touches), existing.stats.touches);
     state.players.set(name, existing);
   });
+}
+function playerNameFromValue(value){
+  if(!value) return "";
+  if(typeof value === "string") return cleanName(value);
+  return cleanName(firstDefined(valueByKey(value,["Name","name","PlayerName","playerName","Player","player","Id","id"]), ""));
+}
+function focusNameFromPayload(payload){
+  const direct = firstDefined(
+    valueByKey(payload,["FocusedPlayer","focusedPlayer","FocusPlayer","focusPlayer","CameraPlayer","cameraPlayer","CameraTarget","cameraTarget","GameCameraPlayer","gameCameraPlayer","TargetPlayer","targetPlayer"]),
+    valueByKey(payload?.Game,["FocusedPlayer","focusedPlayer","CameraPlayer","cameraPlayer","CameraTarget","cameraTarget","TargetPlayer","targetPlayer","MainTarget","mainTarget"])
+  );
+  return playerNameFromValue(direct);
+}
+function ensurePlayer(name, team=null){
+  const clean = cleanName(name);
+  if(!clean) return null;
+  const existing = state.players.get(clean) || {name:clean, team, boost:0, stats:{score:0,goals:0,shots:0,assists:0,saves:0,demos:0,touches:0}};
+  if(team) existing.team = team;
+  state.players.set(clean, existing);
+  return existing;
 }
 function gameClock(payload){
   const direct = firstDefined(
@@ -402,6 +554,36 @@ function renderBoostRows(team){
       </div>`;
     }).join("");
 }
+function allPlayersForCard(){
+  return Array.from(state.players.values())
+    .filter(player=>player.team === "Blue" || player.team === "Orange")
+    .sort((a,b)=>{
+      if(a.team !== b.team) return a.team === "Blue" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+}
+function renderLiveStatCard(){
+  const focusName = state.focusedPlayerName && state.players.has(state.focusedPlayerName) ? state.focusedPlayerName : "";
+  $("liveStatFocus").textContent = focusName ? `${focusName} view` : "No focused view";
+  const players = allPlayersForCard();
+  if(!players.length){
+    $("liveStatPlayers").innerHTML = `<div class="liveStatPlayer"><span class="liveStatName">Waiting for players</span><span></span><span></span><span></span><span></span></div>`;
+    return;
+  }
+  $("liveStatPlayers").innerHTML = players.map(player=>{
+    const stats = player.stats || {};
+    const boost = Math.max(0, Math.min(100, Math.round(player.boost || 0)));
+    const focused = focusName && player.name === focusName;
+    return `<div class="liveStatPlayer ${player.team.toLowerCase()} ${focused ? "focused" : ""}" style="--boost:${boost}%">
+      <div class="liveStatName">${escapeHtml(player.name)}</div>
+      <div class="liveStatValue"><b>${Math.round(stats.goals || 0)}</b><span>G</span></div>
+      <div class="liveStatValue"><b>${Math.round(stats.shots || 0)}</b><span>SH</span></div>
+      <div class="liveStatValue"><b>${Math.round(stats.assists || 0)}</b><span>A</span></div>
+      <div class="liveStatValue"><b>${Math.round(stats.saves || 0)}</b><span>SV</span></div>
+      <div class="liveStatBoost"><i></i></div>
+    </div>`;
+  }).join("");
+}
 function render(){
   const config = readConfig();
   const stage = $("stage");
@@ -419,6 +601,7 @@ function render(){
   $("orangeSeries").innerHTML = renderDots("Orange", config);
   $("blueBoosts").innerHTML = renderBoostRows("Blue");
   $("orangeBoosts").innerHTML = renderBoostRows("Orange");
+  renderLiveStatCard();
 }
 function handleMessage(raw){
   let msg;
@@ -427,12 +610,39 @@ function handleMessage(raw){
   state.updates++;
   updateTeams(msg.payload);
   updatePlayers(msg.payload);
+  const focusName = focusNameFromPayload(msg.payload);
+  if(focusName) state.focusedPlayerName = focusName;
+  if(msg.event.includes("ballhit") || msg.event.includes("ball_hit")){
+    const hitPlayer = playerNameFromValue(firstDefined(valueByKey(msg.payload,["Player","player","playerName","PlayerName","lastTouchPlayer","LastTouchPlayer"]), msg.payload?.BallLastTouch?.Player, msg.payload?.ballLastTouch?.player));
+    const team = normalizeTeam(valueByKey(msg.payload,["team","Team"]));
+    const p = ensurePlayer(hitPlayer, team);
+    if(p){
+      p.stats.touches = (p.stats.touches || 0) + 1;
+    }
+  }
+  if(msg.event.includes("statfeed")){
+    const statPlayer = playerNameFromValue(firstDefined(msg.payload?.MainTarget, msg.payload?.mainTarget, msg.payload?.Player, msg.payload?.player));
+    const statType = String(firstDefined(valueByKey(msg.payload,["Type","type","EventName","eventName"]), "")).toLowerCase();
+    const team = normalizeTeam(valueByKey(msg.payload,["team","Team"]));
+    const p = ensurePlayer(statPlayer, team);
+    if(p){
+      if(statType.includes("goal")) p.stats.goals = (p.stats.goals || 0) + 1;
+      if(statType.includes("shot")) p.stats.shots = (p.stats.shots || 0) + 1;
+      if(statType.includes("assist")) p.stats.assists = (p.stats.assists || 0) + 1;
+      if(statType.includes("save")) p.stats.saves = (p.stats.saves || 0) + 1;
+      if(statType.includes("demo")) p.stats.demos = (p.stats.demos || 0) + 1;
+    }
+  }
   const clock = gameClock(msg.payload);
   if(clock !== null) state.clock = clock;
   const replay = replayFlag(msg.payload);
   if(replay !== null) state.replay = replay;
   if(msg.event.includes("goalreplay")) state.replay = !msg.event.includes("ended") && !msg.event.includes("end");
   render();
+}
+function updateStageScale(){
+  const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+  document.documentElement.style.setProperty("--stage-scale", String(scale || 1));
 }
 function connect(){
   const wsUrl = `${location.origin.replace(/^http/, "ws")}/api/live-api`;
@@ -461,9 +671,11 @@ function startHeartbeat(){
   const timer = setInterval(()=>post(false), 15000);
   window.addEventListener("pagehide", ()=>{clearInterval(timer); post(true);});
 }
+window.addEventListener("resize", updateStageScale);
 window.addEventListener("storage", event=>{
   if(event.key === overlayConfigKey) render();
 });
+updateStageScale();
 startHeartbeat();
 connect();
 render();
