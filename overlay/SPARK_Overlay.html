@@ -514,6 +514,7 @@ const state = {
   players:new Map(),
   focusedPlayerName:null
 };
+let serverConfig = null;
 const $ = id=>document.getElementById(id);
 function firstDefined(...values){
   for(const value of values) if(value !== undefined && value !== null && value !== "") return value;
@@ -546,8 +547,23 @@ function escapeHtml(value){
   return String(value ?? "").replace(/[&<>"']/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
 }
 function readConfig(){
-  try{return {...defaultConfig, ...JSON.parse(localStorage.getItem(overlayConfigKey) || "{}")};}
-  catch{return {...defaultConfig};}
+  let localConfig = {};
+  try{ localConfig = JSON.parse(localStorage.getItem(overlayConfigKey) || "{}"); }
+  catch{ localConfig = {}; }
+  return {...defaultConfig, ...localConfig, ...(serverConfig || {})};
+}
+async function refreshServerConfig(){
+  try{
+    const response = await fetch(`${location.origin}/api/overlay-config`, {cache:"no-store"});
+    if(!response.ok) return;
+    const json = await response.json();
+    if(json?.config && typeof json.config === "object"){
+      serverConfig = json.config;
+      try{ localStorage.setItem(overlayConfigKey, JSON.stringify({...defaultConfig, ...serverConfig})); }
+      catch{}
+      render();
+    }
+  }catch{}
 }
 function formatClock(seconds){
   const raw = Number(seconds);
@@ -992,6 +1008,8 @@ window.addEventListener("storage", event=>{
   if(event.key === overlayConfigKey) render();
 });
 updateStageScale();
+refreshServerConfig();
+setInterval(refreshServerConfig, 2000);
 startHeartbeat();
 connect();
 render();

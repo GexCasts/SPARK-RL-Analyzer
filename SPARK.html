@@ -962,10 +962,10 @@ canvas{width:100%!important;height:100%!important}
 }
 .overlayPreviewFrameWrap{
   position:relative;
-  width:100%;
+  width:min(100%, calc((100vh - 220px) * 16 / 9));
   aspect-ratio:16/9;
   min-height:0;
-  max-height:min(70vh,760px);
+  justify-self:center;
   background:#050607;
   border:1px solid rgba(255,208,0,.72);
   border-radius:10px;
@@ -5508,6 +5508,7 @@ function toggleOverlayFinalStatsPreview(){
 
 async function copyOverlayUrl(){
   const status = $("overlayCopyStatus");
+  syncOverlayConfigToServer(overlayConfig);
   try{
     await navigator.clipboard.writeText(obsOverlayUrl);
     if(status) status.textContent = "Overlay URL copied.";
@@ -5527,6 +5528,11 @@ async function copyOverlayUrl(){
     }
     helper.remove();
   }
+}
+
+function openOverlayWindow(){
+  syncOverlayConfigToServer(overlayConfig);
+  window.open(obsOverlayUrl, "_blank", "noopener");
 }
 
 function loadOverlayLogoFile(side, input){
@@ -5863,7 +5869,7 @@ function renderOverlayControl(){
           <div class="overlayQuickActions">
             <button type="button" onclick="saveOverlayConfig({...overlayConfig, blueSeriesScore:0, orangeSeriesScore:0})">Wipe Score</button>
             <button type="button" onclick="copyOverlayUrl()">Copy Overlay URL</button>
-            <button type="button" onclick="window.open(obsOverlayUrl,'_blank','noopener')">Open Overlay</button>
+            <button type="button" onclick="openOverlayWindow()">Open Overlay</button>
           </div>
           <div class="overlayQuickTeam orange">
             <button type="button" onclick="setOverlaySeriesScore('Orange',-1)">-</button>
@@ -10581,8 +10587,19 @@ function saveOverlayConfig(nextConfig){
   };
   try{ localStorage.setItem(overlayConfigKey, JSON.stringify(overlayConfig)); }
   catch(err){ console.warn("Could not save overlay config:", err); }
+  syncOverlayConfigToServer(overlayConfig);
   renderOverlayControl();
   renderObsOverlay();
+}
+
+function syncOverlayConfigToServer(config){
+  if(!location.protocol.startsWith("http")) return;
+  fetch(`${location.origin}/api/overlay-config`, {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({config}),
+    cache:"no-store"
+  }).catch(err=>console.warn("Could not sync overlay config:", err));
 }
 
 function updateOverlayConfigField(key, value){
@@ -11710,7 +11727,7 @@ if($("obsOverlayBtn")){
   $("obsOverlayBtn").onclick=e=>{
     e.preventDefault();
     e.stopPropagation();
-    window.open(obsOverlayUrl, "_blank", "noopener");
+    openOverlayWindow();
     $("fileStatus").innerHTML =
       `OBS overlay websource URL:<br><b>${obsOverlayUrl}</b><br>` +
       `Use 1920x1080 with a transparent background. The overlay auto-connects to the live API bridge and reads Rocket League from <b>127.0.0.1:49123</b>.<br>` +
@@ -11826,6 +11843,7 @@ document.addEventListener("touchmove", event=>{
 window.addEventListener("resize", ()=>updateSparkScrollThumb(sparkScrollTarget, false));
 window.addEventListener("resize", ()=>scheduleTileLayoutSettle(4));
 requestAnimationFrame(()=>updateSparkScrollThumb(window, false));
+if(!isObsOverlayMode) syncOverlayConfigToServer(overlayConfig);
 
 if(isObsOverlayMode){
   document.body.classList.add("obsOverlayMode");

@@ -16,6 +16,7 @@ const logoPath = path.join(here, "assets", "Spark Logo.png");
 const oneNeLogoPath = path.join(here, "assets", "1NE_Vector_edited.png");
 const tileLayoutPath = path.join(here, "SPARK-layout.json");
 const overlayAssetDir = path.join(here, ".tmp", "overlay-assets");
+const overlayConfigPath = path.join(overlayAssetDir, "overlay-config.json");
 const rrrocketVersion = "0.11.1";
 const rrrocketCandidates = [
   process.env.SPARK_RRROCKET_PATH,
@@ -2810,6 +2811,47 @@ async function handleTileLayout(req, res){
   res.end(JSON.stringify({ok:true, fileName:path.basename(tileLayoutPath)}));
 }
 
+async function handleOverlayConfig(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+
+  if(req.method === "GET"){
+    let config = {};
+    try{
+      config = JSON.parse(await fs.readFile(overlayConfigPath, "utf8") || "{}");
+    }catch{
+      config = {};
+    }
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify({ok:true, config}));
+    return;
+  }
+
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use GET or POST.");
+    return;
+  }
+
+  const body = await readRequestBody(req, 12 * 1024 * 1024);
+  let message = {};
+  try{
+    message = JSON.parse(body.toString("utf8") || "{}");
+  }catch{
+    throw new Error("Invalid overlay config JSON.");
+  }
+  const config = message && typeof message.config === "object" && !Array.isArray(message.config)
+    ? message.config
+    : {};
+  await fs.mkdir(overlayAssetDir, {recursive:true});
+  await fs.writeFile(overlayConfigPath, JSON.stringify(config, null, 2), "utf8");
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify({ok:true}));
+}
+
 async function handleOverlayAssetUpload(req, res){
   if(req.method === "OPTIONS"){
     res.writeHead(204, corsHeaders);
@@ -2998,6 +3040,10 @@ server = http.createServer(async (req,res)=>{
     }
     if(url.pathname === "/api/tile-layout"){
       await handleTileLayout(req, res);
+      return;
+    }
+    if(url.pathname === "/api/overlay-config"){
+      await handleOverlayConfig(req, res);
       return;
     }
     if(url.pathname === "/api/overlay-asset"){
