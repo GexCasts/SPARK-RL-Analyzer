@@ -3826,6 +3826,7 @@ const overlayDefaultConfig = {
 let overlayServerConfig = {};
 let overlayConfig = readOverlayConfig();
 let overlayConfigRefreshStartedAt = 0;
+let overlayControlInteractionUntil = 0;
 let obsFinalScreenVisible = false;
 let obsStingerTimer = null;
 
@@ -5784,15 +5785,38 @@ function bindOverlayTournamentEditor(){
   resizeHandle?.addEventListener("pointerdown", event=>startDrag(event, "resize"));
 }
 
+function markOverlayControlInteraction(ms=1800){
+  overlayControlInteractionUntil = Date.now() + ms;
+}
+
+function overlayControlIsEditing(){
+  const panel = $("overlayControlPanel");
+  const active = document.activeElement;
+  if(Date.now() < overlayControlInteractionUntil) return true;
+  if(!panel || !active || !panel.contains(active)) return false;
+  return /^(INPUT|SELECT|TEXTAREA|BUTTON)$/i.test(active.tagName);
+}
+
+function shouldRefreshOverlayControl(){
+  return location.protocol.startsWith("http")
+    && Date.now() - overlayConfigRefreshStartedAt > 1400
+    && !overlayControlIsEditing();
+}
+
+function refreshOverlayControlWhenIdle(){
+  if(!shouldRefreshOverlayControl()) return;
+  overlayConfigRefreshStartedAt = Date.now();
+  refreshOverlayConfigFromServer().then(()=>{
+    if((activeView === "overlay" || selected === "overlayControl") && !overlayControlIsEditing()){
+      renderOverlayControl();
+    }
+  });
+}
+
 function renderOverlayControl(){
   const panel = $("overlayControlPanel");
   if(!panel) return;
-  if(location.protocol.startsWith("http") && Date.now() - overlayConfigRefreshStartedAt > 1400){
-    overlayConfigRefreshStartedAt = Date.now();
-    refreshOverlayConfigFromServer().then(()=>{
-      if(activeView === "overlay" || selected === "overlayControl") renderOverlayControl();
-    });
-  }
+  refreshOverlayControlWhenIdle();
   overlayConfig = readOverlayConfig();
   const blueLogo = overlayLogoFor("Blue");
   const orangeLogo = overlayLogoFor("Orange");
@@ -6007,9 +6031,16 @@ function renderOverlayControl(){
       </div>
     </div>`;
 
+  ["pointerdown","focusin","input","change"].forEach(eventName=>{
+    panel.addEventListener(eventName, ()=>markOverlayControlInteraction(), {capture:true});
+  });
+
   const bind = (id,key,eventName="change")=>{
     const el = $(id);
-    if(el) el.addEventListener(eventName, ()=>updateOverlayConfigField(key, el.value));
+    if(el) el.addEventListener(eventName, ()=>{
+      markOverlayControlInteraction();
+      updateOverlayConfigField(key, el.value, {renderControl:false});
+    });
   };
   bind("overlayBlueNameInput","blueTeamName");
   bind("overlayOrangeNameInput","orangeTeamName");
@@ -10888,7 +10919,7 @@ async function refreshOverlayConfigFromServer(){
   }
 }
 
-function saveOverlayConfig(nextConfig){
+function saveOverlayConfig(nextConfig, options={}){
   const bestOf = [3,5,7].includes(Number(nextConfig.seriesBestOf)) ? Number(nextConfig.seriesBestOf) : 5;
   const maxWins = Math.ceil(bestOf / 2);
   overlayConfig = {
@@ -10908,7 +10939,7 @@ function saveOverlayConfig(nextConfig){
   try{ localStorage.setItem(overlayConfigKey, JSON.stringify(overlayConfig)); }
   catch(err){ console.warn("Could not save overlay config:", err); }
   syncOverlayConfigToServer(overlayConfig);
-  renderOverlayControl();
+  if(options.renderControl !== false) renderOverlayControl();
   renderObsOverlay();
 }
 
@@ -10922,8 +10953,8 @@ function syncOverlayConfigToServer(config){
   }).catch(err=>console.warn("Could not sync overlay config:", err));
 }
 
-function updateOverlayConfigField(key, value){
-  saveOverlayConfig({...overlayConfig, [key]:value});
+function updateOverlayConfigField(key, value, options={}){
+  saveOverlayConfig({...overlayConfig, [key]:value}, options);
 }
 
 function overlayLogoFor(side){
@@ -12264,7 +12295,10 @@ requestAnimationFrame(()=>updateSparkScrollThumb(window, false));
 if(!isObsOverlayMode && location.protocol.startsWith("http")){
   setInterval(()=>{
     if(activeView !== "overlay" && selected !== "overlayControl") return;
-    refreshOverlayConfigFromServer().then(()=>renderOverlayControl());
+    if(overlayControlIsEditing()) return;
+    refreshOverlayConfigFromServer().then(()=>{
+      if(!overlayControlIsEditing()) renderOverlayControl();
+    });
   }, 2500);
 }
 
