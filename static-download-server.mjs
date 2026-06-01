@@ -30,11 +30,10 @@ const ffmpegCandidates = [
   process.env.SPARK_FFMPEG_PATH,
   path.join(here, "tools", "ffmpeg", "bin", "ffmpeg.exe"),
   path.join(here, "tools", "ffmpeg", "ffmpeg.exe"),
-  "ffmpeg.exe",
-  "ffmpeg"
+  ...findWingetFfmpegCandidates(),
+  ...findCommandCandidatesOnPath(["ffmpeg.exe", "ffmpeg"])
 ].filter(Boolean);
 const ffmpegPath = ffmpegCandidates.find(candidate=>{
-  if(candidate === "ffmpeg" || candidate === "ffmpeg.exe") return true;
   return fsSync.existsSync(candidate);
 });
 const tmpDir = path.join(here, ".tmp");
@@ -81,6 +80,56 @@ const liveApiSampleLimit = 160;
 const liveApiSamples = [];
 let liveSeriesAwardedMatchKey = "";
 const liveSeriesPendingAwards = new Set();
+
+function findWingetFfmpegCandidates(){
+  const base = process.env.LOCALAPPDATA
+    ? path.join(process.env.LOCALAPPDATA, "Microsoft", "WinGet", "Packages")
+    : "";
+  if(!base || !fsSync.existsSync(base)) return [];
+  try{
+    return fsSync.readdirSync(base, {withFileTypes:true})
+      .filter(entry=>entry.isDirectory() && entry.name.toLowerCase().includes("ffmpeg"))
+      .flatMap(entry=>{
+        const packageDir = path.join(base, entry.name);
+        return findFilesByName(packageDir, "ffmpeg.exe", 5);
+      });
+  }catch{
+    return [];
+  }
+}
+
+function findFilesByName(rootDir, fileName, limit=5){
+  const found = [];
+  const stack = [rootDir];
+  while(stack.length && found.length < limit){
+    const dir = stack.pop();
+    let entries = [];
+    try{ entries = fsSync.readdirSync(dir, {withFileTypes:true}); }
+    catch{ continue; }
+    for(const entry of entries){
+      const fullPath = path.join(dir, entry.name);
+      if(entry.isDirectory()) stack.push(fullPath);
+      else if(entry.isFile() && entry.name.toLowerCase() === fileName.toLowerCase()) found.push(fullPath);
+      if(found.length >= limit) break;
+    }
+  }
+  return found;
+}
+
+function findCommandCandidatesOnPath(names){
+  const pathDirs = String(process.env.PATH || "")
+    .split(path.delimiter)
+    .map(dir=>dir.trim())
+    .filter(Boolean);
+  const found = [];
+  for(const dir of pathDirs){
+    for(const name of names){
+      const candidate = path.join(dir, name);
+      if(fsSync.existsSync(candidate)) found.push(candidate);
+    }
+  }
+  return found;
+}
 
 function clearShutdownTimer(){
   if(shutdownTimer){
@@ -3130,7 +3179,11 @@ function runExecFile(file, args, options={}){
 
 async function maybeTranscodeOverlayStinger(assetPath, cleanName, mime){
   if(!overlayStingerNeedsTranscode(cleanName, mime)) return {};
-  if(!ffmpegPath) return {error:"ffmpeg not found. Set SPARK_FFMPEG_PATH or place ffmpeg.exe in tools/ffmpeg/bin."};
+  if(!ffmpegPath){
+    return {
+      error:"SPARK could not find FFmpeg, so this stinger cannot be converted yet. Install FFmpeg, set SPARK_FFMPEG_PATH, or place ffmpeg.exe in tools/ffmpeg/bin. The overlay will use the fade transition for now."
+    };
+  }
 
   const outputName = "stinger-transition.webm";
   const outputPath = path.join(overlayAssetDir, outputName);
@@ -3162,8 +3215,19 @@ async function maybeTranscodeOverlayStinger(assetPath, cleanName, mime){
     };
   }catch(error){
     try{ await fs.rm(outputPath, {force:true}); }catch{}
-    return {error:error.message || "Could not transcode stinger."};
+    return {error:friendlyFfmpegError(error)};
   }
+}
+
+function friendlyFfmpegError(error){
+  const message = String(error?.message || error || "");
+  if(/ENOENT|not recognized|cannot find/i.test(message)){
+    return "SPARK could not start FFmpeg, so this stinger cannot be converted yet. Install FFmpeg, set SPARK_FFMPEG_PATH, or place ffmpeg.exe in tools/ffmpeg/bin. The overlay will use the fade transition for now.";
+  }
+  if(/Unknown encoder|libvpx-vp9/i.test(message)){
+    return "FFmpeg is installed, but this build cannot create transparent WebM files. Install a full FFmpeg build with VP9/WebM support. The overlay will use the fade transition for now.";
+  }
+  return `SPARK could not convert this stinger to a browser-playable WebM. The overlay will use the fade transition for now. Details: ${message.slice(0, 240)}`;
 }
 
 function runPowerShell(script){

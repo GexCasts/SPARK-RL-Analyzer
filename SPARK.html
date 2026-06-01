@@ -5702,7 +5702,7 @@ function loadOverlaySkinFile(key, input){
               file._sparkUploadStatus = json.transcoded
                 ? `Converted ${json.originalFileName || file.name || "stinger"} to WebM for browser playback.`
                 : json.transcodeError
-                  ? `Browser fallback will use the fade. ${json.transcodeError}`
+                  ? json.transcodeError
                   : "";
             }
             saveUploadedUrl(json.url);
