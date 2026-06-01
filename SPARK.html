@@ -3860,6 +3860,7 @@ let overlayControlInteractionUntil = 0;
 let obsFinalScreenVisible = false;
 let obsStingerTimer = null;
 let obsStingerFallbackTimer = null;
+let obsStingerRunId = 0;
 
 const playerColors=["#ffd000","#f0a020","#f2f2f2","#a0a0a0","#ff6555","#ffe060","#707070","#c7c7c7"];
 
@@ -11391,6 +11392,7 @@ function playObsStatsTransition(showFinalScreen){
   const stinger = $("obsStingerTransition");
   const cfg = overlayConfig || overlayDefaultConfig;
   const src = String(cfg.stingerTransitionUrl || "");
+  const runId = ++obsStingerRunId;
   stage?.classList.remove("fadeTransition");
   if(obsStingerTimer){
     clearTimeout(obsStingerTimer);
@@ -11404,6 +11406,9 @@ function playObsStatsTransition(showFinalScreen){
   stinger.classList.remove("active");
   stinger.onended = null;
   stinger.oncanplay = null;
+  stinger.onloadstart = null;
+  stinger.onloadeddata = null;
+  stinger.oncanplaythrough = null;
   stinger.onerror = null;
   try{ stinger.pause(); }catch{}
   if(!src || !overlayStingerBrowserPlayable(cfg)){
@@ -11416,7 +11421,9 @@ function playObsStatsTransition(showFinalScreen){
   stinger.playsInline = true;
   stinger.preload = "auto";
   stinger.classList.add("active");
+  let started = false;
   const cleanup = ()=>{
+    if(runId !== obsStingerRunId) return;
     if(obsStingerFallbackTimer){
       clearTimeout(obsStingerFallbackTimer);
       obsStingerFallbackTimer = null;
@@ -11429,25 +11436,56 @@ function playObsStatsTransition(showFinalScreen){
     cleanup();
     if(showFinalScreen) triggerObsStatsFade(stage);
   };
+  let playRetries = 0;
+  const armPlaybackTimers = ()=>{
+    if(runId !== obsStingerRunId || obsStingerTimer) return;
+    obsStingerTimer = setTimeout(cleanup, showFinalScreen ? 4500 : 2400);
+  };
   const start = ()=>{
+    if(runId !== obsStingerRunId || started) return;
+    started = true;
     try{ stinger.currentTime = 0; }catch{}
     const played = stinger.play?.();
+    if(played?.then){
+      played.then(armPlaybackTimers).catch(error=>{
+        if(runId !== obsStingerRunId) return;
+        const message = String(error?.name || error?.message || error || "");
+        if(playRetries < 2 && /abort|interrupted|load/i.test(message)){
+          playRetries += 1;
+          started = false;
+          setTimeout(start, 120);
+          return;
+        }
+        console.warn("Could not play OBS stinger transition:", error);
+        cleanup();
+        if(showFinalScreen) triggerObsStatsFade(stage);
+      });
+      return;
+    }
     if(played?.catch) played.catch(error=>{
+      if(runId !== obsStingerRunId) return;
       console.warn("Could not play OBS stinger transition:", error);
       cleanup();
       if(showFinalScreen) triggerObsStatsFade(stage);
     });
+    armPlaybackTimers();
   };
   if(stinger.readyState >= 2) start();
-  else stinger.addEventListener("canplay", start, {once:true});
-  stinger.load?.();
+  else{
+    stinger.onloadeddata = start;
+    stinger.oncanplay = start;
+    stinger.oncanplaythrough = start;
+  }
+  try{ stinger.load?.(); }catch{}
   obsStingerFallbackTimer = setTimeout(()=>{
-    if(stinger.readyState < 2){
+    if(runId !== obsStingerRunId || started) return;
+    if(stinger.readyState >= 2){
+      start();
+    }else{
       cleanup();
       if(showFinalScreen) triggerObsStatsFade(stage);
     }
-  }, 900);
-  obsStingerTimer = setTimeout(cleanup, showFinalScreen ? 4500 : 2400);
+  }, 2500);
 }
 
 function renderObsFinalScreen(){

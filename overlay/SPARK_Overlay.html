@@ -818,6 +818,7 @@ let stingerTimer = null;
 let stingerFallbackTimer = null;
 let finalTransitionTimer = null;
 let finalTransitionQueueTimer = null;
+let finalTransitionRunId = 0;
 const $ = id=>document.getElementById(id);
 function firstDefined(...values){
   for(const value of values) if(value !== undefined && value !== null && value !== "") return value;
@@ -1341,6 +1342,7 @@ function resetForNextMatch(){
     clearTimeout(stingerFallbackTimer);
     stingerFallbackTimer = null;
   }
+  finalTransitionRunId += 1;
   const stinger = $("stingerTransition");
   stinger?.classList.remove("active");
   try{ stinger?.pause(); }catch{}
@@ -1519,6 +1521,7 @@ function playFinalTransition(config, onCut=revealFinalScreen){
   const stage = $("stage");
   const stinger = $("stingerTransition");
   const src = String(config.stingerTransitionUrl || "");
+  const runId = ++finalTransitionRunId;
   stage?.classList.remove("fadeTransition");
   if(finalTransitionTimer){
     clearTimeout(finalTransitionTimer);
@@ -1528,6 +1531,10 @@ function playFinalTransition(config, onCut=revealFinalScreen){
     clearTimeout(stingerTimer);
     stingerTimer = null;
   }
+  if(stingerFallbackTimer){
+    clearTimeout(stingerFallbackTimer);
+    stingerFallbackTimer = null;
+  }
   if(!stinger){
     onCut?.();
     return;
@@ -1535,10 +1542,16 @@ function playFinalTransition(config, onCut=revealFinalScreen){
   stinger.classList.remove("active");
   stinger.onended = null;
   stinger.oncanplay = null;
+  stinger.onloadstart = null;
+  stinger.onloadeddata = null;
+  stinger.oncanplaythrough = null;
   stinger.onerror = null;
   try{ stinger.pause(); }catch{}
   const playableStinger = !!src && stingerBrowserPlayable(config);
+  let cutDone = false;
   const cut = ()=>{
+    if(runId !== finalTransitionRunId || cutDone) return;
+    cutDone = true;
     if(finalTransitionTimer){
       clearTimeout(finalTransitionTimer);
       finalTransitionTimer = null;
@@ -1556,7 +1569,9 @@ function playFinalTransition(config, onCut=revealFinalScreen){
   stinger.playsInline = true;
   stinger.preload = "auto";
   stinger.classList.add("active");
+  let started = false;
   const cleanup = ()=>{
+    if(runId !== finalTransitionRunId) return;
     if(stingerTimer){
       clearTimeout(stingerTimer);
       stingerTimer = null;
@@ -1574,26 +1589,59 @@ function playFinalTransition(config, onCut=revealFinalScreen){
     cleanup();
     triggerFinalFade(stage);
   };
+  let playRetries = 0;
+  const armPlaybackTimers = ()=>{
+    if(runId !== finalTransitionRunId || finalTransitionTimer) return;
+    finalTransitionTimer = setTimeout(cut, transitionCutDelayMs(config, true));
+    stingerTimer = setTimeout(cleanup, Math.max(4500, transitionCutDelayMs(config, true) + 1500));
+  };
   const start = ()=>{
+    if(runId !== finalTransitionRunId || started) return;
+    started = true;
     try{ stinger.currentTime = 0; }catch{}
     const played = stinger.play?.();
+    if(played?.then){
+      played.then(armPlaybackTimers).catch(error=>{
+        if(runId !== finalTransitionRunId) return;
+        const message = String(error?.name || error?.message || error || "");
+        if(playRetries < 2 && /abort|interrupted|load/i.test(message)){
+          playRetries += 1;
+          started = false;
+          setTimeout(start, 120);
+          return;
+        }
+        console.warn("Could not play stinger transition:", error);
+        cleanup();
+        triggerFinalFade(stage);
+      });
+      return;
+    }
     if(played?.catch) played.catch(error=>{
+      if(runId !== finalTransitionRunId) return;
       console.warn("Could not play stinger transition:", error);
       cleanup();
       triggerFinalFade(stage);
     });
+    armPlaybackTimers();
   };
   if(stinger.readyState >= 2) start();
-  else stinger.addEventListener("canplay", start, {once:true});
-  if(stinger.readyState < 2) stinger.load?.();
-  finalTransitionTimer = setTimeout(cut, transitionCutDelayMs(config, true));
+  else{
+    stinger.onloadeddata = start;
+    stinger.oncanplay = start;
+    stinger.oncanplaythrough = start;
+  }
+  if(stinger.readyState < 2){
+    try{ stinger.load?.(); }catch{}
+  }
   stingerFallbackTimer = setTimeout(()=>{
-    if(stinger.readyState < 2){
+    if(runId !== finalTransitionRunId || started) return;
+    if(stinger.readyState >= 2){
+      start();
+    }else{
       cleanup();
       triggerFinalFade(stage);
     }
-  }, 900);
-  stingerTimer = setTimeout(cleanup, Math.max(4500, transitionCutDelayMs(config, true) + 1500));
+  }, 2500);
 }
 function render(){
   const config = readConfig();
