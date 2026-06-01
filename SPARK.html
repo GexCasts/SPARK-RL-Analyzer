@@ -3792,8 +3792,8 @@ const isObsOverlayMode = new URLSearchParams(location.search).get("overlay") ===
 const forceObsFinalPreview = new URLSearchParams(location.search).get("finalPreview") === "1";
 const obsOverlayFileUrl = `${location.href.split("?")[0]}?overlay=obs`;
 const obsOverlayUrl = location.protocol === "file:"
-  ? "http://127.0.0.1:8765/1NE_Overlay"
-  : `${location.origin}/1NE_Overlay`;
+  ? "http://127.0.0.1:8765/SPARK.html?overlay=obs"
+  : `${location.origin}/SPARK.html?overlay=obs`;
 const overlayLogoUrl = "assets/Spark%20Logo.png";
 const oneNeLogoUrl = "assets/1NE_Vector_edited.png";
 const overlayLogoRoute = "/__spark_logo.png";
@@ -5824,8 +5824,8 @@ function shouldRefreshOverlayControl(){
 function refreshOverlayControlWhenIdle(){
   if(!shouldRefreshOverlayControl()) return;
   overlayConfigRefreshStartedAt = Date.now();
-  refreshOverlayConfigFromServer().then(()=>{
-    if((activeView === "overlay" || selected === "overlayControl") && !overlayControlIsEditing()){
+  refreshOverlayConfigFromServer().then(changed=>{
+    if(changed && (activeView === "overlay" || selected === "overlayControl") && !overlayControlIsEditing()){
       renderOverlayControl();
     }
   });
@@ -10875,7 +10875,7 @@ function readOverlayConfig(){
       tournamentLogoWidth:Math.round(Math.max(24, Math.min(900, Number(merged.tournamentLogoWidth ?? overlayDefaultConfig.tournamentLogoWidth) || 280))),
       tournamentLogoRatio:Math.max(.2, Math.min(8, Number(merged.tournamentLogoRatio ?? overlayDefaultConfig.tournamentLogoRatio) || 2.2)),
       ...normalizeOverlayTheme(merged),
-      testFinalStatsPreview:merged.testFinalStatsPreview === true || merged.testFinalStatsPreview === "true"
+      testFinalStatsPreview:stored.testFinalStatsPreview === true || stored.testFinalStatsPreview === "true"
     };
   }catch(err){
     return {...overlayDefaultConfig};
@@ -10928,13 +10928,17 @@ async function refreshOverlayConfigFromServer(){
   if(!location.protocol.startsWith("http")) return;
   try{
     const response = await fetch(`${location.origin}/api/overlay-config`, {cache:"no-store"});
-    if(!response.ok) return;
+    if(!response.ok) return false;
     const json = await response.json();
+    const previous = stableOverlayConfigJson(overlayServerConfig);
     overlayServerConfig = json?.config && typeof json.config === "object" ? json.config : {};
+    const changed = stableOverlayConfigJson(overlayServerConfig) !== previous;
     overlayConfig = readOverlayConfig();
     try{ localStorage.setItem(overlayConfigKey, JSON.stringify(overlayConfig)); }catch{}
+    return changed;
   }catch(err){
     console.warn("Could not read overlay config:", err);
+    return false;
   }
 }
 
@@ -10962,12 +10966,25 @@ function saveOverlayConfig(nextConfig, options={}){
   renderObsOverlay();
 }
 
+function overlayConfigForServer(config){
+  const copy = {...(config || {})};
+  delete copy.testFinalStatsPreview;
+  return copy;
+}
+
+function stableOverlayConfigJson(config){
+  const clean = overlayConfigForServer(config || {});
+  const ordered = {};
+  Object.keys(clean).sort().forEach(key=>{ ordered[key] = clean[key]; });
+  return JSON.stringify(ordered);
+}
+
 function syncOverlayConfigToServer(config){
   if(!location.protocol.startsWith("http")) return;
   fetch(`${location.origin}/api/overlay-config`, {
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({config}),
+    body:JSON.stringify({config:overlayConfigForServer(config)}),
     cache:"no-store"
   }).catch(err=>console.warn("Could not sync overlay config:", err));
 }
@@ -12361,8 +12378,8 @@ if(!isObsOverlayMode && location.protocol.startsWith("http")){
   setInterval(()=>{
     if(activeView !== "overlay" && selected !== "overlayControl") return;
     if(overlayControlIsEditing()) return;
-    refreshOverlayConfigFromServer().then(()=>{
-      if(!overlayControlIsEditing()) renderOverlayControl();
+    refreshOverlayConfigFromServer().then(changed=>{
+      if(changed && !overlayControlIsEditing()) renderOverlayControl();
     });
   }, 2500);
 }

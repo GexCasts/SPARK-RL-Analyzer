@@ -11,7 +11,6 @@ import {createReplayAnalysisPackage} from "./parser/replay-analysis-service.mjs"
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = here;
 const appFileName = "SPARK.html";
-const overlayFileName = path.join("overlay", "SPARK_Overlay.html");
 const logoPath = path.join(here, "assets", "Spark Logo.png");
 const oneNeLogoPath = path.join(here, "assets", "1NE_Vector_edited.png");
 const tileLayoutPath = path.join(here, "SPARK-layout.json");
@@ -3417,7 +3416,7 @@ server = http.createServer(async (req,res)=>{
       return;
     }
     if(url.pathname === "/1NE_Overlay" || url.pathname === "/SPARK_Overlay"){
-      const data = await fs.readFile(path.join(root, overlayFileName));
+      const data = await fs.readFile(path.join(root, appFileName));
       res.writeHead(200, {"Content-Type":"text/html; charset=utf-8"});
       res.end(data);
       return;
