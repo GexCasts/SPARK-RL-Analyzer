@@ -10695,6 +10695,10 @@ function liveApiFieldHasPlayers(payload){
   return extractLivePlayers(payload).some(player=>toBoolean(valueByKey(player,["bHasCar","hasCar","HasCar","inGame","InGame"])));
 }
 
+function liveApiPayloadHasPlayers(payload){
+  return extractLivePlayers(payload).length > 0;
+}
+
 function liveApiReplayFlag(payload){
   const game = livePayloadGame(payload);
   const value = firstDefined(
@@ -10710,11 +10714,50 @@ function setLiveReplayActive(active){
   liveApiState.replayStartedAt = liveApiState.replayActive ? (liveApiState.replayStartedAt || Date.now()) : null;
 }
 
-function clearLivePostGameIfNextFieldState(payload){
+function liveApiNextMatchStartEvent(eventName){
+  const compact = String(eventName || "").toLowerCase().replace(/[^a-z]/g, "");
+  return compact.includes("matchcreated")
+    || compact.includes("matchinitialized")
+    || compact.includes("roundstarted")
+    || compact.includes("countdownbegan")
+    || compact.includes("countdownbegin")
+    || compact.includes("countdownstarted")
+    || compact.includes("gamebegan");
+}
+
+function liveApiPayloadScoresLookReset(payload){
+  const teams = firstDefined(
+    valueByKey(payload,["teams","Teams"]),
+    valueByKey(payload?.Game,["teams","Teams"]),
+    valueByKey(payload?.game,["Teams","teams"])
+  );
+  let found = false;
+  let blue = null;
+  let orange = null;
+  const visit = (team, fallback="")=>{
+    const teamKey = normalizeLiveTeam(firstDefined(valueByKey(team,["TeamNum","teamNum","Index","index","team","Team"]), fallback));
+    if(!teamKey) return;
+    const raw = valueByKey(team,["Score","score","Goals","goals"]);
+    if(raw === undefined) return;
+    found = true;
+    if(teamKey === "Blue") blue = Math.max(0, Math.round(toNumber(raw, 0)));
+    if(teamKey === "Orange") orange = Math.max(0, Math.round(toNumber(raw, 0)));
+  };
+  if(Array.isArray(teams)) teams.forEach(visit);
+  else if(teams && typeof teams === "object") Object.entries(teams).forEach(([name, team])=>visit(team, name));
+  return found && blue === 0 && orange === 0;
+}
+
+function clearLivePostGameIfNextFieldState(payload, eventName=""){
   if(!liveApiState?.matchEnded) return;
   const clock = liveGameClockSeconds(payload);
   const looksLikeFreshKickoff = Number.isFinite(clock) && clock >= 285;
-  if(looksLikeFreshKickoff && liveApiFieldHasPlayers(payload)){
+  const playersPresent = liveApiFieldHasPlayers(payload) || liveApiPayloadHasPlayers(payload);
+  const endedAge = liveApiState.endedAt ? Date.now() - liveApiState.endedAt : 0;
+  const shouldReset = liveApiNextMatchStartEvent(eventName)
+    || (looksLikeFreshKickoff && playersPresent && liveApiPayloadScoresLookReset(payload))
+    || (endedAge > 2500 && looksLikeFreshKickoff && playersPresent);
+  if(shouldReset){
     resetLiveApiForNewMatch(liveApiMatchGuid(payload) || liveApiState.pendingMatchGuid || liveApiState.matchGuid || "");
   }
 }
@@ -11488,6 +11531,28 @@ function playObsStatsTransition(showFinalScreen){
   }, 2500);
 }
 
+function stopObsStatsTransition(){
+  obsStingerRunId += 1;
+  if(obsStingerTimer){
+    clearTimeout(obsStingerTimer);
+    obsStingerTimer = null;
+  }
+  if(obsStingerFallbackTimer){
+    clearTimeout(obsStingerFallbackTimer);
+    obsStingerFallbackTimer = null;
+  }
+  const stinger = $("obsStingerTransition");
+  if(!stinger) return;
+  stinger.classList.remove("active");
+  stinger.onended = null;
+  stinger.oncanplay = null;
+  stinger.onloadstart = null;
+  stinger.onloadeddata = null;
+  stinger.oncanplaythrough = null;
+  stinger.onerror = null;
+  try{ stinger.pause(); }catch{}
+}
+
 function renderObsFinalScreen(){
   if(!isObsOverlayMode || !liveApiState) return;
   overlayConfig = readOverlayConfig();
@@ -11496,7 +11561,8 @@ function renderObsFinalScreen(){
   const manualPreview = !!overlayConfig.testFinalStatsPreview;
   const showFinalScreen = !!((liveApiState.matchEnded || forceObsFinalPreview || manualPreview) && !liveApiState.replayActive);
   if(showFinalScreen !== obsFinalScreenVisible){
-    playObsStatsTransition(showFinalScreen);
+    if(showFinalScreen) playObsStatsTransition(true);
+    else stopObsStatsTransition();
     obsFinalScreenVisible = showFinalScreen;
   }
   document.querySelector(".obsStage")?.classList.toggle("finalActive", showFinalScreen);
@@ -11657,9 +11723,10 @@ function liveGameClockSeconds(payload){
 
 function handleLiveUpdateState(payload){
   syncLiveApiMatchBoundary(payload);
-  clearLivePostGameIfNextFieldState(payload);
+  const updateEndsMatch = liveApiGameEnded(payload, "updatestate");
+  if(!updateEndsMatch) clearLivePostGameIfNextFieldState(payload, "updatestate");
   liveApiState.updateCount++;
-  if(liveApiGameEnded(payload, "updatestate")) markLiveMatchEnded();
+  if(updateEndsMatch) markLiveMatchEnded();
   updateLiveTeamsFromPayload(payload);
   const replayFlag = liveApiReplayFlag(payload);
   if(replayFlag !== null) setLiveReplayActive(replayFlag);
@@ -12001,7 +12068,9 @@ function handleLiveApiMessage(raw){
   try{ msg = normalizeLiveApiMessage(raw); }
   catch(err){ console.warn("Bad Live API message:", err); return; }
   syncLiveApiMatchBoundary(msg.payload);
-  if(liveApiGameEnded(msg.payload, msg.event)) markLiveMatchEnded();
+  const messageEndsMatch = liveApiGameEnded(msg.payload, msg.event);
+  if(!messageEndsMatch) clearLivePostGameIfNextFieldState(msg.payload, msg.event);
+  if(messageEndsMatch) markLiveMatchEnded();
   if(msg.event.includes("updatestate")) handleLiveUpdateState(msg.payload);
   else if(msg.event.includes("clockupdatedseconds")){
     const clock = liveGameClockSeconds(msg.payload);
