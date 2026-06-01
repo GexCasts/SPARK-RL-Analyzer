@@ -762,7 +762,9 @@ html,body{
 </div>
 <script>
 const overlayConfigKey = "oneReplayAnalyzer.overlayConfig.v1";
-const forceFinalPreview = new URLSearchParams(location.search).get("finalPreview") === "1";
+const routeParams = new URLSearchParams(location.search);
+const forceFinalPreview = routeParams.get("finalPreview") === "1";
+const personalOverlayMode = routeParams.get("personal") === "1";
 const defaultConfig = {
   blueTeamName:"",
   orangeTeamName:"",
@@ -1524,6 +1526,7 @@ function transitionCutDelayMs(config, hasPlayableStinger){
 }
 
 function revealFinalScreen(){
+  if(personalOverlayMode) return;
   if(state.finalVisible) return;
   state.finalVisible = true;
   render();
@@ -1542,6 +1545,7 @@ function preloadFinalTransition(config){
 }
 
 function queueFinalTransition(config){
+  if(personalOverlayMode) return;
   if(state.finalVisible || finalTransitionQueueTimer || finalTransitionTimer) return;
   preloadFinalTransition(config);
   finalTransitionQueueTimer = setTimeout(()=>{
@@ -1683,7 +1687,7 @@ function render(){
   const stage = $("stage");
   stage.classList.toggle("live", state.connected && state.updates > 0);
   stage.classList.toggle("replayActive", !!state.replay);
-  stage.classList.toggle("finalActive", !!state.finalVisible);
+  stage.classList.toggle("finalActive", !!state.finalVisible && !personalOverlayMode);
   const tournamentLogo = $("tournamentLogo");
   const hasTournamentLogo = !!String(config.tournamentLogoUrl || "").trim();
   stage.classList.toggle("hasTournamentLogo", hasTournamentLogo);
@@ -1712,8 +1716,8 @@ function render(){
   renderCustomScoreboard(config);
   renderLiveStatCard();
   const finalScreen = $("finalScreen");
-  if(finalScreen) finalScreen.classList.toggle("active", !!state.finalVisible);
-  if(state.finalVisible) renderFinalScreen(config);
+  if(finalScreen) finalScreen.classList.toggle("active", !!state.finalVisible && !personalOverlayMode);
+  if(state.finalVisible && !personalOverlayMode) renderFinalScreen(config);
 }
 function handleMessage(raw){
   let msg;
@@ -1762,7 +1766,7 @@ function handleMessage(raw){
   const replay = replayFlag(msg.payload);
   if(replay !== null) state.replay = replay;
   if(eventName.includes("goalreplay")) state.replay = !(eventName.includes("ended") || eventName.endsWith("end") || eventName.includes("willend"));
-  if(messageEndsMatch){
+  if(messageEndsMatch && !personalOverlayMode){
     const config = readConfig();
     queueFinalTransition(config);
   }
