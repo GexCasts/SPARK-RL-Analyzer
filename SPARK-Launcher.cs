@@ -81,11 +81,12 @@ namespace SparkLauncher
             LoadLocalManifestStatus();
         }
 
-        private string NodeZipPath { get { return Path.Combine(toolsDir, nodeFolder + ".zip"); } }
+        private string DependencyDownloadDir { get { return Path.Combine(tmpDir, "downloads"); } }
+        private string NodeZipPath { get { return Path.Combine(DependencyDownloadDir, nodeFolder + ".zip"); } }
         private string BundledNodePath { get { return Path.Combine(toolsDir, "node", nodeFolder, "node.exe"); } }
-        private string RrrocketZipPath { get { return Path.Combine(toolsDir, "rrrocket", rrrocketFolder + ".zip"); } }
+        private string RrrocketZipPath { get { return Path.Combine(DependencyDownloadDir, rrrocketFolder + ".zip"); } }
         private string RrrocketExePath { get { return Path.Combine(toolsDir, "rrrocket", rrrocketFolder, "rrrocket.exe"); } }
-        private string FfmpegZipPath { get { return Path.Combine(toolsDir, "ffmpeg", ffmpegFolder + ".zip"); } }
+        private string FfmpegZipPath { get { return Path.Combine(DependencyDownloadDir, ffmpegFolder + ".zip"); } }
         private string FfmpegExePath { get { return Path.Combine(toolsDir, "ffmpeg", ffmpegFolder, "bin", "ffmpeg.exe"); } }
         private string ServerScriptPath { get { return Path.Combine(root, "static-download-server.mjs"); } }
         private string ManifestPath { get { return Path.Combine(root, "spark-manifest.json"); } }
