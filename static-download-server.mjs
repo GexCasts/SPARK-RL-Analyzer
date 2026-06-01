@@ -26,6 +26,17 @@ const rrrocketCandidates = [
   path.join(here, "tools", "rrrocket", `rrrocket-${rrrocketVersion}-x86_64-pc-windows-msvc`, "rrrocket.exe")
 ].filter(Boolean);
 const rrrocketPath = rrrocketCandidates.find(candidate=>fsSync.existsSync(candidate));
+const ffmpegCandidates = [
+  process.env.SPARK_FFMPEG_PATH,
+  path.join(here, "tools", "ffmpeg", "bin", "ffmpeg.exe"),
+  path.join(here, "tools", "ffmpeg", "ffmpeg.exe"),
+  "ffmpeg.exe",
+  "ffmpeg"
+].filter(Boolean);
+const ffmpegPath = ffmpegCandidates.find(candidate=>{
+  if(candidate === "ffmpeg" || candidate === "ffmpeg.exe") return true;
+  return fsSync.existsSync(candidate);
+});
 const tmpDir = path.join(here, ".tmp");
 const PHYSICS_SAMPLE_INTERVAL_SECONDS = 0.045;
 const TARGET_POSITION_SAMPLES_PER_PLAYER = 5400;
@@ -3048,17 +3059,36 @@ async function handleOverlayAssetUpload(req, res){
   const maxBytes = kind === "stinger-transition" ? 150 * 1024 * 1024 : 8 * 1024 * 1024;
   if(!bytes.length || bytes.length > maxBytes) throw new Error("Overlay asset is too large.");
   await fs.mkdir(overlayAssetDir, {recursive:true});
+  let responseMeta = {};
   if(kind === "stinger-transition"){
     const cleanName = path.basename(String(message.fileName || "stinger-transition"));
     const ext = overlayAssetExtension(cleanName, mime);
     const assetFile = `${fileName}${ext}`;
-    await fs.writeFile(path.join(overlayAssetDir, assetFile), bytes);
-    await fs.writeFile(path.join(overlayAssetDir, overlayStingerMetaFile), JSON.stringify({fileName:cleanName, mime, assetFile}, null, 2));
+    const assetPath = path.join(overlayAssetDir, assetFile);
+    await fs.writeFile(assetPath, bytes);
+    const transcode = await maybeTranscodeOverlayStinger(assetPath, cleanName, mime);
+    const meta = {
+      fileName:cleanName,
+      mime,
+      assetFile,
+      playableFileName:transcode.playableFileName || cleanName,
+      playableMime:transcode.playableMime || mime,
+      playableAssetFile:transcode.playableAssetFile || assetFile,
+      transcoded:!!transcode.transcoded,
+      transcodeError:transcode.error || ""
+    };
+    await fs.writeFile(path.join(overlayAssetDir, overlayStingerMetaFile), JSON.stringify(meta, null, 2));
+    responseMeta = {
+      fileName:meta.playableFileName,
+      originalFileName:cleanName,
+      transcoded:meta.transcoded,
+      transcodeError:meta.transcodeError
+    };
   }else{
     await fs.writeFile(path.join(overlayAssetDir, fileName), bytes);
   }
   res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
-  res.end(JSON.stringify({ok:true, url:`/__overlay_asset/${kind}?v=${Date.now()}`}));
+  res.end(JSON.stringify({ok:true, url:`/__overlay_asset/${kind}?v=${Date.now()}`, ...responseMeta}));
 }
 
 function overlayAssetExtension(fileName, mime){
@@ -3079,6 +3109,61 @@ function overlayAssetExtension(fileName, mime){
     ["application/octet-stream", ".bin"]
   ]);
   return byMime.get(String(mime || "").toLowerCase()) || ".bin";
+}
+
+function overlayStingerNeedsTranscode(fileName, mime){
+  const ext = overlayAssetExtension(fileName, mime);
+  return [".avi", ".mkv", ".flv", ".ts", ".mov", ".bin"].includes(ext);
+}
+
+function runExecFile(file, args, options={}){
+  return new Promise((resolve, reject)=>{
+    execFile(file, args, {windowsHide:true, maxBuffer:1024 * 1024 * 8, ...options}, (error, stdout, stderr)=>{
+      if(error){
+        reject(new Error(String(stderr || stdout || error.message || "Command failed").trim()));
+        return;
+      }
+      resolve({stdout:String(stdout || ""), stderr:String(stderr || "")});
+    });
+  });
+}
+
+async function maybeTranscodeOverlayStinger(assetPath, cleanName, mime){
+  if(!overlayStingerNeedsTranscode(cleanName, mime)) return {};
+  if(!ffmpegPath) return {error:"ffmpeg not found. Set SPARK_FFMPEG_PATH or place ffmpeg.exe in tools/ffmpeg/bin."};
+
+  const outputName = "stinger-transition.webm";
+  const outputPath = path.join(overlayAssetDir, outputName);
+  try{ await fs.rm(outputPath, {force:true}); }catch{}
+
+  const args = [
+    "-y",
+    "-i", assetPath,
+    "-an",
+    "-c:v", "libvpx-vp9",
+    "-pix_fmt", "yuva420p",
+    "-auto-alt-ref", "0",
+    "-deadline", "good",
+    "-b:v", "0",
+    "-crf", "30",
+    outputPath
+  ];
+
+  try{
+    await runExecFile(ffmpegPath, args, {timeout:180000});
+    const stat = await fs.stat(outputPath);
+    if(!stat.size) throw new Error("Converted stinger was empty.");
+    const baseName = path.basename(cleanName, path.extname(cleanName)) || "stinger-transition";
+    return {
+      transcoded:true,
+      playableAssetFile:outputName,
+      playableFileName:`${baseName}.webm`,
+      playableMime:"video/webm"
+    };
+  }catch(error){
+    try{ await fs.rm(outputPath, {force:true}); }catch{}
+    return {error:error.message || "Could not transcode stinger."};
+  }
 }
 
 function runPowerShell(script){
@@ -3257,8 +3342,8 @@ server = http.createServer(async (req,res)=>{
       if(kind === "stinger-transition"){
         const metaRaw = await fs.readFile(path.join(overlayAssetDir, overlayStingerMetaFile), "utf8");
         const meta = JSON.parse(metaRaw || "{}");
-        assetFile = path.basename(String(meta.assetFile || ""));
-        contentType = String(meta.mime || "application/octet-stream");
+        assetFile = path.basename(String(meta.playableAssetFile || meta.assetFile || ""));
+        contentType = String(meta.playableMime || meta.mime || "application/octet-stream");
         if(!assetFile) throw new Error("Missing stinger transition asset.");
       }
       const data = await fs.readFile(path.join(overlayAssetDir, assetFile));

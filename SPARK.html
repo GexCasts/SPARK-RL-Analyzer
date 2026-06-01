@@ -3813,6 +3813,7 @@ const overlayDefaultConfig = {
   tournamentLogoRatio:2.2,
   stingerTransitionUrl:"",
   stingerTransitionName:"",
+  stingerTransitionStatus:"",
   seriesBestOf:5,
   blueSeriesScore:0,
   orangeSeriesScore:0,
@@ -5672,7 +5673,12 @@ function loadOverlaySkinFile(key, input){
       if(key === "tournamentLogoUrl" && Number.isFinite(tournamentRatio)){
         saveOverlayConfig({...overlayConfig, tournamentLogoUrl:url, tournamentLogoRatio:tournamentRatio});
       }else if(key === "stingerTransitionUrl"){
-        saveOverlayConfig({...overlayConfig, stingerTransitionUrl:url, stingerTransitionName:file.name || "Custom stinger"});
+        saveOverlayConfig({
+          ...overlayConfig,
+          stingerTransitionUrl:url,
+          stingerTransitionName:file._sparkUploadedName || file.name || "Custom stinger",
+          stingerTransitionStatus:file._sparkUploadStatus || ""
+        });
       }else{
         updateOverlayConfigField(key, url);
       }
@@ -5688,6 +5694,17 @@ function loadOverlaySkinFile(key, input){
         if(response.ok){
           const json = await response.json();
           if(json?.url){
+            if(key === "stingerTransitionUrl" && json.transcodeError){
+              console.warn("Could not convert stinger for browser playback:", json.transcodeError);
+            }
+            if(key === "stingerTransitionUrl" && json.fileName){
+              file._sparkUploadedName = json.fileName;
+              file._sparkUploadStatus = json.transcoded
+                ? `Converted ${json.originalFileName || file.name || "stinger"} to WebM for browser playback.`
+                : json.transcodeError
+                  ? `Browser fallback will use the fade. ${json.transcodeError}`
+                  : "";
+            }
             saveUploadedUrl(json.url);
             return;
           }
@@ -5972,12 +5989,13 @@ function renderOverlayControl(){
             <label class="overlayField">Stinger File
               <div class="overlayLogoTools">
                 <button type="button" onclick="$('overlayStingerFile').click()">${overlayConfig.stingerTransitionUrl ? "Replace Stinger" : "Choose Stinger"}</button>
-                <button type="button" onclick="saveOverlayConfig({...overlayConfig, stingerTransitionUrl:'', stingerTransitionName:''})" ${overlayConfig.stingerTransitionUrl ? "" : "disabled"}>Clear</button>
+                <button type="button" onclick="saveOverlayConfig({...overlayConfig, stingerTransitionUrl:'', stingerTransitionName:'', stingerTransitionStatus:''})" ${overlayConfig.stingerTransitionUrl ? "" : "disabled"}>Clear</button>
                 <input class="overlayFileInput" id="overlayStingerFile" type="file" accept="video/*,.webm,.mp4,.mov,.mkv,.avi,.m4v,.flv,.ts,.gif" onchange="loadOverlaySkinFile('stingerTransitionUrl',this)">
               </div>
             </label>
             <div class="overlaySkinStatus">
               <span>${overlayConfig.stingerTransitionUrl ? `Custom stinger: ${escapeHtml(overlayConfig.stingerTransitionName || "Uploaded file")}` : "No stinger selected. Stats screen uses a quick fade."}</span>
+              ${overlayConfig.stingerTransitionStatus ? `<span>${escapeHtml(overlayConfig.stingerTransitionStatus)}</span>` : ""}
             </div>
           </div>
         </details>
