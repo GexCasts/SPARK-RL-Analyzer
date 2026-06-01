@@ -103,8 +103,10 @@ html,body{
   display:none !important;
 }
 .maskSlot.score{
-  font-size:var(--slot-font,52px);
-  color:#fffdf3;
+  font-family:var(--mask-goal-font,var(--overlay-font));
+  font-size:calc(var(--slot-font,52px) * var(--mask-goal-scale,1));
+  color:var(--mask-goal-color,#fffdf3);
+  transform:translateY(-.045em);
 }
 .maskSlot.clock{
   font-size:var(--slot-font,44px);
@@ -113,17 +115,22 @@ html,body{
 }
 .maskSlot.teamName{
   padding:0 12px;
-  font-size:var(--slot-font,26px);
+  font-family:var(--mask-team-font,var(--overlay-font));
+  font-size:calc(var(--slot-font,26px) * var(--mask-team-scale,1));
+  color:var(--mask-team-color,#f7f7f4);
   letter-spacing:.03em;
   white-space:nowrap;
   text-overflow:ellipsis;
+  transform:translateY(-.045em);
 }
 .maskSlot.seriesTitle{
-  font-size:var(--slot-font,22px);
+  font-family:var(--mask-ticker-font,var(--overlay-font));
+  font-size:calc(var(--slot-font,22px) * var(--mask-ticker-scale,1));
   letter-spacing:.08em;
-  color:#050609;
+  color:var(--mask-ticker-color,#050609);
   text-shadow:none;
   white-space:nowrap;
+  transform:translateY(-.045em);
 }
 .maskSlot.seriesDots{
   gap:8px;
@@ -147,10 +154,11 @@ html,body{
   width:43%;
   height:58px;
   background:linear-gradient(180deg,#ffc938,#f1a70e);
-  color:#fff;
+  color:var(--mask-team-color,#fff);
   display:flex;
   align-items:center;
-  font-size:24px;
+  font-family:var(--mask-team-font,var(--overlay-font));
+  font-size:calc(24px * var(--mask-team-scale,1));
   font-weight:900;
   letter-spacing:.04em;
   text-transform:uppercase;
@@ -211,8 +219,10 @@ html,body{
   height:70px;
   display:grid;
   place-items:center;
-  font-size:42px;
+  font-family:var(--mask-goal-font,var(--overlay-font));
+  font-size:calc(42px * var(--mask-goal-scale,1));
   font-weight:900;
+  color:var(--mask-goal-color,#fff);
 }
 .score.blue{
   background:var(--blue);
@@ -231,9 +241,10 @@ html,body{
 .match{
   grid-column:1/4;
   grid-row:2;
-  font-size:13px;
+  font-family:var(--mask-ticker-font,var(--overlay-font));
+  font-size:calc(13px * var(--mask-ticker-scale,1));
   font-weight:800;
-  color:#ddd;
+  color:var(--mask-ticker-color,#ddd);
 }
 .bolt{
   grid-column:2;
@@ -293,7 +304,8 @@ html,body{
   display:grid;
   grid-template-columns:minmax(0,1fr) 38px;
   align-items:center;
-  font-size:12px;
+  font-family:var(--boost-font,var(--overlay-font));
+  font-size:calc(12px * var(--boost-font-scale,1));
   font-weight:850;
   text-transform:uppercase;
   overflow:hidden;
@@ -323,7 +335,7 @@ html,body{
   inset:0 0 0 auto;
   transform-origin:right;
 }
-.name,.boostValue{position:relative;padding:0 8px;z-index:1;color:var(--overlay-text)}
+.name,.boostValue{position:relative;padding:0 8px;z-index:1;color:var(--boost-text-color,var(--overlay-text))}
 .boostValue{
   height:100%;
   display:grid;
@@ -691,7 +703,7 @@ html,body{
   height:100%;
   object-fit:cover;
   z-index:30;
-  background:#050607;
+  background:transparent;
   pointer-events:none;
 }
 .stingerTransition.active{display:block}
@@ -750,6 +762,7 @@ html,body{
 </div>
 <script>
 const overlayConfigKey = "oneReplayAnalyzer.overlayConfig.v1";
+const forceFinalPreview = new URLSearchParams(location.search).get("finalPreview") === "1";
 const defaultConfig = {
   blueTeamName:"",
   orangeTeamName:"",
@@ -766,6 +779,7 @@ const defaultConfig = {
   stingerTransitionUrl:"",
   stingerTransitionName:"",
   stingerTransitionStatus:"",
+  stingerTransitionCutMs:900,
   seriesBestOf:5,
   blueSeriesScore:0,
   orangeSeriesScore:0,
@@ -773,7 +787,19 @@ const defaultConfig = {
   overlayAccentColor:"#ffd000",
   overlayBlueBoostColor:"#1b8cff",
   overlayOrangeBoostColor:"#ff8400",
-  overlayFontFamily:"Inter, Segoe UI, Arial, sans-serif"
+  overlayFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayTeamNameFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayTeamNameFontSize:100,
+  overlayTeamNameColor:"#f7f7f4",
+  overlayGoalFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayGoalFontSize:100,
+  overlayGoalColor:"#fffdf3",
+  overlayTickerFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayTickerFontSize:100,
+  overlayTickerColor:"#050609",
+  overlayBoostFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayBoostFontSize:100,
+  overlayBoostTextColor:"#f7f7f4"
 };
 const state = {
   connected:false,
@@ -789,6 +815,7 @@ const state = {
 let serverConfig = null;
 let stingerTimer = null;
 let stingerFallbackTimer = null;
+let finalTransitionTimer = null;
 const $ = id=>document.getElementById(id);
 function firstDefined(...values){
   for(const value of values) if(value !== undefined && value !== null && value !== "") return value;
@@ -832,6 +859,10 @@ function readConfig(){
 function applyOverlayTheme(config){
   const root = document.documentElement;
   const color = (value, fallback)=>/^#[0-9a-f]{6}$/i.test(String(value || "")) ? value : fallback;
+  const percent = (value, fallback=100)=>{
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(40, Math.min(180, n)) : fallback;
+  };
   const fonts = [
     "Inter, Segoe UI, Arial, sans-serif",
     "Segoe UI, Inter, Arial, sans-serif",
@@ -839,12 +870,25 @@ function applyOverlayTheme(config){
     "Barlow Condensed, Inter, Arial, sans-serif",
     "Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"
   ];
+  const font = (value, fallback=defaultConfig.overlayFontFamily)=>fonts.includes(value) ? value : fallback;
   root.style.setProperty("--overlay-text", color(config.overlayTextColor, defaultConfig.overlayTextColor));
   root.style.setProperty("--overlay-accent", color(config.overlayAccentColor, defaultConfig.overlayAccentColor));
   root.style.setProperty("--overlay-boost-blue", color(config.overlayBlueBoostColor, defaultConfig.overlayBlueBoostColor));
   root.style.setProperty("--overlay-boost-orange", color(config.overlayOrangeBoostColor, defaultConfig.overlayOrangeBoostColor));
   root.style.setProperty("--spark-gold", color(config.overlayAccentColor, defaultConfig.overlayAccentColor));
-  root.style.setProperty("--overlay-font", fonts.includes(config.overlayFontFamily) ? config.overlayFontFamily : defaultConfig.overlayFontFamily);
+  root.style.setProperty("--overlay-font", font(config.overlayFontFamily));
+  root.style.setProperty("--mask-team-font", font(config.overlayTeamNameFontFamily));
+  root.style.setProperty("--mask-team-scale", String(percent(config.overlayTeamNameFontSize, defaultConfig.overlayTeamNameFontSize) / 100));
+  root.style.setProperty("--mask-team-color", color(config.overlayTeamNameColor, defaultConfig.overlayTeamNameColor));
+  root.style.setProperty("--mask-goal-font", font(config.overlayGoalFontFamily));
+  root.style.setProperty("--mask-goal-scale", String(percent(config.overlayGoalFontSize, defaultConfig.overlayGoalFontSize) / 100));
+  root.style.setProperty("--mask-goal-color", color(config.overlayGoalColor, defaultConfig.overlayGoalColor));
+  root.style.setProperty("--mask-ticker-font", font(config.overlayTickerFontFamily));
+  root.style.setProperty("--mask-ticker-scale", String(percent(config.overlayTickerFontSize, defaultConfig.overlayTickerFontSize) / 100));
+  root.style.setProperty("--mask-ticker-color", color(config.overlayTickerColor, defaultConfig.overlayTickerColor));
+  root.style.setProperty("--boost-font", font(config.overlayBoostFontFamily));
+  root.style.setProperty("--boost-font-scale", String(percent(config.overlayBoostFontSize, defaultConfig.overlayBoostFontSize) / 100));
+  root.style.setProperty("--boost-text-color", color(config.overlayBoostTextColor, defaultConfig.overlayBoostTextColor));
 }
 async function refreshServerConfig(){
   try{
@@ -1261,6 +1305,10 @@ function resetForNextMatch(){
   state.teams.Orange.score = 0;
   state.players.clear();
   state.focusedPlayerName = null;
+  if(finalTransitionTimer){
+    clearTimeout(finalTransitionTimer);
+    finalTransitionTimer = null;
+  }
   if(stingerTimer){
     clearTimeout(stingerTimer);
     stingerTimer = null;
@@ -1409,24 +1457,52 @@ function triggerFinalFade(stage){
   stage.classList.add("fadeTransition");
 }
 
-function playFinalTransition(config){
+function transitionCutDelayMs(config, hasPlayableStinger){
+  if(!hasPlayableStinger) return 0;
+  const n = Number(config?.stingerTransitionCutMs);
+  return Number.isFinite(n) ? Math.max(0, Math.min(5000, Math.round(n))) : 900;
+}
+
+function revealFinalScreen(){
+  if(state.finalVisible) return;
+  state.finalVisible = true;
+  render();
+}
+
+function playFinalTransition(config, onCut=revealFinalScreen){
   const stage = $("stage");
   const stinger = $("stingerTransition");
   const src = String(config.stingerTransitionUrl || "");
   stage?.classList.remove("fadeTransition");
+  if(finalTransitionTimer){
+    clearTimeout(finalTransitionTimer);
+    finalTransitionTimer = null;
+  }
   if(stingerTimer){
     clearTimeout(stingerTimer);
     stingerTimer = null;
   }
-  if(!stinger) return;
+  if(!stinger){
+    onCut?.();
+    return;
+  }
   stinger.classList.remove("active");
   stinger.onended = null;
   stinger.oncanplay = null;
   stinger.onerror = null;
   try{ stinger.pause(); }catch{}
-  if(!src || !stingerBrowserPlayable(config)){
+  const playableStinger = !!src && stingerBrowserPlayable(config);
+  const cut = ()=>{
+    if(finalTransitionTimer){
+      clearTimeout(finalTransitionTimer);
+      finalTransitionTimer = null;
+    }
+    onCut?.();
+  };
+  if(!playableStinger){
     stinger.removeAttribute("src");
     triggerFinalFade(stage);
+    cut();
     return;
   }
   if(stinger.getAttribute("src") !== src) stinger.src = src;
@@ -1441,6 +1517,7 @@ function playFinalTransition(config){
     }
     stinger.classList.remove("active");
     try{ stinger.pause(); }catch{}
+    cut();
   };
   stinger.onended = cleanup;
   stinger.onerror = ()=>{
@@ -1459,13 +1536,14 @@ function playFinalTransition(config){
   if(stinger.readyState >= 2) start();
   else stinger.addEventListener("canplay", start, {once:true});
   stinger.load?.();
+  finalTransitionTimer = setTimeout(cut, transitionCutDelayMs(config, true));
   stingerFallbackTimer = setTimeout(()=>{
     if(stinger.readyState < 2){
       cleanup();
       triggerFinalFade(stage);
     }
   }, 900);
-  stingerTimer = setTimeout(cleanup, 4500);
+  stingerTimer = setTimeout(cleanup, Math.max(4500, transitionCutDelayMs(config, true) + 1500));
 }
 function render(){
   const config = readConfig();
@@ -1557,8 +1635,7 @@ function handleMessage(raw){
   if(eventName.includes("goalreplay")) state.replay = !(eventName.includes("ended") || eventName.endsWith("end") || eventName.includes("willend"));
   if(messageEndsMatch){
     const config = readConfig();
-    if(!state.finalVisible) playFinalTransition(config);
-    state.finalVisible = true;
+    if(!state.finalVisible && !finalTransitionTimer) playFinalTransition(config);
   }
   render();
 }
@@ -1593,6 +1670,33 @@ function startHeartbeat(){
   const timer = setInterval(()=>post(false), 15000);
   window.addEventListener("pagehide", ()=>{clearInterval(timer); post(true);});
 }
+function seedFinalPreview(){
+  state.connected = true;
+  state.updates = 1;
+  state.matchEnded = true;
+  state.clock = 0;
+  state.teams.Blue = {name:"1NE",score:4};
+  state.teams.Orange = {name:"BDG",score:2};
+  [
+    {name:"Volt",team:"Blue",score:612,goals:2,shots:5,assists:1,saves:2,demos:1,boost:46},
+    {name:"Surge",team:"Blue",score:488,goals:1,shots:4,assists:2,saves:1,demos:0,boost:41},
+    {name:"Arc",team:"Blue",score:344,goals:1,shots:3,assists:0,saves:3,demos:2,boost:38},
+    {name:"Rival 1",team:"Orange",score:521,goals:1,shots:4,assists:1,saves:4,demos:0,boost:33},
+    {name:"Rival 2",team:"Orange",score:402,goals:1,shots:3,assists:0,saves:2,demos:1,boost:29},
+    {name:"Rival 3",team:"Orange",score:276,goals:0,shots:2,assists:1,saves:1,demos:0,boost:35}
+  ].forEach(raw=>{
+    const player = ensurePlayer(raw.name, raw.team);
+    if(!player) return;
+    player.stats.score = raw.score;
+    player.stats.goals = raw.goals;
+    player.stats.shots = raw.shots;
+    player.stats.assists = raw.assists;
+    player.stats.saves = raw.saves;
+    player.stats.demos = raw.demos;
+    player.boost = raw.boost;
+    player.boostKnown = true;
+  });
+}
 window.addEventListener("resize", updateStageScale);
 window.addEventListener("storage", event=>{
   if(event.key === overlayConfigKey) render();
@@ -1601,8 +1705,13 @@ updateStageScale();
 refreshServerConfig().finally(()=>{
   setInterval(refreshServerConfig, 2000);
   startHeartbeat();
-  connect();
-  render();
+  if(forceFinalPreview){
+    seedFinalPreview();
+    playFinalTransition(readConfig());
+  }else{
+    connect();
+    render();
+  }
 });
 </script>
 </body>

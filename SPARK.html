@@ -1100,6 +1100,23 @@ canvas{width:100%!important;height:100%!important}
   background:rgba(255,208,0,.08);
   color:var(--spark-yellow);
 }
+.overlaySubmenu{
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:8px;
+  background:rgba(255,255,255,.025);
+  overflow:hidden;
+}
+.overlaySubmenu summary{
+  padding:10px 12px;
+  font-size:12px;
+  font-weight:950;
+  color:#f3f4f6;
+  background:rgba(255,255,255,.028);
+}
+.overlaySubmenuBody{
+  padding:12px;
+  border-top:1px solid rgba(255,255,255,.08);
+}
 .overlayCategoryBody{
   display:grid;
   gap:12px;
@@ -2920,7 +2937,7 @@ body.obsOverlayMode #obsOverlayRoot{
   height:100%;
   object-fit:cover;
   z-index:30;
-  background:#050607;
+  background:transparent;
   pointer-events:none;
 }
 .obsStingerTransition.active{display:block}
@@ -3813,6 +3830,7 @@ const overlayDefaultConfig = {
   stingerTransitionUrl:"",
   stingerTransitionName:"",
   stingerTransitionStatus:"",
+  stingerTransitionCutMs:900,
   seriesBestOf:5,
   blueSeriesScore:0,
   orangeSeriesScore:0,
@@ -3821,6 +3839,18 @@ const overlayDefaultConfig = {
   overlayBlueBoostColor:"#1b8cff",
   overlayOrangeBoostColor:"#ff8400",
   overlayFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayTeamNameFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayTeamNameFontSize:100,
+  overlayTeamNameColor:"#f7f7f7",
+  overlayGoalFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayGoalFontSize:100,
+  overlayGoalColor:"#f7f7f7",
+  overlayTickerFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayTickerFontSize:100,
+  overlayTickerColor:"#050609",
+  overlayBoostFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayBoostFontSize:100,
+  overlayBoostTextColor:"#f7f7f7",
   testFinalStatsPreview:false
 };
 let overlayServerConfig = {};
@@ -5830,6 +5860,92 @@ function refreshOverlayControlWhenIdle(){
   });
 }
 
+function renderOverlayFontSelect(id, value){
+  return `<select class="overlaySelect" id="${id}">
+    ${overlayFontOptions().map(option=>`<option value="${escapeHtml(option.value)}" ${value===option.value?"selected":""}>${escapeHtml(option.label)}</option>`).join("")}
+  </select>`;
+}
+
+function renderOverlayAppearanceMenus(){
+  return `
+    <details class="overlaySubmenu" open>
+      <summary>Element Colors</summary>
+      <div class="overlaySubmenuBody overlayControlGrid">
+        <label class="overlayField">Global Text
+          <input class="overlayColorInput" id="overlayTextColorInput" type="color" value="${escapeHtml(overlayConfig.overlayTextColor)}">
+        </label>
+        <label class="overlayField">Accent
+          <input class="overlayColorInput" id="overlayAccentColorInput" type="color" value="${escapeHtml(overlayConfig.overlayAccentColor)}">
+        </label>
+        <label class="overlayField">Blue Boost Bar
+          <input class="overlayColorInput" id="overlayBlueBoostColorInput" type="color" value="${escapeHtml(overlayConfig.overlayBlueBoostColor)}">
+        </label>
+        <label class="overlayField">Orange Boost Bar
+          <input class="overlayColorInput" id="overlayOrangeBoostColorInput" type="color" value="${escapeHtml(overlayConfig.overlayOrangeBoostColor)}">
+        </label>
+        <label class="overlayField">Default Font
+          ${renderOverlayFontSelect("overlayFontInput", overlayConfig.overlayFontFamily)}
+        </label>
+      </div>
+    </details>
+    <details class="overlaySubmenu">
+      <summary>Team Names</summary>
+      <div class="overlaySubmenuBody overlayControlGrid">
+        <label class="overlayField">Font
+          ${renderOverlayFontSelect("overlayTeamNameFontInput", overlayConfig.overlayTeamNameFontFamily)}
+        </label>
+        <label class="overlayField">Size %
+          <input class="overlayInput" id="overlayTeamNameSizeInput" type="number" min="40" max="180" step="5" value="${Math.round(Number(overlayConfig.overlayTeamNameFontSize) || 100)}">
+        </label>
+        <label class="overlayField">Color
+          <input class="overlayColorInput" id="overlayTeamNameColorInput" type="color" value="${escapeHtml(overlayConfig.overlayTeamNameColor)}">
+        </label>
+      </div>
+    </details>
+    <details class="overlaySubmenu">
+      <summary>Goals</summary>
+      <div class="overlaySubmenuBody overlayControlGrid">
+        <label class="overlayField">Font
+          ${renderOverlayFontSelect("overlayGoalFontInput", overlayConfig.overlayGoalFontFamily)}
+        </label>
+        <label class="overlayField">Size %
+          <input class="overlayInput" id="overlayGoalSizeInput" type="number" min="40" max="180" step="5" value="${Math.round(Number(overlayConfig.overlayGoalFontSize) || 100)}">
+        </label>
+        <label class="overlayField">Color
+          <input class="overlayColorInput" id="overlayGoalColorInput" type="color" value="${escapeHtml(overlayConfig.overlayGoalColor)}">
+        </label>
+      </div>
+    </details>
+    <details class="overlaySubmenu">
+      <summary>Ticker</summary>
+      <div class="overlaySubmenuBody overlayControlGrid">
+        <label class="overlayField">Font
+          ${renderOverlayFontSelect("overlayTickerFontInput", overlayConfig.overlayTickerFontFamily)}
+        </label>
+        <label class="overlayField">Size %
+          <input class="overlayInput" id="overlayTickerSizeInput" type="number" min="40" max="180" step="5" value="${Math.round(Number(overlayConfig.overlayTickerFontSize) || 100)}">
+        </label>
+        <label class="overlayField">Color
+          <input class="overlayColorInput" id="overlayTickerColorInput" type="color" value="${escapeHtml(overlayConfig.overlayTickerColor)}">
+        </label>
+      </div>
+    </details>
+    <details class="overlaySubmenu">
+      <summary>Player Boosts</summary>
+      <div class="overlaySubmenuBody overlayControlGrid">
+        <label class="overlayField">Font
+          ${renderOverlayFontSelect("overlayBoostFontInput", overlayConfig.overlayBoostFontFamily)}
+        </label>
+        <label class="overlayField">Size %
+          <input class="overlayInput" id="overlayBoostSizeInput" type="number" min="40" max="180" step="5" value="${Math.round(Number(overlayConfig.overlayBoostFontSize) || 100)}">
+        </label>
+        <label class="overlayField">Text Color
+          <input class="overlayColorInput" id="overlayBoostTextColorInput" type="color" value="${escapeHtml(overlayConfig.overlayBoostTextColor)}">
+        </label>
+      </div>
+    </details>`;
+}
+
 function renderOverlayControl(){
   const panel = $("overlayControlPanel");
   if(!panel) return;
@@ -5841,8 +5957,8 @@ function renderOverlayControl(){
   const orangeName = overlayTeamName("Orange", "Orange");
   const maxWins = overlayMaxSeriesWins();
   const statsPreviewUrl = location.protocol === "file:"
-    ? `${obsOverlayFileUrl}&finalPreview=1`
-    : `${location.origin}/SPARK.html?overlay=obs&finalPreview=1`;
+    ? "http://127.0.0.1:8765/1NE_Overlay?finalPreview=1"
+    : `${location.origin}/1NE_Overlay?finalPreview=1`;
   const previewUrl = overlayConfig.testFinalStatsPreview ? statsPreviewUrl : obsOverlayUrl;
   panel.innerHTML = `
     <div class="overlayStudioLayout">
@@ -5877,25 +5993,7 @@ function renderOverlayControl(){
         <details class="overlayCategory" open>
           <summary>Appearance</summary>
           <div class="overlayCategoryBody">
-            <div class="overlayControlGrid">
-              <label class="overlayField">Text Color
-                <input class="overlayColorInput" id="overlayTextColorInput" type="color" value="${escapeHtml(overlayConfig.overlayTextColor)}">
-              </label>
-              <label class="overlayField">Accent Color
-                <input class="overlayColorInput" id="overlayAccentColorInput" type="color" value="${escapeHtml(overlayConfig.overlayAccentColor)}">
-              </label>
-              <label class="overlayField">Blue Boost Bar
-                <input class="overlayColorInput" id="overlayBlueBoostColorInput" type="color" value="${escapeHtml(overlayConfig.overlayBlueBoostColor)}">
-              </label>
-              <label class="overlayField">Orange Boost Bar
-                <input class="overlayColorInput" id="overlayOrangeBoostColorInput" type="color" value="${escapeHtml(overlayConfig.overlayOrangeBoostColor)}">
-              </label>
-              <label class="overlayField">Overlay Font
-                <select class="overlaySelect" id="overlayFontInput">
-                  ${overlayFontOptions().map(option=>`<option value="${escapeHtml(option.value)}" ${overlayConfig.overlayFontFamily===option.value?"selected":""}>${escapeHtml(option.label)}</option>`).join("")}
-                </select>
-              </label>
-            </div>
+            ${renderOverlayAppearanceMenus()}
           </div>
         </details>
 
@@ -5996,6 +6094,9 @@ function renderOverlayControl(){
               <span>${overlayConfig.stingerTransitionUrl ? `Custom stinger: ${escapeHtml(overlayConfig.stingerTransitionName || "Uploaded file")}` : "No stinger selected. Stats screen uses a quick fade."}</span>
               ${overlayConfig.stingerTransitionStatus ? `<span>${escapeHtml(overlayConfig.stingerTransitionStatus)}</span>` : ""}
             </div>
+            <label class="overlayField">Transition Point Delay (ms)
+              <input class="overlayInput" id="overlayStingerCutInput" type="number" min="0" max="5000" step="50" value="${Math.round(Number(overlayConfig.stingerTransitionCutMs) || 0)}">
+            </label>
           </div>
         </details>
 
@@ -6071,6 +6172,19 @@ function renderOverlayControl(){
   bind("overlayBlueBoostColorInput","overlayBlueBoostColor","input");
   bind("overlayOrangeBoostColorInput","overlayOrangeBoostColor","input");
   bind("overlayFontInput","overlayFontFamily","change");
+  bind("overlayTeamNameFontInput","overlayTeamNameFontFamily","change");
+  bind("overlayTeamNameSizeInput","overlayTeamNameFontSize","input");
+  bind("overlayTeamNameColorInput","overlayTeamNameColor","input");
+  bind("overlayGoalFontInput","overlayGoalFontFamily","change");
+  bind("overlayGoalSizeInput","overlayGoalFontSize","input");
+  bind("overlayGoalColorInput","overlayGoalColor","input");
+  bind("overlayTickerFontInput","overlayTickerFontFamily","change");
+  bind("overlayTickerSizeInput","overlayTickerFontSize","input");
+  bind("overlayTickerColorInput","overlayTickerColor","input");
+  bind("overlayBoostFontInput","overlayBoostFontFamily","change");
+  bind("overlayBoostSizeInput","overlayBoostFontSize","input");
+  bind("overlayBoostTextColorInput","overlayBoostTextColor","input");
+  bind("overlayStingerCutInput","stingerTransitionCutMs","input");
   const tournamentBindings = [
     ["overlayTournamentXInput","tournamentLogoX"],
     ["overlayTournamentYInput","tournamentLogoY"],
@@ -10873,6 +10987,7 @@ function readOverlayConfig(){
       tournamentLogoY:Math.round(Math.max(0, Math.min(1080, Number(merged.tournamentLogoY ?? overlayDefaultConfig.tournamentLogoY) || 0))),
       tournamentLogoWidth:Math.round(Math.max(24, Math.min(900, Number(merged.tournamentLogoWidth ?? overlayDefaultConfig.tournamentLogoWidth) || 280))),
       tournamentLogoRatio:Math.max(.2, Math.min(8, Number(merged.tournamentLogoRatio ?? overlayDefaultConfig.tournamentLogoRatio) || 2.2)),
+      stingerTransitionCutMs:sanitizeOverlayMs(merged.stingerTransitionCutMs, overlayDefaultConfig.stingerTransitionCutMs),
       ...normalizeOverlayTheme(merged),
       testFinalStatsPreview:stored.testFinalStatsPreview === true || stored.testFinalStatsPreview === "true"
     };
@@ -10884,6 +10999,14 @@ function readOverlayConfig(){
 function sanitizeOverlayColor(value, fallback){
   const text = String(value || "").trim();
   return /^#[0-9a-f]{6}$/i.test(text) ? text : fallback;
+}
+function sanitizeOverlayPercent(value, fallback=100){
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(40, Math.min(180, Math.round(n))) : fallback;
+}
+function sanitizeOverlayMs(value, fallback=900){
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.min(5000, Math.round(n))) : fallback;
 }
 
 function overlayFontOptions(){
@@ -10899,12 +11022,25 @@ function overlayFontOptions(){
 function normalizeOverlayTheme(config){
   const fonts = overlayFontOptions().map(option=>option.value);
   const fallback = overlayDefaultConfig;
+  const font = value=>fonts.includes(value) ? value : fallback.overlayFontFamily;
   return {
     overlayTextColor:sanitizeOverlayColor(config.overlayTextColor, fallback.overlayTextColor),
     overlayAccentColor:sanitizeOverlayColor(config.overlayAccentColor, fallback.overlayAccentColor),
     overlayBlueBoostColor:sanitizeOverlayColor(config.overlayBlueBoostColor, fallback.overlayBlueBoostColor),
     overlayOrangeBoostColor:sanitizeOverlayColor(config.overlayOrangeBoostColor, fallback.overlayOrangeBoostColor),
-    overlayFontFamily:fonts.includes(config.overlayFontFamily) ? config.overlayFontFamily : fallback.overlayFontFamily
+    overlayFontFamily:font(config.overlayFontFamily),
+    overlayTeamNameFontFamily:font(config.overlayTeamNameFontFamily),
+    overlayTeamNameFontSize:sanitizeOverlayPercent(config.overlayTeamNameFontSize, fallback.overlayTeamNameFontSize),
+    overlayTeamNameColor:sanitizeOverlayColor(config.overlayTeamNameColor, fallback.overlayTeamNameColor),
+    overlayGoalFontFamily:font(config.overlayGoalFontFamily),
+    overlayGoalFontSize:sanitizeOverlayPercent(config.overlayGoalFontSize, fallback.overlayGoalFontSize),
+    overlayGoalColor:sanitizeOverlayColor(config.overlayGoalColor, fallback.overlayGoalColor),
+    overlayTickerFontFamily:font(config.overlayTickerFontFamily),
+    overlayTickerFontSize:sanitizeOverlayPercent(config.overlayTickerFontSize, fallback.overlayTickerFontSize),
+    overlayTickerColor:sanitizeOverlayColor(config.overlayTickerColor, fallback.overlayTickerColor),
+    overlayBoostFontFamily:font(config.overlayBoostFontFamily),
+    overlayBoostFontSize:sanitizeOverlayPercent(config.overlayBoostFontSize, fallback.overlayBoostFontSize),
+    overlayBoostTextColor:sanitizeOverlayColor(config.overlayBoostTextColor, fallback.overlayBoostTextColor)
   };
 }
 
@@ -10917,6 +11053,14 @@ function applyOverlayThemeToElement(element, config=overlayConfig){
   element.style.setProperty("--overlay-boost-orange", theme.overlayOrangeBoostColor);
   element.style.setProperty("--spark-yellow", theme.overlayAccentColor);
   element.style.setProperty("--overlay-font", theme.overlayFontFamily);
+  element.style.setProperty("--overlay-team-name-font", theme.overlayTeamNameFontFamily);
+  element.style.setProperty("--overlay-team-name-color", theme.overlayTeamNameColor);
+  element.style.setProperty("--overlay-goal-font", theme.overlayGoalFontFamily);
+  element.style.setProperty("--overlay-goal-color", theme.overlayGoalColor);
+  element.style.setProperty("--overlay-ticker-font", theme.overlayTickerFontFamily);
+  element.style.setProperty("--overlay-ticker-color", theme.overlayTickerColor);
+  element.style.setProperty("--overlay-boost-font", theme.overlayBoostFontFamily);
+  element.style.setProperty("--overlay-boost-text", theme.overlayBoostTextColor);
 }
 
 function applyOverlayThemeToPreview(){
@@ -10954,6 +11098,7 @@ function saveOverlayConfig(nextConfig, options={}){
     tournamentLogoY:Math.round(Math.max(0, Math.min(1080, Number(nextConfig.tournamentLogoY) || 0))),
     tournamentLogoWidth:Math.round(Math.max(24, Math.min(900, Number(nextConfig.tournamentLogoWidth) || 280))),
     tournamentLogoRatio:Math.max(.2, Math.min(8, Number(nextConfig.tournamentLogoRatio) || 2.2)),
+    stingerTransitionCutMs:sanitizeOverlayMs(nextConfig.stingerTransitionCutMs, overlayDefaultConfig.stingerTransitionCutMs),
     ...normalizeOverlayTheme(nextConfig),
     testFinalStatsPreview:nextConfig.testFinalStatsPreview === true
   };

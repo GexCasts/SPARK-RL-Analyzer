@@ -4,4 +4,5 @@
 *.log
 tools/*.zip
 tools/node/
+tools/ffmpeg/
 tools/rrrocket/*.zip
