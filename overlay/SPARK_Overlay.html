@@ -1303,7 +1303,17 @@ function nextMatchStartEvent(eventName){
     || compact.includes("countdownbegan")
     || compact.includes("countdownbegin")
     || compact.includes("countdownstarted")
-    || compact.includes("gamebegan");
+    || compact.includes("gamebegan")
+    || spawnEventName(compact);
+}
+function spawnEventName(compactEvent){
+  return compactEvent.includes("playerspawn")
+    || compactEvent.includes("carspawn")
+    || compactEvent.includes("vehiclespawn")
+    || compactEvent.includes("pawnspawn")
+    || compactEvent.includes("playerrespawn")
+    || compactEvent.includes("carrespawn")
+    || compactEvent.includes("vehiclerespawn");
 }
 function nextMatchLooksReady(payload, eventName, incomingClock, messageEndsMatch){
   if(!state.matchEnded || messageEndsMatch) return false;

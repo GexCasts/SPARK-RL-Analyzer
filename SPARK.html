@@ -10722,7 +10722,18 @@ function liveApiNextMatchStartEvent(eventName){
     || compact.includes("countdownbegan")
     || compact.includes("countdownbegin")
     || compact.includes("countdownstarted")
-    || compact.includes("gamebegan");
+    || compact.includes("gamebegan")
+    || liveApiSpawnEventName(compact);
+}
+
+function liveApiSpawnEventName(compactEvent){
+  return compactEvent.includes("playerspawn")
+    || compactEvent.includes("carspawn")
+    || compactEvent.includes("vehiclespawn")
+    || compactEvent.includes("pawnspawn")
+    || compactEvent.includes("playerrespawn")
+    || compactEvent.includes("carrespawn")
+    || compactEvent.includes("vehiclerespawn");
 }
 
 function liveApiPayloadScoresLookReset(payload){
