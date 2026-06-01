@@ -28,6 +28,7 @@ const rrrocketCandidates = [
 const rrrocketPath = rrrocketCandidates.find(candidate=>fsSync.existsSync(candidate));
 const ffmpegCandidates = [
   process.env.SPARK_FFMPEG_PATH,
+  path.join(here, "tools", "ffmpeg", "ffmpeg-8.1.1-essentials_build", "bin", "ffmpeg.exe"),
   path.join(here, "tools", "ffmpeg", "bin", "ffmpeg.exe"),
   path.join(here, "tools", "ffmpeg", "ffmpeg.exe"),
   ...findWingetFfmpegCandidates(),

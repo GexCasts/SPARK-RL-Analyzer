@@ -7,6 +7,7 @@ $RepoRawBase = "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/mai
 $excludedDirectories = @(
   ".git",
   ".tmp",
+  "tools\ffmpeg",
   "tools\node"
 )
 
@@ -94,7 +95,7 @@ $manifest = [ordered]@{
     branch = "main"
     rawBaseUrl = $RepoRawBase
   }
-  notes = "Generated from distributable SPARK files. Local .git, .tmp, and portable Node cache are intentionally excluded."
+  notes = "Generated from distributable SPARK files. Local .git, .tmp, portable Node, and portable FFmpeg caches are intentionally excluded."
   files = $files
 }
 

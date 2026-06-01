@@ -61,6 +61,8 @@ namespace SparkLauncher
         private readonly string nodeFolder = "node-v22.11.0-win-x64";
         private readonly string rrrocketVersion = "0.11.1";
         private readonly string rrrocketFolder = "rrrocket-0.11.1-x86_64-pc-windows-msvc";
+        private readonly string ffmpegVersion = "8.1.1";
+        private readonly string ffmpegFolder = "ffmpeg-8.1.1-essentials_build";
         private readonly string githubRawBase = "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main";
         private readonly string appUrl = "http://127.0.0.1:8765/SPARK.html";
 
@@ -83,6 +85,8 @@ namespace SparkLauncher
         private string BundledNodePath { get { return Path.Combine(toolsDir, "node", nodeFolder, "node.exe"); } }
         private string RrrocketZipPath { get { return Path.Combine(toolsDir, "rrrocket", rrrocketFolder + ".zip"); } }
         private string RrrocketExePath { get { return Path.Combine(toolsDir, "rrrocket", rrrocketFolder, "rrrocket.exe"); } }
+        private string FfmpegZipPath { get { return Path.Combine(toolsDir, "ffmpeg", ffmpegFolder + ".zip"); } }
+        private string FfmpegExePath { get { return Path.Combine(toolsDir, "ffmpeg", ffmpegFolder, "bin", "ffmpeg.exe"); } }
         private string ServerScriptPath { get { return Path.Combine(root, "static-download-server.mjs"); } }
         private string ManifestPath { get { return Path.Combine(root, "spark-manifest.json"); } }
 
@@ -279,17 +283,20 @@ namespace SparkLauncher
             SetProgress(14);
             EnsureRrrocket();
 
-            SetProgress(28);
+            SetProgress(24);
+            EnsureFfmpeg();
+
+            SetProgress(34);
             string nodeExe = ResolveNode();
 
-            SetProgress(42);
+            SetProgress(44);
             if (!File.Exists(ServerScriptPath)) throw new FileNotFoundException("Missing static-download-server.mjs next to this launcher.");
 
-            SetProgress(52);
+            SetProgress(54);
             if (!TestServer())
             {
                 WriteStatus("Starting local server on 127.0.0.1:8765...");
-                SetProgress(62);
+                SetProgress(64);
                 Directory.CreateDirectory(tmpDir);
 
                 ProcessStartInfo info = new ProcessStartInfo();
@@ -299,13 +306,15 @@ namespace SparkLauncher
                 info.UseShellExecute = false;
                 info.CreateNoWindow = true;
                 info.WindowStyle = ProcessWindowStyle.Hidden;
+                info.EnvironmentVariables["SPARK_RRROCKET_PATH"] = RrrocketExePath;
+                info.EnvironmentVariables["SPARK_FFMPEG_PATH"] = FfmpegExePath;
 
                 Process serverProcess = Process.Start(info);
                 bool ready = false;
                 for (int i = 0; i < 40; i++)
                 {
                     System.Threading.Thread.Sleep(250);
-                    SetProgress(62 + Math.Min(28, (int)((i + 1) * 0.7)));
+                    SetProgress(64 + Math.Min(26, (int)((i + 1) * 0.65)));
                     if (serverProcess != null && serverProcess.HasExited) break;
                     if (TestServer())
                     {
@@ -496,6 +505,18 @@ namespace SparkLauncher
             SafeDeleteFile(RrrocketZipPath);
 
             if (!File.Exists(RrrocketExePath)) throw new FileNotFoundException("rrrocket install failed. Expected " + RrrocketExePath);
+        }
+
+        private void EnsureFfmpeg()
+        {
+            if (File.Exists(FfmpegExePath)) return;
+
+            WriteStatus("FFmpeg was not found. Installing video conversion support into tools\\ffmpeg...");
+            DownloadFile("https://github.com/GyanD/codexffmpeg/releases/download/" + ffmpegVersion + "/" + ffmpegFolder + ".zip", FfmpegZipPath);
+            ExpandZip(FfmpegZipPath, Path.Combine(toolsDir, "ffmpeg"));
+            SafeDeleteFile(FfmpegZipPath);
+
+            if (!File.Exists(FfmpegExePath)) throw new FileNotFoundException("FFmpeg install failed. Expected " + FfmpegExePath);
         }
 
         private bool TestServer()
@@ -825,27 +846,56 @@ namespace SparkLauncher
 
         private async Task InitializeWebViewAsync()
         {
-            string userDataFolder = Path.Combine(root, ".tmp", "webview2-profile");
-            Directory.CreateDirectory(userDataFolder);
-            CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-            await webView.EnsureCoreWebView2Async(environment);
-            webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
-            webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
-            webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
-            webView.CoreWebView2.NewWindowRequested += delegate(object sender, CoreWebView2NewWindowRequestedEventArgs args)
+            try
             {
-                args.Handled = true;
-                try
+                string userDataFolder = Path.Combine(root, ".tmp", "webview2-profile");
+                Directory.CreateDirectory(userDataFolder);
+                CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                await webView.EnsureCoreWebView2Async(environment);
+                webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+                webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+                webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+                webView.CoreWebView2.NewWindowRequested += delegate(object sender, CoreWebView2NewWindowRequestedEventArgs args)
                 {
-                    ProcessStartInfo info = new ProcessStartInfo();
-                    info.FileName = args.Uri;
-                    info.UseShellExecute = true;
-                    Process.Start(info);
-                }
-                catch { }
-            };
-            webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
-            webView.CoreWebView2.Navigate(appUrl);
+                    args.Handled = true;
+                    try
+                    {
+                        ProcessStartInfo info = new ProcessStartInfo();
+                        info.FileName = args.Uri;
+                        info.UseShellExecute = true;
+                        Process.Start(info);
+                    }
+                    catch { }
+                };
+                webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+                webView.CoreWebView2.Navigate(appUrl);
+            }
+            catch (Exception ex)
+            {
+                OpenBrowserFallback(ex);
+            }
+        }
+
+        private void OpenBrowserFallback(Exception ex)
+        {
+            try
+            {
+                ProcessStartInfo fallback = new ProcessStartInfo();
+                fallback.FileName = appUrl;
+                fallback.UseShellExecute = true;
+                Process.Start(fallback);
+            }
+            catch
+            {
+            }
+
+            string detail = ex == null ? "" : "\n\n" + ex.Message;
+            MessageBox.Show(
+                "SPARK could not open the native app shell, so it opened in your browser instead." + detail,
+                "SPARK",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            Close();
         }
 
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)

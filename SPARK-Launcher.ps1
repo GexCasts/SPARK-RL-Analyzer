@@ -24,6 +24,10 @@ $RrrocketVersion = "0.11.1"
 $RrrocketFolder = "rrrocket-$RrrocketVersion-x86_64-pc-windows-msvc"
 $RrrocketZip = Join-Path $ToolsDir "rrrocket\$RrrocketFolder.zip"
 $RrrocketExe = Join-Path $ToolsDir "rrrocket\$RrrocketFolder\rrrocket.exe"
+$FfmpegVersion = "8.1.1"
+$FfmpegFolder = "ffmpeg-$FfmpegVersion-essentials_build"
+$FfmpegZip = Join-Path $ToolsDir "ffmpeg\$FfmpegFolder.zip"
+$FfmpegExe = Join-Path $ToolsDir "ffmpeg\$FfmpegFolder\bin\ffmpeg.exe"
 $ServerScript = Join-Path $Root "static-download-server.mjs"
 $AppUrl = "http://127.0.0.1:8765/SPARK.html"
 $TmpDir = Join-Path $Root ".tmp"
@@ -108,6 +112,21 @@ function Ensure-Rrrocket {
   }
 }
 
+function Ensure-Ffmpeg {
+  if(Test-Path $FfmpegExe) {
+    return
+  }
+
+  Write-Status "FFmpeg was not found. Installing video conversion support into tools\ffmpeg..."
+  Download-File "https://github.com/GyanD/codexffmpeg/releases/download/$FfmpegVersion/$FfmpegFolder.zip" $FfmpegZip
+  Expand-Zip $FfmpegZip (Join-Path $ToolsDir "ffmpeg")
+  Remove-Item -LiteralPath $FfmpegZip -Force -ErrorAction SilentlyContinue
+
+  if(!(Test-Path $FfmpegExe)) {
+    throw "FFmpeg install failed. Expected $FfmpegExe"
+  }
+}
+
 function Test-Server {
   try {
     $Response = Invoke-WebRequest -Uri $AppUrl -UseBasicParsing -TimeoutSec 2
@@ -147,20 +166,24 @@ function Start-SPARK {
   New-Item -ItemType Directory -Force -Path $ToolsDir | Out-Null
   Set-LauncherProgress 14
   Ensure-Rrrocket
-  Set-LauncherProgress 28
+  Set-LauncherProgress 24
+  Ensure-Ffmpeg
+  Set-LauncherProgress 34
   $NodeExe = Resolve-Node
-  Set-LauncherProgress 42
+  Set-LauncherProgress 44
 
   if(!(Test-Path $ServerScript)) {
     throw "Missing static-download-server.mjs next to this launcher."
   }
 
-  Set-LauncherProgress 52
+  Set-LauncherProgress 54
   if(!(Test-Server)) {
     Write-Status "Starting local server on 127.0.0.1:8765..."
-    Set-LauncherProgress 62
+    Set-LauncherProgress 64
     New-Item -ItemType Directory -Force -Path $TmpDir | Out-Null
     Remove-Item -LiteralPath $ServerOutLog, $ServerErrLog -Force -ErrorAction SilentlyContinue
+    $env:SPARK_RRROCKET_PATH = $RrrocketExe
+    $env:SPARK_FFMPEG_PATH = $FfmpegExe
     $ServerProcess = Start-Process `
       -FilePath $NodeExe `
       -ArgumentList @("`"$ServerScript`"") `
@@ -173,7 +196,7 @@ function Start-SPARK {
     $Ready = $false
     for($i = 0; $i -lt 40; $i++) {
       Start-Sleep -Milliseconds 250
-      Set-LauncherProgress (62 + [Math]::Min(28, [int](($i + 1) * 0.7)))
+      Set-LauncherProgress (64 + [Math]::Min(26, [int](($i + 1) * 0.65)))
       if($ServerProcess.HasExited) {
         break
       }

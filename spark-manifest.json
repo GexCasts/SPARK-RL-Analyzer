@@ -1,14 +1,14 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.06.01.0011",
-    "generatedUtc":  "2026-06-01T00:11:06.5601497Z",
+    "appVersion":  "2026.06.01.0019",
+    "generatedUtc":  "2026-06-01T00:19:40.0382881Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
                    "repository":  "https://github.com/GexCasts/SPARK-RL-Analyzer"
                },
-    "notes":  "Generated from distributable SPARK files. Local .git, .tmp, and portable Node cache are intentionally excluded.",
+    "notes":  "Generated from distributable SPARK files. Local .git, .tmp, portable Node, and portable FFmpeg caches are intentionally excluded.",
     "files":  [
                   {
                       "path":  ".gitattributes",
@@ -152,10 +152,10 @@
                   },
                   {
                       "path":  "SPARK Launcher.exe",
-                      "version":  "7947d6797703",
-                      "sha256":  "7947d6797703235c5f3075086fd737f5d9e0863e628e997781de8acf11f15d86",
-                      "size":  50688,
-                      "modifiedUtc":  "2026-05-31T06:19:50.9756489Z"
+                      "version":  "fcc12f808306",
+                      "sha256":  "fcc12f808306a0e1e4c9eeafd64e7beb36f0b53aaa5aee6771f1cf435210c713",
+                      "size":  50176,
+                      "modifiedUtc":  "2026-06-01T00:19:11.2228860Z"
                   },
                   {
                       "path":  "SPARK.html",
@@ -166,17 +166,17 @@
                   },
                   {
                       "path":  "SPARK-Launcher.cs",
-                      "version":  "fd35c19355db",
-                      "sha256":  "fd35c19355db75536a860b2cd991c1684577f7e6723e718914858f43608cf9b1",
-                      "size":  40962,
-                      "modifiedUtc":  "2026-05-31T06:19:19.0267648Z"
+                      "version":  "bddf1071d685",
+                      "sha256":  "bddf1071d685666a17bfa551397c0c2927fa0dbccfaaf37aa013ec52aa9a1a5e",
+                      "size":  43099,
+                      "modifiedUtc":  "2026-06-01T00:17:48.4393022Z"
                   },
                   {
                       "path":  "SPARK-Launcher.ps1",
-                      "version":  "01bdb5ec89e4",
-                      "sha256":  "01bdb5ec89e4935ad8f1f8dce280f93c887863e0c8f0cf0342f6b3f3ca4b4ab3",
-                      "size":  18576,
-                      "modifiedUtc":  "2026-05-22T10:34:10.8056945Z"
+                      "version":  "1fbf59c61aa5",
+                      "sha256":  "1fbf59c61aa59552165d0fd9699c705f7e348bfb95f02dd3b0a839b5acb4ba6b",
+                      "size":  19424,
+                      "modifiedUtc":  "2026-06-01T00:18:09.8690061Z"
                   },
                   {
                       "path":  "SPARK-Launcher.sh",
@@ -187,17 +187,17 @@
                   },
                   {
                       "path":  "static-download-server.mjs",
-                      "version":  "30907ae78a91",
-                      "sha256":  "30907ae78a910490e2a2b55437ae026a13a7eafa4b7704f7355df2f1bd106f2f",
-                      "size":  138525,
-                      "modifiedUtc":  "2026-06-01T00:09:36.3123114Z"
+                      "version":  "f3dbc44b11d9",
+                      "sha256":  "f3dbc44b11d98588f0c0856dc1e92a797f42deed8679fd7f8d337e938ba1fc33",
+                      "size":  138617,
+                      "modifiedUtc":  "2026-06-01T00:14:20.1201802Z"
                   },
                   {
                       "path":  "tools/New-SparkManifest.ps1",
-                      "version":  "e3a7a7f14648",
-                      "sha256":  "e3a7a7f14648a29c6261c0071418ce48703b918ab249c513203ba10b2e5c4e20",
-                      "size":  3239,
-                      "modifiedUtc":  "2026-05-23T10:01:32.4264983Z"
+                      "version":  "0a1fe65e861b",
+                      "sha256":  "0a1fe65e861b6080cbc9d566516730c6206cbd04d6b62bcce9a58e6c55f0bd99",
+                      "size":  3275,
+                      "modifiedUtc":  "2026-06-01T00:18:18.3125464Z"
                   },
                   {
                       "path":  "tools/rrrocket/rrrocket-0.11.1-x86_64-pc-windows-msvc/rrrocket.exe",
