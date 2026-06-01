@@ -5684,6 +5684,10 @@ async function requestPersonalOverlay(action){
       body:JSON.stringify({action, url:obsOverlayUrl}),
       cache:"no-store"
     });
+    if(!response.ok){
+      const detail = await response.text().catch(()=>"");
+      return {ok:false, reason:`SPARK server needs restart for pinned overlay (${response.status}). ${detail}`.trim()};
+    }
     return await response.json();
   }catch(err){
     return {ok:false, reason:String(err?.message || err || "Personal overlay request failed")};
@@ -5702,8 +5706,7 @@ async function openPinnedOverlayWindow(){
     if(status) status.textContent = "Pinned personal overlay opened. Use borderless/windowed Rocket League for it to appear over the game.";
     return;
   }
-  window.open(obsOverlayUrl, "_blank", "noopener");
-  if(status) status.textContent = "Opened overlay in browser. Always-on-top pinning needs the SPARK Launcher app shell.";
+  if(status) status.textContent = `${serverResult.reason || "Pinned overlay unavailable."} Restart SPARK Launcher, then press Pin Personal Overlay again.`;
 }
 
 async function closePinnedOverlayWindow(){
@@ -5716,7 +5719,7 @@ async function closePinnedOverlayWindow(){
   if(postSparkShellMessage({type:"spark-overlay-control",action:"close-personal-overlay"})){
     if(status) status.textContent = "Pinned personal overlay closed.";
   }else if(status){
-    status.textContent = "Pinned overlay control needs the SPARK Launcher app shell.";
+    status.textContent = `${serverResult.reason || "Pinned overlay control unavailable."} Restart SPARK Launcher if the overlay is still visible.`;
   }
 }
 

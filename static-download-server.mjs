@@ -3360,13 +3360,19 @@ async function handlePersonalOverlay(req, res){
     message = {};
   }
   const action = String(message.action || "").toLowerCase();
-  if(!["open","close","toggle"].includes(action)) throw new Error("Unsupported personal overlay action.");
+  if(!["open","close","toggle","status"].includes(action)) throw new Error("Unsupported personal overlay action.");
   if(process.platform !== "win32"){
     res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
     res.end(JSON.stringify({ok:false, reason:"Pinned personal overlay is only available on Windows."}));
     return;
   }
 
+  if(action === "status"){
+    const running = !!(personalOverlayProcess && !personalOverlayProcess.killed && personalOverlayProcess.exitCode === null);
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify({ok:true, running, helperExists:fsSync.existsSync(personalOverlayExePath)}));
+    return;
+  }
   const isRunning = personalOverlayProcess && !personalOverlayProcess.killed && personalOverlayProcess.exitCode === null;
   if(action === "close" || (action === "toggle" && isRunning)){
     if(isRunning){
