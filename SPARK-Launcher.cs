@@ -783,6 +783,7 @@ namespace SparkLauncher
         private readonly string appUrl;
         private readonly string root;
         private readonly WebView2 webView;
+        private SparkPersonalOverlayForm personalOverlay;
         private Rectangle restoreBounds;
         private bool isCustomMaximized;
 
@@ -913,9 +914,55 @@ namespace SparkLauncher
             }
             if (message == null || !message.ContainsKey("type")) return;
             string type = Convert.ToString(message["type"]);
-            if (!String.Equals(type, "spark-window-control", StringComparison.OrdinalIgnoreCase)) return;
             string action = message.ContainsKey("action") ? Convert.ToString(message["action"]) : "";
-            ApplyWindowAction(action);
+            if (String.Equals(type, "spark-window-control", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyWindowAction(action);
+                return;
+            }
+            if (String.Equals(type, "spark-overlay-control", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyOverlayAction(action);
+            }
+        }
+
+        private void ApplyOverlayAction(string action)
+        {
+            action = (action ?? "").Trim().ToLowerInvariant();
+            if (action == "open-personal-overlay" || action == "toggle-personal-overlay")
+            {
+                if (personalOverlay != null && !personalOverlay.IsDisposed)
+                {
+                    if (action == "toggle-personal-overlay")
+                    {
+                        ClosePersonalOverlay();
+                        return;
+                    }
+                    personalOverlay.Show();
+                    personalOverlay.TopMost = true;
+                    return;
+                }
+                string overlayUrl = "http://127.0.0.1:8765/1NE_Overlay?personal=1";
+                personalOverlay = new SparkPersonalOverlayForm(overlayUrl, root, Screen.FromControl(this));
+                personalOverlay.FormClosed += delegate { personalOverlay = null; };
+                personalOverlay.Show(this);
+                return;
+            }
+            if (action == "close-personal-overlay")
+            {
+                ClosePersonalOverlay();
+            }
+        }
+
+        private void ClosePersonalOverlay()
+        {
+            if (personalOverlay == null || personalOverlay.IsDisposed)
+            {
+                personalOverlay = null;
+                return;
+            }
+            personalOverlay.Close();
+            personalOverlay = null;
         }
 
         private void ApplyWindowAction(string action)
@@ -1007,6 +1054,84 @@ namespace SparkLauncher
 
         [DllImport("dwmapi.dll")]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+    }
+
+    internal sealed class SparkPersonalOverlayForm : Form
+    {
+        private const int WS_EX_TRANSPARENT = 0x00000020;
+        private const int WS_EX_TOOLWINDOW = 0x00000080;
+        private const int WS_EX_NOACTIVATE = 0x08000000;
+
+        private readonly string overlayUrl;
+        private readonly string root;
+        private readonly WebView2 webView;
+
+        public SparkPersonalOverlayForm(string overlayUrl, string root, Screen screen)
+        {
+            this.overlayUrl = overlayUrl;
+            this.root = root;
+            Text = "SPARK Personal Overlay";
+            StartPosition = FormStartPosition.Manual;
+            Bounds = (screen ?? Screen.PrimaryScreen).Bounds;
+            FormBorderStyle = FormBorderStyle.None;
+            ShowInTaskbar = false;
+            TopMost = true;
+            BackColor = Color.Black;
+
+            webView = new WebView2();
+            webView.Dock = DockStyle.Fill;
+            webView.DefaultBackgroundColor = Color.Transparent;
+            Controls.Add(webView);
+        }
+
+        protected override bool ShowWithoutActivation
+        {
+            get { return true; }
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+                return cp;
+            }
+        }
+
+        protected override async void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            await InitializeWebViewAsync();
+        }
+
+        private async Task InitializeWebViewAsync()
+        {
+            try
+            {
+                string userDataFolder = Path.Combine(root, ".tmp", "webview2-personal-overlay");
+                Directory.CreateDirectory(userDataFolder);
+                CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                await webView.EnsureCoreWebView2Async(environment);
+                webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+                webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+                webView.CoreWebView2.NewWindowRequested += delegate(object sender, CoreWebView2NewWindowRequestedEventArgs args)
+                {
+                    args.Handled = true;
+                };
+                webView.CoreWebView2.Navigate(overlayUrl);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "SPARK could not open the pinned personal overlay.\n\n" + ex.Message,
+                    "SPARK",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                Close();
+            }
+        }
     }
 
     internal static class Program

@@ -4,7 +4,7 @@ import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
-import {execFile} from "node:child_process";
+import {execFile, spawn} from "node:child_process";
 import {fileURLToPath} from "node:url";
 import {createReplayAnalysisPackage} from "./parser/replay-analysis-service.mjs";
 
@@ -12,6 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = here;
 const appFileName = "SPARK.html";
 const overlayFileName = path.join("overlay", "SPARK_Overlay.html");
+const personalOverlayExePath = path.join(here, "SPARK Personal Overlay.exe");
 const logoPath = path.join(here, "assets", "Spark Logo.png");
 const oneNeLogoPath = path.join(here, "assets", "1NE_Vector_edited.png");
 const tileLayoutPath = path.join(here, "SPARK-layout.json");
@@ -38,6 +39,7 @@ const ffmpegPath = ffmpegCandidates.find(candidate=>{
   return fsSync.existsSync(candidate);
 });
 const tmpDir = path.join(here, ".tmp");
+let personalOverlayProcess = null;
 const PHYSICS_SAMPLE_INTERVAL_SECONDS = 0.045;
 const TARGET_POSITION_SAMPLES_PER_PLAYER = 5400;
 const types = new Map([
@@ -3338,6 +3340,67 @@ if(-not [SparkWindowControl]::Act($action)){ throw "SPARK app window not found."
   res.end(JSON.stringify({ok:true, action}));
 }
 
+async function handlePersonalOverlay(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use POST.");
+    return;
+  }
+
+  const body = await readRequestBody(req, 16 * 1024);
+  let message = {};
+  try{
+    message = JSON.parse(body.toString("utf8") || "{}");
+  }catch{
+    message = {};
+  }
+  const action = String(message.action || "").toLowerCase();
+  if(!["open","close","toggle"].includes(action)) throw new Error("Unsupported personal overlay action.");
+  if(process.platform !== "win32"){
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify({ok:false, reason:"Pinned personal overlay is only available on Windows."}));
+    return;
+  }
+
+  const isRunning = personalOverlayProcess && !personalOverlayProcess.killed && personalOverlayProcess.exitCode === null;
+  if(action === "close" || (action === "toggle" && isRunning)){
+    if(isRunning){
+      try{ personalOverlayProcess.kill(); }catch{}
+    }
+    personalOverlayProcess = null;
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify({ok:true, action:"close"}));
+    return;
+  }
+
+  if(isRunning){
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify({ok:true, action:"open", alreadyOpen:true}));
+    return;
+  }
+  if(!fsSync.existsSync(personalOverlayExePath)){
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify({ok:false, reason:"SPARK Personal Overlay.exe is missing. Update SPARK or use Open Overlay as a browser source."}));
+    return;
+  }
+
+  const overlayUrl = "http://127.0.0.1:8765/1NE_Overlay?personal=1";
+  personalOverlayProcess = spawn(personalOverlayExePath, [overlayUrl], {
+    cwd: here,
+    windowsHide: false,
+    stdio: "ignore"
+  });
+  personalOverlayProcess.on("exit", ()=>{ personalOverlayProcess = null; });
+  personalOverlayProcess.unref?.();
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify({ok:true, action:"open"}));
+}
+
 server = http.createServer(async (req,res)=>{
   try{
     const url = new URL(req.url, "http://127.0.0.1");
@@ -3367,6 +3430,10 @@ server = http.createServer(async (req,res)=>{
     }
     if(url.pathname === "/api/overlay-asset"){
       await handleOverlayAssetUpload(req, res);
+      return;
+    }
+    if(url.pathname === "/api/personal-overlay"){
+      await handlePersonalOverlay(req, res);
       return;
     }
     if(url.pathname === "/api/window-control"){

@@ -5663,6 +5663,63 @@ function openOverlayWindow(){
   window.open(obsOverlayUrl, "_blank", "noopener");
 }
 
+function postSparkShellMessage(message){
+  try{
+    if(window.chrome?.webview?.postMessage){
+      window.chrome.webview.postMessage(message);
+      return true;
+    }
+  }catch(err){
+    console.warn("Could not contact SPARK shell:", err);
+  }
+  return false;
+}
+
+async function requestPersonalOverlay(action){
+  if(!location.protocol.startsWith("http")) return {ok:false, reason:"SPARK server is not active"};
+  try{
+    const response = await fetch(`${location.origin}/api/personal-overlay`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action, url:obsOverlayUrl}),
+      cache:"no-store"
+    });
+    return await response.json();
+  }catch(err){
+    return {ok:false, reason:String(err?.message || err || "Personal overlay request failed")};
+  }
+}
+
+async function openPinnedOverlayWindow(){
+  const status = $("overlayCopyStatus");
+  syncOverlayConfigToServer(overlayConfig);
+  const serverResult = await requestPersonalOverlay("open");
+  if(serverResult.ok){
+    if(status) status.textContent = "Pinned personal overlay opened. Use borderless/windowed Rocket League for it to appear over the game.";
+    return;
+  }
+  if(postSparkShellMessage({type:"spark-overlay-control",action:"open-personal-overlay",url:obsOverlayUrl})){
+    if(status) status.textContent = "Pinned personal overlay opened. Use borderless/windowed Rocket League for it to appear over the game.";
+    return;
+  }
+  window.open(obsOverlayUrl, "_blank", "noopener");
+  if(status) status.textContent = "Opened overlay in browser. Always-on-top pinning needs the SPARK Launcher app shell.";
+}
+
+async function closePinnedOverlayWindow(){
+  const status = $("overlayCopyStatus");
+  const serverResult = await requestPersonalOverlay("close");
+  if(serverResult.ok){
+    if(status) status.textContent = "Pinned personal overlay closed.";
+    return;
+  }
+  if(postSparkShellMessage({type:"spark-overlay-control",action:"close-personal-overlay"})){
+    if(status) status.textContent = "Pinned personal overlay closed.";
+  }else if(status){
+    status.textContent = "Pinned overlay control needs the SPARK Launcher app shell.";
+  }
+}
+
 function loadOverlayLogoFile(side, input){
   const file = input?.files?.[0];
   if(!file) return;
@@ -6140,6 +6197,8 @@ function renderOverlayControl(){
             <button type="button" onclick="saveOverlayConfig({...overlayConfig, blueSeriesScore:0, orangeSeriesScore:0})">Wipe Score</button>
             <button type="button" onclick="copyOverlayUrl()">Copy Overlay URL</button>
             <button type="button" onclick="openOverlayWindow()">Open Overlay</button>
+            <button type="button" onclick="openPinnedOverlayWindow()">Pin Personal Overlay</button>
+            <button type="button" onclick="closePinnedOverlayWindow()">Close Pin</button>
           </div>
           <div class="overlayQuickTeam orange">
             <button type="button" onclick="setOverlaySeriesScore('Orange',-1)">-</button>
