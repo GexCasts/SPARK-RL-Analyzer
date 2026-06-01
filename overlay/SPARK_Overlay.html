@@ -806,6 +806,7 @@ const state = {
   updates:0,
   replay:false,
   matchEnded:false,
+  matchEndedAt:0,
   finalVisible:false,
   clock:300,
   teams:{Blue:{name:"Blue",score:0},Orange:{name:"Orange",score:0}},
@@ -1293,6 +1294,23 @@ function matchEndedFlag(payload, event=""){
   const compact = text.replace(/[^a-z]/g, "");
   return compact.includes("matchended") || compact.includes("gameended") || compact.includes("matchdestroyed");
 }
+function nextMatchStartEvent(eventName){
+  const compact = compactEventName(eventName);
+  return compact.includes("matchcreated")
+    || compact.includes("matchinitialized")
+    || compact.includes("roundstarted")
+    || compact.includes("countdownbegan")
+    || compact.includes("gamebegan");
+}
+function nextMatchLooksReady(payload, eventName, incomingClock, messageEndsMatch){
+  if(!state.matchEnded || messageEndsMatch) return false;
+  if(nextMatchStartEvent(eventName)) return true;
+  const endedAge = state.matchEndedAt ? Date.now() - state.matchEndedAt : 0;
+  return endedAge > 6500
+    && incomingClock !== null
+    && incomingClock >= 250
+    && hasFieldPlayers(payload);
+}
 function hasFieldPlayers(payload){
   const players = extractPlayers(payload);
   return players.some(player=>toBoolean(valueByKey(player,["bHasCar","hasCar","HasCar","inGame","InGame"])));
@@ -1300,6 +1318,7 @@ function hasFieldPlayers(payload){
 function resetForNextMatch(){
   state.replay = false;
   state.matchEnded = false;
+  state.matchEndedAt = 0;
   state.finalVisible = false;
   state.clock = 300;
   state.teams.Blue.score = 0;
@@ -1621,21 +1640,18 @@ function handleMessage(raw){
   state.updates++;
   const eventName = compactEventName(msg.event);
   const incomingClock = gameClock(msg.payload);
-  const nextMatchLooksReady = state.matchEnded
-    && incomingClock !== null
-    && incomingClock >= 250
-    && (hasFieldPlayers(msg.payload) || eventName.includes("matchcreated") || eventName.includes("matchinitialized") || eventName.includes("roundstarted"));
-  if(nextMatchLooksReady) resetForNextMatch();
   const messageEndsMatch = matchEndedFlag(msg.payload, msg.event);
+  if(nextMatchLooksReady(msg.payload, eventName, incomingClock, messageEndsMatch)) resetForNextMatch();
   if(messageEndsMatch){
     state.replay = false;
+    if(!state.matchEnded) state.matchEndedAt = Date.now();
     state.matchEnded = true;
   }
   updateTeams(msg.payload);
   updatePlayers(msg.payload);
   const focusName = focusNameFromPayload(msg.payload);
   if(focusName) state.focusedPlayerName = focusName;
-  if(state.matchEnded && (eventName.includes("matchcreated") || eventName.includes("matchinitialized") || eventName.includes("roundstarted"))){
+  if(state.matchEnded && !messageEndsMatch && nextMatchStartEvent(eventName)){
     resetForNextMatch();
   }
   if(eventName.includes("ballhit")){
@@ -1705,6 +1721,7 @@ function seedFinalPreview(){
   state.connected = true;
   state.updates = 1;
   state.matchEnded = true;
+  state.matchEndedAt = Date.now();
   state.clock = 0;
   state.teams.Blue = {name:"1NE",score:4};
   state.teams.Orange = {name:"BDG",score:2};
