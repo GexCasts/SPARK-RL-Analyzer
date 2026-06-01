@@ -816,6 +816,7 @@ let serverConfig = null;
 let stingerTimer = null;
 let stingerFallbackTimer = null;
 let finalTransitionTimer = null;
+let finalTransitionQueueTimer = null;
 const $ = id=>document.getElementById(id);
 function firstDefined(...values){
   for(const value of values) if(value !== undefined && value !== null && value !== "") return value;
@@ -1305,6 +1306,10 @@ function resetForNextMatch(){
   state.teams.Orange.score = 0;
   state.players.clear();
   state.focusedPlayerName = null;
+  if(finalTransitionQueueTimer){
+    clearTimeout(finalTransitionQueueTimer);
+    finalTransitionQueueTimer = null;
+  }
   if(finalTransitionTimer){
     clearTimeout(finalTransitionTimer);
     finalTransitionTimer = null;
@@ -1469,6 +1474,28 @@ function revealFinalScreen(){
   render();
 }
 
+function preloadFinalTransition(config){
+  const stinger = $("stingerTransition");
+  const src = String(config?.stingerTransitionUrl || "");
+  if(!stinger || !src || !stingerBrowserPlayable(config)) return false;
+  if(stinger.getAttribute("src") !== src) stinger.src = src;
+  stinger.muted = true;
+  stinger.playsInline = true;
+  stinger.preload = "auto";
+  try{ stinger.load?.(); }catch{}
+  return true;
+}
+
+function queueFinalTransition(config){
+  if(state.finalVisible || finalTransitionQueueTimer || finalTransitionTimer) return;
+  preloadFinalTransition(config);
+  finalTransitionQueueTimer = setTimeout(()=>{
+    finalTransitionQueueTimer = null;
+    if(!state.matchEnded || state.finalVisible) return;
+    playFinalTransition(readConfig());
+  }, 2500);
+}
+
 function playFinalTransition(config, onCut=revealFinalScreen){
   const stage = $("stage");
   const stinger = $("stingerTransition");
@@ -1511,6 +1538,10 @@ function playFinalTransition(config, onCut=revealFinalScreen){
   stinger.preload = "auto";
   stinger.classList.add("active");
   const cleanup = ()=>{
+    if(stingerTimer){
+      clearTimeout(stingerTimer);
+      stingerTimer = null;
+    }
     if(stingerFallbackTimer){
       clearTimeout(stingerFallbackTimer);
       stingerFallbackTimer = null;
@@ -1535,7 +1566,7 @@ function playFinalTransition(config, onCut=revealFinalScreen){
   };
   if(stinger.readyState >= 2) start();
   else stinger.addEventListener("canplay", start, {once:true});
-  stinger.load?.();
+  if(stinger.readyState < 2) stinger.load?.();
   finalTransitionTimer = setTimeout(cut, transitionCutDelayMs(config, true));
   stingerFallbackTimer = setTimeout(()=>{
     if(stinger.readyState < 2){
@@ -1588,11 +1619,12 @@ function handleMessage(raw){
   try{msg = normalizeMessage(raw);}catch{return;}
   state.connected = true;
   state.updates++;
+  const eventName = compactEventName(msg.event);
   const incomingClock = gameClock(msg.payload);
   const nextMatchLooksReady = state.matchEnded
     && incomingClock !== null
     && incomingClock >= 250
-    && hasFieldPlayers(msg.payload);
+    && (hasFieldPlayers(msg.payload) || eventName.includes("matchcreated") || eventName.includes("matchinitialized") || eventName.includes("roundstarted"));
   if(nextMatchLooksReady) resetForNextMatch();
   const messageEndsMatch = matchEndedFlag(msg.payload, msg.event);
   if(messageEndsMatch){
@@ -1603,8 +1635,7 @@ function handleMessage(raw){
   updatePlayers(msg.payload);
   const focusName = focusNameFromPayload(msg.payload);
   if(focusName) state.focusedPlayerName = focusName;
-  const eventName = compactEventName(msg.event);
-  if(state.matchEnded && (eventName.includes("matchcreated") || eventName.includes("matchinitialized") || eventName.includes("roundstarted")) && hasFieldPlayers(msg.payload)){
+  if(state.matchEnded && (eventName.includes("matchcreated") || eventName.includes("matchinitialized") || eventName.includes("roundstarted"))){
     resetForNextMatch();
   }
   if(eventName.includes("ballhit")){
@@ -1635,7 +1666,7 @@ function handleMessage(raw){
   if(eventName.includes("goalreplay")) state.replay = !(eventName.includes("ended") || eventName.endsWith("end") || eventName.includes("willend"));
   if(messageEndsMatch){
     const config = readConfig();
-    if(!state.finalVisible && !finalTransitionTimer) playFinalTransition(config);
+    queueFinalTransition(config);
   }
   render();
 }
@@ -1707,7 +1738,7 @@ refreshServerConfig().finally(()=>{
   startHeartbeat();
   if(forceFinalPreview){
     seedFinalPreview();
-    playFinalTransition(readConfig());
+    queueFinalTransition(readConfig());
   }else{
     connect();
     render();
