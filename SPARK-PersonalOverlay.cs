@@ -1,7 +1,9 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
@@ -18,6 +20,7 @@ namespace SparkPersonalOverlay
         private readonly string url;
         private readonly string root;
         private readonly WebView2 webView;
+        private readonly Timer placementTimer;
 
         public OverlayForm(string url, string root)
         {
@@ -25,7 +28,7 @@ namespace SparkPersonalOverlay
             this.root = root;
             Text = "SPARK Personal Overlay";
             StartPosition = FormStartPosition.Manual;
-            Bounds = Screen.PrimaryScreen.Bounds;
+            Bounds = FindRocketLeagueScreen().Bounds;
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
             TopMost = true;
@@ -35,6 +38,10 @@ namespace SparkPersonalOverlay
             webView.Dock = DockStyle.Fill;
             webView.DefaultBackgroundColor = Color.Transparent;
             Controls.Add(webView);
+
+            placementTimer = new Timer();
+            placementTimer.Interval = 1500;
+            placementTimer.Tick += delegate { SyncToRocketLeagueScreen(); };
         }
 
         protected override bool ShowWithoutActivation
@@ -55,7 +62,18 @@ namespace SparkPersonalOverlay
         protected override async void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            SyncToRocketLeagueScreen();
+            placementTimer.Start();
             await InitializeAsync();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                placementTimer.Dispose();
+            }
+            base.Dispose(disposing);
         }
 
         private async Task InitializeAsync()
@@ -85,6 +103,81 @@ namespace SparkPersonalOverlay
                 Close();
             }
         }
+
+        private void SyncToRocketLeagueScreen()
+        {
+            Rectangle targetBounds = FindRocketLeagueScreen().Bounds;
+            if (Bounds != targetBounds)
+            {
+                WindowState = FormWindowState.Normal;
+                Bounds = targetBounds;
+            }
+            TopMost = false;
+            TopMost = true;
+        }
+
+        private static Screen FindRocketLeagueScreen()
+        {
+            IntPtr handle = FindRocketLeagueWindow();
+            if (handle != IntPtr.Zero)
+            {
+                return Screen.FromHandle(handle);
+            }
+            return Screen.FromPoint(Cursor.Position) ?? Screen.PrimaryScreen;
+        }
+
+        private static IntPtr FindRocketLeagueWindow()
+        {
+            try
+            {
+                foreach (Process process in Process.GetProcessesByName("RocketLeague"))
+                {
+                    if (process.MainWindowHandle != IntPtr.Zero)
+                    {
+                        return process.MainWindowHandle;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            IntPtr found = IntPtr.Zero;
+            EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
+            {
+                if (!IsWindowVisible(hWnd)) return true;
+                uint processId;
+                GetWindowThreadProcessId(hWnd, out processId);
+                if (processId == 0) return true;
+                try
+                {
+                    Process process = Process.GetProcessById((int)processId);
+                    string title = process.MainWindowTitle ?? "";
+                    if (String.Equals(process.ProcessName, "RocketLeague", StringComparison.OrdinalIgnoreCase) ||
+                        title.IndexOf("Rocket League", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        found = hWnd;
+                        return false;
+                    }
+                }
+                catch
+                {
+                }
+                return true;
+            }, IntPtr.Zero);
+            return found;
+        }
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
     }
 
     internal static class Program
