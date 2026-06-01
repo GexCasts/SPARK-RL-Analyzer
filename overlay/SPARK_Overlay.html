@@ -1,0 +1,1609 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPARK Overlay</title>
+<style>
+:root{
+  --spark-amber:#ffb617;
+  --spark-gold:#ffd000;
+  --blue:#1b8cff;
+  --orange:#ff8400;
+  --overlay-text:#f7f7f4;
+  --overlay-accent:#ffd000;
+  --overlay-boost-blue:#1b8cff;
+  --overlay-boost-orange:#ff8400;
+  --overlay-font:Inter,Segoe UI,Arial,sans-serif;
+  --panel:#050609;
+  --text:#f7f7f4;
+  --stage-scale:1;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:transparent;
+  color:var(--overlay-text);
+  font-family:var(--overlay-font);
+}
+.stage{
+  position:relative;
+  width:1920px;
+  height:1080px;
+  transform:scale(var(--stage-scale));
+  transform-origin:top left;
+}
+.tournamentLogo{
+  position:absolute;
+  left:var(--logo-x,820px);
+  top:var(--logo-y,146px);
+  width:var(--logo-w,280px);
+  height:auto;
+  display:none;
+  z-index:4;
+  object-fit:contain;
+  object-position:center;
+  pointer-events:none;
+  filter:drop-shadow(0 5px 10px rgba(0,0,0,.48));
+}
+.stage.hasTournamentLogo .tournamentLogo{display:block}
+.customScoreboardSkin,
+.customScoreboardLayer{
+  display:none;
+}
+.customScoreboardSkin{
+  position:absolute;
+  inset:0;
+  width:1920px;
+  height:1080px;
+  object-fit:contain;
+  object-position:top center;
+  z-index:1;
+  pointer-events:none;
+}
+.customScoreboardLayer{
+  position:absolute;
+  inset:0;
+  z-index:3;
+  pointer-events:none;
+}
+.stage.customScoreboard .scorebug{
+  display:none;
+}
+.stage.customScoreboard .customScoreboardSkin,
+.stage.customScoreboard .customScoreboardLayer{
+  display:block;
+}
+.maskSlot{
+  position:absolute;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-width:1px;
+  min-height:1px;
+  color:#f7f7f4;
+  font-weight:1000;
+  line-height:1;
+  text-align:center;
+  text-transform:uppercase;
+  text-shadow:0 3px 7px rgba(0,0,0,.65);
+  overflow:hidden;
+}
+.maskSlot.logo img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  object-position:center;
+  filter:drop-shadow(0 4px 7px rgba(0,0,0,.55));
+}
+.maskSlot.logo.empty{
+  display:none !important;
+}
+.maskSlot.score{
+  font-size:var(--slot-font,52px);
+  color:#fffdf3;
+}
+.maskSlot.clock{
+  font-size:var(--slot-font,44px);
+  color:#fffdf3;
+  letter-spacing:.02em;
+}
+.maskSlot.teamName{
+  padding:0 12px;
+  font-size:var(--slot-font,26px);
+  letter-spacing:.03em;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+.maskSlot.seriesTitle{
+  font-size:var(--slot-font,22px);
+  letter-spacing:.08em;
+  color:#050609;
+  text-shadow:none;
+  white-space:nowrap;
+}
+.maskSlot.seriesDots{
+  gap:8px;
+}
+.maskSlot.seriesDots .dot{
+  width:clamp(10px,22%,20px);
+  height:clamp(8px,70%,18px);
+}
+.scorebug{
+  position:absolute;
+  left:50%;
+  top:0;
+  width:min(1180px,86vw);
+  height:156px;
+  transform:translateX(-50%);
+  filter:drop-shadow(0 8px 18px rgba(0,0,0,.45));
+}
+.wing{
+  position:absolute;
+  top:20px;
+  width:43%;
+  height:58px;
+  background:linear-gradient(180deg,#ffc938,#f1a70e);
+  color:#fff;
+  display:flex;
+  align-items:center;
+  font-size:24px;
+  font-weight:900;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  text-shadow:0 2px 0 rgba(0,0,0,.18);
+  gap:14px;
+  overflow:hidden;
+}
+.wing.left{
+  left:0;
+  justify-content:flex-end;
+  padding-left:24px;
+  padding-right:118px;
+  clip-path:polygon(0 0,100% 0,84% 100%,0 100%);
+}
+.wing.right{
+  right:0;
+  justify-content:flex-start;
+  padding-right:24px;
+  padding-left:118px;
+  clip-path:polygon(0 0,100% 0,100% 100%,16% 100%);
+}
+.teamLogo{
+  width:68px;
+  height:42px;
+  flex:0 0 68px;
+  object-fit:contain;
+  object-position:center;
+  filter:drop-shadow(0 3px 5px rgba(0,0,0,.55));
+}
+.teamLogo.empty{
+  display:none;
+}
+.teamLabel{
+  min-width:0;
+  flex:0 1 auto;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.center{
+  position:absolute;
+  left:50%;
+  top:0;
+  width:344px;
+  height:132px;
+  transform:translateX(-50%);
+  background:#07080b;
+  clip-path:polygon(8% 0,92% 0,100% 64%,70% 100%,30% 100%,0 64%);
+  display:grid;
+  grid-template-columns:72px 1fr 72px;
+  grid-template-rows:70px 28px 34px;
+  align-items:center;
+  justify-items:center;
+  border-bottom:2px solid rgba(255,255,255,.55);
+}
+.score{
+  width:72px;
+  height:70px;
+  display:grid;
+  place-items:center;
+  font-size:42px;
+  font-weight:900;
+}
+.score.blue{
+  background:var(--blue);
+  padding-left:12px;
+}
+.score.orange{
+  background:var(--orange);
+  padding-right:12px;
+}
+.clock{
+  grid-column:2;
+  font-size:36px;
+  font-weight:950;
+  line-height:1;
+}
+.match{
+  grid-column:1/4;
+  grid-row:2;
+  font-size:13px;
+  font-weight:800;
+  color:#ddd;
+}
+.bolt{
+  grid-column:2;
+  grid-row:3;
+  height:42px;
+  transform:translateY(3px);
+}
+.series{
+  position:absolute;
+  top:78px;
+  width:220px;
+  height:36px;
+  background:#fff;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.series.left{
+  right:50%;
+  margin-right:156px;
+  justify-content:flex-end;
+  padding-right:34px;
+  clip-path:polygon(20% 0,100% 0,86% 100%,0 100%);
+}
+.series.right{
+  left:50%;
+  margin-left:156px;
+  justify-content:flex-start;
+  padding-left:34px;
+  clip-path:polygon(0 0,80% 0,100% 100%,14% 100%);
+}
+.dot{
+  width:18px;
+  height:18px;
+  border-radius:4px;
+  background:#08090d;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);
+}
+.dot.blue.filled{background:var(--blue)}
+.dot.orange.filled{background:var(--orange)}
+.boosts{
+  position:absolute;
+  top:96px;
+  width:286px;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+.boosts.left{left:30px}
+.boosts.right{right:30px}
+.boostRow{
+  --boostTeam:var(--overlay-boost-blue);
+  position:relative;
+  height:22px;
+  background:linear-gradient(180deg,rgba(9,11,16,.94),rgba(3,4,7,.98));
+  border:1px solid color-mix(in srgb,var(--boostTeam) 45%,rgba(255,255,255,.2));
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 38px;
+  align-items:center;
+  font-size:12px;
+  font-weight:850;
+  text-transform:uppercase;
+  overflow:hidden;
+  box-shadow:0 5px 12px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.12);
+  clip-path:polygon(0 0,96% 0,100% 50%,96% 100%,0 100%);
+}
+.boosts.right .boostRow{
+  --boostTeam:var(--overlay-boost-orange);
+  grid-template-columns:38px minmax(0,1fr);
+  text-align:right;
+  clip-path:polygon(4% 0,100% 0,100% 100%,4% 100%,0 50%);
+}
+.bar{
+  position:absolute;
+  inset:0 auto 0 0;
+  height:100%;
+  width:var(--boost,0%);
+  background:
+    linear-gradient(90deg,color-mix(in srgb,var(--boostTeam) 90%,#fff 6%),var(--overlay-accent)),
+    linear-gradient(180deg,rgba(255,255,255,.28),transparent);
+  opacity:.78;
+  box-shadow:0 0 16px color-mix(in srgb,var(--boostTeam) 72%,transparent);
+  transform-origin:left;
+  transition:width .18s cubic-bezier(.22,1,.36,1);
+}
+.boosts.right .bar{
+  inset:0 0 0 auto;
+  transform-origin:right;
+}
+.name,.boostValue{position:relative;padding:0 8px;z-index:1;color:var(--overlay-text)}
+.boostValue{
+  height:100%;
+  display:grid;
+  place-items:center;
+  color:var(--overlay-accent);
+  background:rgba(0,0,0,.48);
+  font-size:13px;
+  font-weight:1000;
+}
+.replay{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:86px;
+  padding-top:27px;
+  background:
+    linear-gradient(90deg,transparent 0 28%,rgba(255,208,0,.92) 28% 72%,transparent 72% 100%),
+    linear-gradient(180deg,transparent,rgba(5,6,9,.82) 42%,rgba(5,6,9,.96));
+  color:#fffdf3;
+  font-size:24px;
+  font-weight:950;
+  text-transform:uppercase;
+  letter-spacing:.24em;
+  text-align:center;
+  text-shadow:0 3px 8px rgba(0,0,0,.75);
+  display:none;
+  clip-path:polygon(0 40%,34% 40%,39% 0,61% 0,66% 40%,100% 40%,100% 100%,0 100%);
+  filter:drop-shadow(0 -7px 18px rgba(0,0,0,.55));
+  z-index:6;
+}
+.stage.replayActive .replay{display:block}
+.stage.replayActive .boosts,
+.stage.replayActive .liveStatCard{
+  display:none;
+}
+.status{
+  position:absolute;
+  left:50%;
+  top:150px;
+  transform:translateX(-50%);
+  color:rgba(255,255,255,.55);
+  font-size:13px;
+  font-weight:700;
+}
+.stage.live .status{display:none}
+.liveStatCard{
+  position:absolute;
+  left:42px;
+  bottom:42px;
+  width:270px;
+  min-height:0;
+  padding:7px;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.08),transparent 34%),
+    rgba(5,6,9,.94);
+  border:1px solid rgba(255,208,0,.72);
+  box-shadow:0 18px 30px rgba(0,0,0,.48), inset 0 1px rgba(255,255,255,.12);
+  display:grid;
+  gap:4px;
+  overflow:hidden;
+}
+.liveStatHeader{
+  display:none;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  color:rgba(247,247,244,.72);
+  font-size:10px;
+  font-weight:950;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.liveStatHeader b{
+  color:var(--spark-gold);
+  font-size:11px;
+}
+.liveStatPlayers{
+  display:grid;
+  gap:3px;
+}
+.liveStatPlayer{
+  --team:var(--spark-gold);
+  display:grid;
+  grid-template-columns:86px repeat(4,34px);
+  grid-template-rows:20px 0fr;
+  align-items:center;
+  column-gap:2px;
+  min-height:20px;
+  padding:0 4px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.045);
+  color:rgba(247,247,244,.84);
+  font-size:9px;
+  font-weight:850;
+  transition:grid-template-rows .22s cubic-bezier(.16,1,.3,1), min-height .22s cubic-bezier(.16,1,.3,1), padding .22s cubic-bezier(.16,1,.3,1), background .18s ease, border-color .18s ease, color .18s ease;
+}
+.liveStatPlayer.blue{--team:var(--blue)}
+.liveStatPlayer.orange{--team:var(--orange)}
+.liveStatPlayer.focused{
+  grid-template-rows:24px 8px;
+  min-height:34px;
+  padding:2px 6px 4px;
+  border-color:color-mix(in srgb,var(--team) 74%,#f7f7f4);
+  background:linear-gradient(90deg,color-mix(in srgb,var(--team) 26%,transparent),rgba(255,255,255,.06));
+  color:#fffdf3;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.liveStatName{
+  min-width:0;
+  max-width:14ch;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  font-size:9px;
+  font-weight:950;
+  color:inherit;
+  transition:font-size .22s cubic-bezier(.16,1,.3,1), font-weight .18s ease;
+}
+.liveStatPlayer.focused .liveStatName{
+  font-size:11px;
+  font-weight:1000;
+}
+.liveStatValue{
+  display:grid;
+  gap:1px;
+  justify-items:center;
+  line-height:1;
+}
+.liveStatValue b{
+  color:#fffdf3;
+  font-size:9px;
+  transition:font-size .22s cubic-bezier(.16,1,.3,1), color .18s ease;
+}
+.liveStatPlayer.focused .liveStatValue b{
+  color:var(--spark-gold);
+  font-size:11px;
+}
+.liveStatValue span{
+  color:rgba(247,247,244,.54);
+  font-size:6px;
+  font-weight:950;
+  letter-spacing:.02em;
+}
+.liveStatBoost{
+  grid-column:1 / -1;
+  grid-row:2;
+  align-self:end;
+  height:5px;
+  overflow:hidden;
+  opacity:0;
+  background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.12);
+  transition:opacity .18s ease;
+}
+.liveStatPlayer.focused .liveStatBoost{opacity:1}
+.liveStatBoost i{
+  display:block;
+  width:var(--boost,0%);
+  height:100%;
+  background:linear-gradient(90deg,var(--team),var(--spark-gold));
+  box-shadow:0 0 14px color-mix(in srgb,var(--team) 72%,transparent);
+  transition:width .22s cubic-bezier(.16,1,.3,1);
+}
+.stage.finalActive .scorebug,
+.stage.finalActive .customScoreboardSkin,
+.stage.finalActive .customScoreboardLayer,
+.stage.finalActive .boosts,
+.stage.finalActive .liveStatCard,
+.stage.finalActive .replay,
+.stage.finalActive .status{
+  display:none;
+}
+.finalScreen{
+  display:none;
+  position:absolute;
+  inset:0;
+  z-index:20;
+  color:#fffdf3;
+  isolation:isolate;
+  box-shadow:inset 0 0 0 9999px #050607;
+  background:
+    radial-gradient(circle at 24% 18%,rgba(255,208,0,.18),transparent 28%),
+    linear-gradient(135deg,rgba(5,6,9,.96),rgba(20,21,25,.98) 58%,rgba(5,6,9,.98));
+  overflow:hidden;
+}
+.finalScreen.active{display:block}
+.stage.fadeTransition .finalScreen.active{
+  animation:finalFade .18s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes finalFade{
+  from{opacity:0}
+  to{opacity:1}
+}
+.finalScreen::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    linear-gradient(104deg,rgba(255,255,255,.14) 0 2px,transparent 2px 100%) left 0 top 0 / 90px 100% no-repeat,
+    linear-gradient(76deg,rgba(255,255,255,.14) 0 2px,transparent 2px 100%) right 0 top 0 / 90px 100% no-repeat;
+  opacity:.76;
+}
+.finalScreen::after{
+  content:"";
+  position:absolute;
+  inset:-80px;
+  z-index:0;
+  background:
+    repeating-radial-gradient(circle at 18% 24%,rgba(255,208,0,.13) 0 1px,transparent 1px 5px),
+    repeating-linear-gradient(97deg,rgba(255,182,23,.055) 0 1px,transparent 1px 9px),
+    radial-gradient(circle at 52% 46%,rgba(255,208,0,.10),transparent 32%);
+  mix-blend-mode:screen;
+  opacity:.24;
+  animation:amberStatic 1.7s steps(5,end) infinite;
+  pointer-events:none;
+}
+@keyframes amberStatic{
+  0%{transform:translate3d(0,0,0)}
+  25%{transform:translate3d(-18px,9px,0)}
+  50%{transform:translate3d(12px,-14px,0)}
+  75%{transform:translate3d(21px,6px,0)}
+  100%{transform:translate3d(0,0,0)}
+}
+.finalContent{
+  position:relative;
+  z-index:1;
+  width:1500px;
+  top:50%;
+  margin:0 auto;
+  transform:translateY(-50%);
+}
+.finalHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:end;
+  margin-bottom:34px;
+}
+.finalKicker{
+  color:var(--spark-gold);
+  font-size:58px;
+  font-weight:1000;
+  letter-spacing:.06em;
+  line-height:1;
+  text-transform:uppercase;
+}
+.finalSeries{
+  color:rgba(247,247,244,.72);
+  font-size:24px;
+  font-weight:900;
+  text-transform:uppercase;
+}
+.finalScore{
+  display:grid;
+  grid-template-columns:1fr 170px 1fr;
+  align-items:center;
+  gap:24px;
+  margin-bottom:28px;
+}
+.finalTeam{
+  min-height:92px;
+  padding:15px 24px 12px;
+  background:rgba(255,255,255,.075);
+  border:1px solid rgba(255,255,255,.16);
+  font-size:34px;
+  font-weight:1000;
+  text-transform:uppercase;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 54px;
+  align-content:center;
+  align-items:center;
+  gap:10px;
+}
+.finalTeam.right{
+  grid-template-columns:54px minmax(0,1fr);
+  text-align:right;
+}
+.finalTeamName{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.finalTeamLogo{
+  width:42px;
+  height:42px;
+  object-fit:contain;
+  justify-self:end;
+  filter:drop-shadow(0 3px 5px rgba(0,0,0,.45));
+}
+.finalTeam.right .finalTeamLogo{justify-self:start}
+.finalTeamLogo.empty{display:none}
+.finalTeamSeries{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  grid-column:1 / -1;
+}
+.finalTeam.right .finalTeamSeries{justify-content:flex-end}
+.finalTeamSeries .dot{
+  width:22px;
+  height:12px;
+  border-radius:3px;
+  background:rgba(5,6,9,.88);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);
+}
+.finalTeamSeries .dot.blue.filled{background:var(--blue)}
+.finalTeamSeries .dot.orange.filled{background:var(--orange)}
+.finalScoreCenter{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  color:#050609;
+  font-size:58px;
+  font-weight:1000;
+}
+.finalScoreCenter span{
+  display:grid;
+  place-items:center;
+  min-height:82px;
+}
+.finalScoreCenter .blue{background:var(--blue)}
+.finalScoreCenter .orange{background:var(--orange)}
+.finalBoard{
+  display:grid;
+  gap:10px;
+}
+.finalRow{
+  display:grid;
+  grid-template-columns:220px repeat(6,1fr);
+  align-items:center;
+  min-height:58px;
+  background:rgba(255,255,255,.075);
+  border:1px solid rgba(255,255,255,.12);
+}
+.finalRow.header{
+  min-height:42px;
+  background:rgba(255,208,0,.16);
+  color:var(--spark-gold);
+  font-size:13px;
+  font-weight:1000;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.finalRow > div{
+  padding:0 12px;
+  font-size:21px;
+  font-weight:900;
+  text-align:center;
+}
+.finalRow .name{
+  text-align:left;
+  max-width:18ch;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.finalRow .blue{color:var(--blue)}
+.finalRow .orange{color:var(--orange)}
+.stingerTransition{
+  display:none;
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  z-index:30;
+  background:#050607;
+  pointer-events:none;
+}
+.stingerTransition.active{display:block}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <img class="tournamentLogo" id="tournamentLogo" alt="">
+  <img class="customScoreboardSkin" id="customScoreboardSkin" alt="">
+  <div class="customScoreboardLayer" id="customScoreboardLayer">
+    <div class="maskSlot logo" id="maskBlueLogo"><img alt=""></div>
+    <div class="maskSlot logo" id="maskOrangeLogo"><img alt=""></div>
+    <div class="maskSlot score" id="maskBlueScore">0</div>
+    <div class="maskSlot score" id="maskOrangeScore">0</div>
+    <div class="maskSlot clock" id="maskClock">5:00</div>
+    <div class="maskSlot teamName" id="maskBlueName">Blue</div>
+    <div class="maskSlot teamName" id="maskOrangeName">Orange</div>
+    <div class="maskSlot seriesDots" id="maskBlueSeries"></div>
+    <div class="maskSlot seriesDots" id="maskOrangeSeries"></div>
+    <div class="maskSlot seriesTitle" id="maskSeriesTitle"></div>
+  </div>
+  <div class="scorebug">
+    <div class="wing left"><img class="teamLogo" id="blueLogo" alt=""><span class="teamLabel" id="blueName">Blue</span></div>
+    <div class="wing right"><span class="teamLabel" id="orangeName">Orange</span><img class="teamLogo" id="orangeLogo" alt=""></div>
+    <div class="series left" id="blueSeries"></div>
+    <div class="series right" id="orangeSeries"></div>
+    <div class="center">
+      <div class="score blue" id="blueScore">0</div>
+      <div class="clock" id="clock">5:00</div>
+      <div class="score orange" id="orangeScore">0</div>
+      <div class="match" id="matchTag">Waiting for feed</div>
+      <img class="bolt" src="/__1ne_logo.png" alt="">
+    </div>
+  </div>
+  <div class="boosts left" id="blueBoosts"></div>
+  <div class="boosts right" id="orangeBoosts"></div>
+  <div class="liveStatCard" id="liveStatCard">
+    <div class="liveStatHeader"><span>Live Stats</span><b id="liveStatFocus">No focused view</b></div>
+    <div class="liveStatPlayers" id="liveStatPlayers"></div>
+  </div>
+  <div class="replay">Replay</div>
+  <div class="finalScreen" id="finalScreen">
+    <div class="finalContent">
+      <div class="finalHeader">
+        <div>
+          <div class="finalKicker">Post Game Report</div>
+        </div>
+        <div class="finalSeries" id="finalSeries">Best of 5</div>
+      </div>
+      <div class="finalScore" id="finalScore"></div>
+      <div class="finalBoard" id="finalBoard"></div>
+    </div>
+  </div>
+  <video class="stingerTransition" id="stingerTransition" muted playsinline preload="auto"></video>
+  <div class="status" id="status">Waiting for SPARK live feed</div>
+</div>
+<script>
+const overlayConfigKey = "oneReplayAnalyzer.overlayConfig.v1";
+const defaultConfig = {
+  blueTeamName:"",
+  orangeTeamName:"",
+  blueLogoUrl:"",
+  orangeLogoUrl:"",
+  scoreboardImageUrl:"",
+  scoreboardMaskUrl:"",
+  seriesTitle:"",
+  tournamentLogoUrl:"",
+  tournamentLogoX:820,
+  tournamentLogoY:146,
+  tournamentLogoWidth:280,
+  tournamentLogoRatio:2.2,
+  stingerTransitionUrl:"",
+  stingerTransitionName:"",
+  stingerTransitionStatus:"",
+  seriesBestOf:5,
+  blueSeriesScore:0,
+  orangeSeriesScore:0,
+  overlayTextColor:"#f7f7f4",
+  overlayAccentColor:"#ffd000",
+  overlayBlueBoostColor:"#1b8cff",
+  overlayOrangeBoostColor:"#ff8400",
+  overlayFontFamily:"Inter, Segoe UI, Arial, sans-serif"
+};
+const state = {
+  connected:false,
+  updates:0,
+  replay:false,
+  matchEnded:false,
+  finalVisible:false,
+  clock:300,
+  teams:{Blue:{name:"Blue",score:0},Orange:{name:"Orange",score:0}},
+  players:new Map(),
+  focusedPlayerName:null
+};
+let serverConfig = null;
+let stingerTimer = null;
+let stingerFallbackTimer = null;
+const $ = id=>document.getElementById(id);
+function firstDefined(...values){
+  for(const value of values) if(value !== undefined && value !== null && value !== "") return value;
+  return undefined;
+}
+function valueByKey(obj, names){
+  if(!obj || typeof obj !== "object") return undefined;
+  for(const name of names) if(obj[name] !== undefined) return obj[name];
+  const wanted = names.map(name=>String(name).toLowerCase());
+  const found = Object.entries(obj).find(([key])=>wanted.includes(key.toLowerCase()));
+  return found ? found[1] : undefined;
+}
+function toNumber(value, fallback=0){
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+function toBoolean(value){
+  return value === true || value === 1 || value === "1" || String(value).toLowerCase() === "true";
+}
+function normalizeTeam(value){
+  if(value && typeof value === "object") value = valueByKey(value,["TeamNum","teamNum","team","Team"]);
+  if(value === 0 || value === "0") return "Blue";
+  if(value === 1 || value === "1") return "Orange";
+  const text = String(value || "").toLowerCase();
+  if(text.includes("blue")) return "Blue";
+  if(text.includes("orange")) return "Orange";
+  return null;
+}
+function cleanName(value){
+  return String(value || "").replace(/\|/g,"").trim();
+}
+function escapeHtml(value){
+  return String(value ?? "").replace(/[&<>"']/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
+}
+function readConfig(){
+  let localConfig = {};
+  try{ localConfig = JSON.parse(localStorage.getItem(overlayConfigKey) || "{}"); }
+  catch{ localConfig = {}; }
+  return {...defaultConfig, ...localConfig, ...(serverConfig || {})};
+}
+function applyOverlayTheme(config){
+  const root = document.documentElement;
+  const color = (value, fallback)=>/^#[0-9a-f]{6}$/i.test(String(value || "")) ? value : fallback;
+  const fonts = [
+    "Inter, Segoe UI, Arial, sans-serif",
+    "Segoe UI, Inter, Arial, sans-serif",
+    "Arial, Helvetica, sans-serif",
+    "Barlow Condensed, Inter, Arial, sans-serif",
+    "Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"
+  ];
+  root.style.setProperty("--overlay-text", color(config.overlayTextColor, defaultConfig.overlayTextColor));
+  root.style.setProperty("--overlay-accent", color(config.overlayAccentColor, defaultConfig.overlayAccentColor));
+  root.style.setProperty("--overlay-boost-blue", color(config.overlayBlueBoostColor, defaultConfig.overlayBlueBoostColor));
+  root.style.setProperty("--overlay-boost-orange", color(config.overlayOrangeBoostColor, defaultConfig.overlayOrangeBoostColor));
+  root.style.setProperty("--spark-gold", color(config.overlayAccentColor, defaultConfig.overlayAccentColor));
+  root.style.setProperty("--overlay-font", fonts.includes(config.overlayFontFamily) ? config.overlayFontFamily : defaultConfig.overlayFontFamily);
+}
+async function refreshServerConfig(){
+  try{
+    const response = await fetch(`${location.origin}/api/overlay-config`, {cache:"no-store"});
+    if(!response.ok) return;
+    const json = await response.json();
+    if(json?.config && typeof json.config === "object"){
+      serverConfig = json.config;
+      try{ localStorage.setItem(overlayConfigKey, JSON.stringify({...defaultConfig, ...serverConfig})); }
+      catch{}
+      render();
+    }
+  }catch{}
+}
+function formatClock(seconds){
+  const raw = Number(seconds);
+  if(Number.isFinite(raw) && raw < 0) return `+${formatClock(Math.abs(raw))}`;
+  const rounded = Math.max(0, Math.round(Number(seconds) || 0));
+  const m = Math.floor(rounded / 60);
+  const s = rounded % 60;
+  return `${m}:${String(s).padStart(2,"0")}`;
+}
+function overlayGameLabel(config){
+  const bestOf = Number(config.seriesBestOf) || 5;
+  const played = Math.max(0, Number(config.blueSeriesScore) || 0) + Math.max(0, Number(config.orangeSeriesScore) || 0);
+  return `Game ${Math.min(bestOf, played + 1)}`;
+}
+function renderDots(side, config){
+  const maxWins = Math.ceil((Number(config.seriesBestOf) || 5) / 2);
+  const score = Math.max(0, Math.min(maxWins, Number(side === "Blue" ? config.blueSeriesScore : config.orangeSeriesScore) || 0));
+  return Array.from({length:maxWins}, (_, index)=>`<span class="dot ${side.toLowerCase()} ${index < score ? "filled" : ""}"></span>`).join("");
+}
+function teamLogoFor(side, config){
+  const manual = String(side === "Blue" ? config.blueLogoUrl || "" : config.orangeLogoUrl || "").trim();
+  return manual;
+}
+const maskColorTargets = {
+  logos:{rgb:[255,0,0]},
+  scores:{rgb:[0,0,255]},
+  clock:{rgb:[255,255,0]},
+  names:{rgb:[255,0,255]},
+  series:{rgb:[0,255,255]},
+  title:{rgb:[0,255,0]}
+};
+const maskState = {source:"", regions:null, loading:false, token:0};
+function colorMatches(data, index, target){
+  const r = data[index], g = data[index + 1], b = data[index + 2], a = data[index + 3];
+  if(a < 80) return false;
+  const [tr,tg,tb] = target;
+  return Math.abs(r - tr) <= 60 && Math.abs(g - tg) <= 60 && Math.abs(b - tb) <= 60;
+}
+function loadImageElement(src){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+function componentsForColor(data, width, height, target){
+  const seen = new Uint8Array(width * height);
+  const components = [];
+  const queue = [];
+  for(let y = 0; y < height; y++){
+    for(let x = 0; x < width; x++){
+      const start = y * width + x;
+      if(seen[start]) continue;
+      const pixel = start * 4;
+      if(!colorMatches(data, pixel, target)){
+        seen[start] = 1;
+        continue;
+      }
+      let minX = x, maxX = x, minY = y, maxY = y, count = 0;
+      queue.length = 0;
+      queue.push(start);
+      seen[start] = 1;
+      for(let cursor = 0; cursor < queue.length; cursor++){
+        const current = queue[cursor];
+        const cx = current % width;
+        const cy = Math.floor(current / width);
+        count++;
+        if(cx < minX) minX = cx;
+        if(cx > maxX) maxX = cx;
+        if(cy < minY) minY = cy;
+        if(cy > maxY) maxY = cy;
+        const neighbors = [current - 1, current + 1, current - width, current + width];
+        for(const next of neighbors){
+          if(next < 0 || next >= seen.length || seen[next]) continue;
+          if((next === current - 1 && cx === 0) || (next === current + 1 && cx === width - 1)) continue;
+          const nextPixel = next * 4;
+          if(!colorMatches(data, nextPixel, target)){
+            seen[next] = 1;
+            continue;
+          }
+          seen[next] = 1;
+          queue.push(next);
+        }
+      }
+      if(count >= 48){
+        components.push({
+          x:minX * (1920 / width),
+          y:minY * (1080 / height),
+          width:(maxX - minX + 1) * (1920 / width),
+          height:(maxY - minY + 1) * (1080 / height),
+          count
+        });
+      }
+    }
+  }
+  return components.sort((a,b)=>b.count - a.count);
+}
+async function analyzeScoreboardMask(src){
+  const token = ++maskState.token;
+  maskState.source = src;
+  maskState.loading = true;
+  try{
+    const img = await loadImageElement(src);
+    if(token !== maskState.token) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    const ctx = canvas.getContext("2d", {willReadFrequently:true});
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const regions = {};
+    Object.entries(maskColorTargets).forEach(([key, target])=>{
+      regions[key] = componentsForColor(data, canvas.width, canvas.height, target.rgb);
+    });
+    maskState.regions = regions;
+    maskState.loading = false;
+    return regions;
+  }catch{
+    if(token === maskState.token){
+      maskState.regions = null;
+      maskState.loading = false;
+    }
+    return null;
+  }
+}
+function activeMaskRegions(config){
+  const src = String(config.scoreboardMaskUrl || "");
+  if(!src) return null;
+  if(maskState.source !== src){
+    maskState.regions = null;
+    analyzeScoreboardMask(src).then(()=>render());
+    return null;
+  }
+  return maskState.regions;
+}
+function sideRegions(regions, key){
+  return [...(regions?.[key] || [])].sort((a,b)=>(a.x + a.width / 2) - (b.x + b.width / 2));
+}
+function largestRegion(regions, key){
+  return [...(regions?.[key] || [])].sort((a,b)=>b.count - a.count)[0] || null;
+}
+function setMaskSlot(id, region, options={}){
+  const el = $(id);
+  if(!el) return;
+  if(!region){
+    el.style.display = "none";
+    return;
+  }
+  const pad = Number(options.pad || 0);
+  const x = region.x + pad;
+  const y = region.y + pad;
+  const width = Math.max(1, region.width - pad * 2);
+  const height = Math.max(1, region.height - pad * 2);
+  el.style.display = "flex";
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  el.style.width = `${width}px`;
+  el.style.height = `${height}px`;
+  if(options.fontScale){
+    const text = options.text === undefined ? String(el.textContent || "") : String(options.text || "");
+    if(options.text !== undefined) el.textContent = text;
+    const chars = Math.max(1, text.length);
+    const widthLimit = width / Math.max(1, chars * (options.charScale || .56));
+    el.style.setProperty("--slot-font", `${Math.max(options.minFont || 8, Math.min(options.maxFont || 96, height * options.fontScale, widthLimit))}px`);
+  }
+}
+function renderMaskDots(id, side, config){
+  const el = $(id);
+  if(el) el.innerHTML = renderDots(side, config);
+}
+function setMaskLogo(id, src){
+  const el = $(id);
+  if(!el) return;
+  const img = el.querySelector("img");
+  const hasLogo = !!String(src || "").trim();
+  el.classList.toggle("empty", !hasLogo);
+  if(img) img.src = hasLogo ? src : "";
+}
+function scoreText(value){
+  const n = Number(value);
+  return Number.isFinite(n) ? String(Math.max(0, Math.round(n))) : "0";
+}
+function renderCustomScoreboard(config){
+  const hasCustom = !!(config.scoreboardImageUrl && config.scoreboardMaskUrl);
+  const stage = $("stage");
+  stage.classList.toggle("customScoreboard", hasCustom);
+  if(!hasCustom) return;
+
+  const skin = $("customScoreboardSkin");
+  if(skin && skin.src !== config.scoreboardImageUrl) skin.src = config.scoreboardImageUrl;
+
+  const regions = activeMaskRegions(config);
+  if(!regions) return;
+  const logoRegions = sideRegions(regions, "logos");
+  const scoreRegions = sideRegions(regions, "scores");
+  const nameRegions = sideRegions(regions, "names");
+  const seriesRegions = sideRegions(regions, "series");
+  const clockRegion = largestRegion(regions, "clock");
+  const titleRegion = largestRegion(regions, "title");
+
+  setMaskSlot("maskBlueLogo", logoRegions[0], {pad:4});
+  setMaskSlot("maskOrangeLogo", logoRegions[logoRegions.length - 1], {pad:4});
+  const blueName = config.blueTeamName || state.teams.Blue.name || "Blue";
+  const orangeName = config.orangeTeamName || state.teams.Orange.name || "Orange";
+  const title = String(config.seriesTitle || overlayGameLabel(config)).trim();
+  setMaskSlot("maskBlueScore", scoreRegions[0], {fontScale:.82, maxFont:86, text:scoreText(state.teams.Blue.score)});
+  setMaskSlot("maskOrangeScore", scoreRegions[scoreRegions.length - 1], {fontScale:.82, maxFont:86, text:scoreText(state.teams.Orange.score)});
+  setMaskSlot("maskClock", clockRegion, {fontScale:.7, charScale:.52, maxFont:72, text:formatClock(state.clock)});
+  setMaskSlot("maskBlueName", nameRegions[0], {pad:8, fontScale:.72, charScale:.6, maxFont:58, text:blueName});
+  setMaskSlot("maskOrangeName", nameRegions[nameRegions.length - 1], {pad:8, fontScale:.72, charScale:.6, maxFont:58, text:orangeName});
+  setMaskSlot("maskBlueSeries", seriesRegions[0], {pad:6});
+  setMaskSlot("maskOrangeSeries", seriesRegions[seriesRegions.length - 1], {pad:6});
+  setMaskSlot("maskSeriesTitle", titleRegion, {pad:3, fontScale:.78, charScale:.48, maxFont:44, text:title});
+
+  setMaskLogo("maskBlueLogo", teamLogoFor("Blue", config));
+  setMaskLogo("maskOrangeLogo", teamLogoFor("Orange", config));
+  renderMaskDots("maskBlueSeries", "Blue", config);
+  renderMaskDots("maskOrangeSeries", "Orange", config);
+}
+function extractPlayers(payload){
+  const players = firstDefined(
+    valueByKey(payload,["players","Players"]),
+    valueByKey(payload?.Game,["players","Players"]),
+    valueByKey(payload?.game,["players","Players"])
+  );
+  if(Array.isArray(players)) return players;
+  if(players && typeof players === "object"){
+    return Object.entries(players).map(([id, player])=>{
+      if(player && typeof player === "object" && !Array.isArray(player)) return {...player, __playerKey:id};
+      return player;
+    });
+  }
+  return [];
+}
+function updateTeams(payload){
+  const teams = firstDefined(valueByKey(payload,["teams","Teams"]), valueByKey(payload?.Game,["teams","Teams"]));
+  if(Array.isArray(teams)){
+    teams.forEach(team=>{
+      const key = normalizeTeam(team);
+      if(!key) return;
+      state.teams[key].name = cleanName(firstDefined(valueByKey(team,["Name","name","TeamName","teamName"]), state.teams[key].name));
+      const incomingScore = toNumber(valueByKey(team,["Score","score","Goals","goals"]), state.teams[key].score);
+      state.teams[key].score = state.matchEnded
+        ? Math.max(state.teams[key].score || 0, incomingScore || 0)
+        : incomingScore;
+    });
+  }else if(teams && typeof teams === "object"){
+    Object.entries(teams).forEach(([name, team])=>{
+      const key = normalizeTeam(firstDefined(valueByKey(team,["TeamNum","teamNum","team","Team"]), name));
+      if(!key) return;
+      state.teams[key].name = cleanName(firstDefined(valueByKey(team,["Name","name","TeamName","teamName"]), state.teams[key].name));
+      const incomingScore = toNumber(valueByKey(team,["Score","score","Goals","goals"]), state.teams[key].score);
+      state.teams[key].score = state.matchEnded
+        ? Math.max(state.teams[key].score || 0, incomingScore || 0)
+        : incomingScore;
+    });
+  }
+}
+function updatePlayers(payload){
+  extractPlayers(payload).forEach(player=>{
+    const name = cleanName(firstDefined(valueByKey(player,["Name","name","PlayerName","playerName","Id","id","__playerKey"]), ""));
+    if(!name) return;
+    const team = normalizeTeam(firstDefined(valueByKey(player,["TeamNum","teamNum","Team","team"]), valueByKey(player,["Team"])));
+    if(!team) return;
+    const existing = state.players.get(name) || {name, team, boost:0, boostKnown:false, stats:{score:0,goals:0,shots:0,assists:0,saves:0,demos:0,touches:0}};
+    existing.team = team;
+    const boost = boostValueFromPlayer(player);
+    existing.boost = boost !== null ? boost : 0;
+    existing.boostKnown = true;
+    existing.stats.score = toNumber(firstDefined(valueByKey(player,["Score","score","points","Points"]), existing.stats.score), existing.stats.score);
+    existing.stats.goals = toNumber(firstDefined(valueByKey(player,["Goals","goals"]), existing.stats.goals), existing.stats.goals);
+    existing.stats.shots = toNumber(firstDefined(valueByKey(player,["Shots","shots"]), existing.stats.shots), existing.stats.shots);
+    existing.stats.assists = toNumber(firstDefined(valueByKey(player,["Assists","assists"]), existing.stats.assists), existing.stats.assists);
+    existing.stats.saves = toNumber(firstDefined(valueByKey(player,["Saves","saves"]), existing.stats.saves), existing.stats.saves);
+    existing.stats.demos = toNumber(firstDefined(valueByKey(player,["Demos","demos","Demolitions","demolitions"]), existing.stats.demos), existing.stats.demos);
+    existing.stats.touches = toNumber(firstDefined(valueByKey(player,["Touches","touches"]), existing.stats.touches), existing.stats.touches);
+    state.players.set(name, existing);
+  });
+}
+function playerNameFromValue(value){
+  if(!value) return "";
+  if(typeof value === "string") return cleanName(value);
+  return cleanName(firstDefined(valueByKey(value,["Name","name","PlayerName","playerName","Player","player","Id","id","target","Target","__playerKey"]), ""));
+}
+function focusNameFromPayload(payload){
+  const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
+  const direct = firstDefined(
+    valueByKey(payload,["FocusedPlayer","focusedPlayer","FocusPlayer","focusPlayer","CameraPlayer","cameraPlayer","CameraTarget","cameraTarget","GameCameraPlayer","gameCameraPlayer","TargetPlayer","targetPlayer","Target","target","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"]),
+    valueByKey(game,["FocusedPlayer","focusedPlayer","FocusPlayer","focusPlayer","CameraPlayer","cameraPlayer","CameraTarget","cameraTarget","TargetPlayer","targetPlayer","MainTarget","mainTarget","Target","target","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"])
+  );
+  const rawName = playerNameFromValue(direct);
+  if(!rawName) return "";
+  const players = extractPlayers(payload);
+  const match = players.find(player=>{
+    if(!player || typeof player !== "object") return false;
+    const names = [
+      valueByKey(player,["Name","name","PlayerName","playerName"]),
+      valueByKey(player,["Id","id","PlayerID","player_id","__playerKey"])
+    ].map(cleanName).filter(Boolean);
+    return names.some(name=>name.toLowerCase() === rawName.toLowerCase());
+  });
+  return match ? cleanName(firstDefined(valueByKey(match,["Name","name","PlayerName","playerName"]), rawName)) : rawName;
+}
+function ensurePlayer(name, team=null){
+  const clean = cleanName(name);
+  if(!clean) return null;
+  const existing = state.players.get(clean) || {name:clean, team, boost:0, boostKnown:false, stats:{score:0,goals:0,shots:0,assists:0,saves:0,demos:0,touches:0}};
+  if(team) existing.team = team;
+  state.players.set(clean, existing);
+  return existing;
+}
+function normalizeBoostValue(value){
+  if(value && typeof value === "object"){
+    return boostValueFromObject(value);
+  }
+  if(typeof value === "boolean") return null;
+  const n = Number(value);
+  if(!Number.isFinite(n)) return null;
+  if(n > 100 && n <= 255) return Math.max(0, Math.min(100, Math.round(n / 2.55)));
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+function boostValueFromObject(obj){
+  if(!obj || typeof obj !== "object") return null;
+  const keys = [
+    "boost",
+    "Boost",
+    "boostAmount",
+    "BoostAmount",
+    "boost_amount",
+    "BoostPercent",
+    "boostPercent",
+    "currentBoost",
+    "CurrentBoost",
+    "BoostCurrent",
+    "boostCurrent"
+  ];
+  for(const key of keys){
+    if(Object.prototype.hasOwnProperty.call(obj, key)){
+      const value = normalizeBoostValue(obj[key]);
+      if(value !== null) return value;
+    }
+  }
+  return null;
+}
+function boostValueFromPlayer(player){
+  const sources = [
+    player,
+    player?.Car,
+    player?.car,
+    player?.State,
+    player?.state,
+    player?.ReplicatedBoost,
+    player?.replicatedBoost
+  ];
+  for(const source of sources){
+    const value = boostValueFromObject(source);
+    if(value !== null) return value;
+  }
+  return null;
+}
+function gameClock(payload){
+  const direct = firstDefined(
+    valueByKey(payload,["gameSecondsRemaining","GameSecondsRemaining","secondsRemaining","SecondsRemaining","timeRemaining","TimeRemaining"]),
+    valueByKey(payload,["TimeSeconds","timeSeconds"]),
+    valueByKey(payload?.Game,["TimeSeconds","timeSeconds","secondsRemaining","timeRemaining"])
+  );
+  return direct !== undefined ? toNumber(direct, null) : null;
+}
+function replayFlag(payload){
+  const direct = firstDefined(
+    valueByKey(payload,["bReplay","replay","Replay","goalReplay","GoalReplay","bGoalReplay"]),
+    valueByKey(payload?.Game,["bReplay","replay","Replay","goalReplay","GoalReplay","bGoalReplay"])
+  );
+  if(direct === undefined) return null;
+  return direct === true || direct === 1 || direct === "1" || String(direct).toLowerCase() === "true";
+}
+function matchEndedFlag(payload, event=""){
+  const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
+  const ended = firstDefined(
+    valueByKey(payload,["bHasWinner","hasWinner","HasWinner"]),
+    valueByKey(game,["bHasWinner","hasWinner","HasWinner"]),
+    valueByKey(payload,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"]),
+    valueByKey(game,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"])
+  );
+  if(ended === true || ended === 1 || ended === "1" || String(ended).toLowerCase() === "true") return true;
+  const text = String(event || "").toLowerCase();
+  const compact = text.replace(/[^a-z]/g, "");
+  return compact.includes("matchended") || compact.includes("gameended") || compact.includes("matchdestroyed");
+}
+function hasFieldPlayers(payload){
+  const players = extractPlayers(payload);
+  return players.some(player=>toBoolean(valueByKey(player,["bHasCar","hasCar","HasCar","inGame","InGame"])));
+}
+function resetForNextMatch(){
+  state.replay = false;
+  state.matchEnded = false;
+  state.finalVisible = false;
+  state.clock = 300;
+  state.teams.Blue.score = 0;
+  state.teams.Orange.score = 0;
+  state.players.clear();
+  state.focusedPlayerName = null;
+  if(stingerTimer){
+    clearTimeout(stingerTimer);
+    stingerTimer = null;
+  }
+  if(stingerFallbackTimer){
+    clearTimeout(stingerFallbackTimer);
+    stingerFallbackTimer = null;
+  }
+  const stinger = $("stingerTransition");
+  stinger?.classList.remove("active");
+  try{ stinger?.pause(); }catch{}
+}
+function normalizeMessage(raw){
+  const msg = typeof raw === "string" ? JSON.parse(raw) : raw;
+  const event = firstDefined(msg.event,msg.Event,msg.type,msg.Type,msg.name,msg.Name);
+  let payload = firstDefined(msg.data,msg.Data,msg.payload,msg.Payload,msg);
+  if(typeof payload === "string"){
+    const trimmed = payload.trim();
+    if(trimmed.startsWith("{") || trimmed.startsWith("[")){
+      try{payload = JSON.parse(trimmed);}catch{}
+    }
+  }
+  return {event:String(event || "").toLowerCase(), payload};
+}
+function compactEventName(event){
+  return String(event || "").toLowerCase().replace(/[^a-z]/g, "");
+}
+function renderBoostRows(team){
+  return Array.from(state.players.values())
+    .filter(player=>player.team === team)
+    .sort((a,b)=>a.name.localeCompare(b.name))
+    .slice(0, 4)
+    .map(player=>{
+      const boost = player.boostKnown ? Math.max(0, Math.min(100, Math.round(player.boost))) : 0;
+      const name = escapeHtml(player.name);
+      return `<div class="boostRow">
+        ${team === "Orange" ? `<span class="boostValue">${boost}</span><span class="name">${name}</span>` : `<span class="name">${name}</span><span class="boostValue">${boost}</span>`}
+        <span class="bar" style="--boost:${boost}%"></span>
+      </div>`;
+    }).join("");
+}
+function allPlayersForCard(){
+  return Array.from(state.players.values())
+    .filter(player=>player.team === "Blue" || player.team === "Orange")
+    .sort((a,b)=>{
+      if(a.team !== b.team) return a.team === "Blue" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+}
+function renderLiveStatCard(){
+  const focusName = state.focusedPlayerName && state.players.has(state.focusedPlayerName) ? state.focusedPlayerName : "";
+  $("liveStatFocus").textContent = focusName ? `${focusName} view` : "No focused view";
+  const players = allPlayersForCard();
+  if(!players.length){
+    $("liveStatPlayers").innerHTML = `<div class="liveStatPlayer"><span class="liveStatName">Waiting for players</span><span></span><span></span><span></span><span></span></div>`;
+    return;
+  }
+  $("liveStatPlayers").innerHTML = players.map(player=>{
+    const stats = player.stats || {};
+    const boost = player.boostKnown ? Math.max(0, Math.min(100, Math.round(player.boost))) : 0;
+    const focused = focusName && player.name === focusName;
+    return `<div class="liveStatPlayer ${player.team.toLowerCase()} ${focused ? "focused" : ""}" style="--boost:${boost}%">
+      <div class="liveStatName">${escapeHtml(player.name)}</div>
+      <div class="liveStatValue"><b>${Math.round(stats.goals || 0)}</b><span>Goals</span></div>
+      <div class="liveStatValue"><b>${Math.round(stats.shots || 0)}</b><span>Shots</span></div>
+      <div class="liveStatValue"><b>${Math.round(stats.assists || 0)}</b><span>Assists</span></div>
+      <div class="liveStatValue"><b>${Math.round(stats.saves || 0)}</b><span>Saves</span></div>
+      <div class="liveStatBoost"><i></i></div>
+    </div>`;
+  }).join("");
+}
+function sortedFinalPlayers(){
+  return Array.from(state.players.values())
+    .filter(player=>player.team === "Blue" || player.team === "Orange")
+    .sort((a,b)=>{
+      if(a.team !== b.team) return a.team === "Blue" ? -1 : 1;
+      return (Number(b.stats?.score || 0) - Number(a.stats?.score || 0)) || a.name.localeCompare(b.name);
+    });
+}
+function renderFinalScreen(config){
+  const screen = $("finalScreen");
+  if(!screen) return;
+  const blueName = config.blueTeamName || state.teams.Blue.name || "Blue";
+  const orangeName = config.orangeTeamName || state.teams.Orange.name || "Orange";
+  const blueLogo = teamLogoFor("Blue", config);
+  const orangeLogo = teamLogoFor("Orange", config);
+  $("finalSeries").textContent = `Best of ${Number(config.seriesBestOf) || 5}`;
+  $("finalScore").innerHTML = `
+    <div class="finalTeam">
+      <div class="finalTeamName">${escapeHtml(blueName)}</div>
+      <img class="finalTeamLogo ${blueLogo ? "" : "empty"}" src="${escapeHtml(blueLogo || "")}" alt="">
+      <div class="finalTeamSeries">${renderDots("Blue", config)}</div>
+    </div>
+    <div class="finalScoreCenter"><span class="blue">${scoreText(state.teams.Blue.score)}</span><span class="orange">${scoreText(state.teams.Orange.score)}</span></div>
+    <div class="finalTeam right">
+      <img class="finalTeamLogo ${orangeLogo ? "" : "empty"}" src="${escapeHtml(orangeLogo || "")}" alt="">
+      <div class="finalTeamName">${escapeHtml(orangeName)}</div>
+      <div class="finalTeamSeries">${renderDots("Orange", config)}</div>
+    </div>`;
+  const players = sortedFinalPlayers();
+  $("finalBoard").innerHTML = `
+    <div class="finalRow header">
+      <div class="name">Player</div><div>Score</div><div>Goals</div><div>Shots</div><div>Assists</div><div>Saves</div><div>Demos</div>
+    </div>
+    ${players.map(player=>{
+      const stats = player.stats || {};
+      return `<div class="finalRow">
+        <div class="name ${player.team.toLowerCase()}">${escapeHtml(player.name)}</div>
+        <div>${Math.round(stats.score || 0)}</div>
+        <div>${Math.round(stats.goals || 0)}</div>
+        <div>${Math.round(stats.shots || 0)}</div>
+        <div>${Math.round(stats.assists || 0)}</div>
+        <div>${Math.round(stats.saves || 0)}</div>
+        <div>${Math.round(stats.demos || 0)}</div>
+      </div>`;
+    }).join("") || `<div class="finalRow"><div class="name">Waiting for final stats</div><div>0</div><div>0</div><div>0</div><div>0</div><div>0</div><div>0</div></div>`}`;
+}
+
+function stingerExtension(config){
+  const source = String(config?.stingerTransitionName || config?.stingerTransitionUrl || "").split("?")[0].toLowerCase();
+  const match = source.match(/\.([a-z0-9]+)$/);
+  return match ? `.${match[1]}` : "";
+}
+
+function stingerBrowserPlayable(config){
+  const ext = stingerExtension(config);
+  if(!ext) return true;
+  if([".avi",".mkv",".flv",".ts"].includes(ext)) return false;
+  const mimeByExt = {
+    ".webm":"video/webm",
+    ".mp4":"video/mp4",
+    ".m4v":"video/mp4",
+    ".mov":"video/quicktime",
+    ".gif":"image/gif"
+  };
+  const mime = mimeByExt[ext];
+  if(!mime) return true;
+  const probe = document.createElement("video");
+  return ext === ".gif" || !!probe.canPlayType(mime);
+}
+
+function triggerFinalFade(stage){
+  if(!stage) return;
+  stage.classList.remove("fadeTransition");
+  void stage.offsetWidth;
+  stage.classList.add("fadeTransition");
+}
+
+function playFinalTransition(config){
+  const stage = $("stage");
+  const stinger = $("stingerTransition");
+  const src = String(config.stingerTransitionUrl || "");
+  stage?.classList.remove("fadeTransition");
+  if(stingerTimer){
+    clearTimeout(stingerTimer);
+    stingerTimer = null;
+  }
+  if(!stinger) return;
+  stinger.classList.remove("active");
+  stinger.onended = null;
+  stinger.oncanplay = null;
+  stinger.onerror = null;
+  try{ stinger.pause(); }catch{}
+  if(!src || !stingerBrowserPlayable(config)){
+    stinger.removeAttribute("src");
+    triggerFinalFade(stage);
+    return;
+  }
+  if(stinger.getAttribute("src") !== src) stinger.src = src;
+  stinger.muted = true;
+  stinger.playsInline = true;
+  stinger.preload = "auto";
+  stinger.classList.add("active");
+  const cleanup = ()=>{
+    if(stingerFallbackTimer){
+      clearTimeout(stingerFallbackTimer);
+      stingerFallbackTimer = null;
+    }
+    stinger.classList.remove("active");
+    try{ stinger.pause(); }catch{}
+  };
+  stinger.onended = cleanup;
+  stinger.onerror = ()=>{
+    cleanup();
+    triggerFinalFade(stage);
+  };
+  const start = ()=>{
+    try{ stinger.currentTime = 0; }catch{}
+    const played = stinger.play?.();
+    if(played?.catch) played.catch(error=>{
+      console.warn("Could not play stinger transition:", error);
+      cleanup();
+      triggerFinalFade(stage);
+    });
+  };
+  if(stinger.readyState >= 2) start();
+  else stinger.addEventListener("canplay", start, {once:true});
+  stinger.load?.();
+  stingerFallbackTimer = setTimeout(()=>{
+    if(stinger.readyState < 2){
+      cleanup();
+      triggerFinalFade(stage);
+    }
+  }, 900);
+  stingerTimer = setTimeout(cleanup, 4500);
+}
+function render(){
+  const config = readConfig();
+  applyOverlayTheme(config);
+  const stage = $("stage");
+  stage.classList.toggle("live", state.connected && state.updates > 0);
+  stage.classList.toggle("replayActive", !!state.replay);
+  stage.classList.toggle("finalActive", !!state.finalVisible);
+  const tournamentLogo = $("tournamentLogo");
+  const hasTournamentLogo = !!String(config.tournamentLogoUrl || "").trim();
+  stage.classList.toggle("hasTournamentLogo", hasTournamentLogo);
+  if(tournamentLogo && hasTournamentLogo){
+    if(tournamentLogo.src !== config.tournamentLogoUrl) tournamentLogo.src = config.tournamentLogoUrl;
+    tournamentLogo.style.setProperty("--logo-x", `${Math.max(0, Math.min(1920, Number(config.tournamentLogoX) || 0))}px`);
+    tournamentLogo.style.setProperty("--logo-y", `${Math.max(0, Math.min(1080, Number(config.tournamentLogoY) || 0))}px`);
+    tournamentLogo.style.setProperty("--logo-w", `${Math.max(24, Math.min(900, Number(config.tournamentLogoWidth) || 280))}px`);
+  }
+  $("blueName").textContent = config.blueTeamName || state.teams.Blue.name || "Blue";
+  $("orangeName").textContent = config.orangeTeamName || state.teams.Orange.name || "Orange";
+  const blueLogo = teamLogoFor("Blue", config);
+  const orangeLogo = teamLogoFor("Orange", config);
+  $("blueLogo").classList.toggle("empty", !blueLogo);
+  $("orangeLogo").classList.toggle("empty", !orangeLogo);
+  $("blueLogo").src = blueLogo || "";
+  $("orangeLogo").src = orangeLogo || "";
+  $("blueScore").textContent = scoreText(state.teams.Blue.score);
+  $("orangeScore").textContent = scoreText(state.teams.Orange.score);
+  $("clock").textContent = formatClock(state.clock);
+  $("matchTag").textContent = state.updates ? `${overlayGameLabel(config)}     Best of ${Number(config.seriesBestOf) || 5}` : "Waiting for feed";
+  $("blueSeries").innerHTML = renderDots("Blue", config);
+  $("orangeSeries").innerHTML = renderDots("Orange", config);
+  $("blueBoosts").innerHTML = renderBoostRows("Blue");
+  $("orangeBoosts").innerHTML = renderBoostRows("Orange");
+  renderCustomScoreboard(config);
+  renderLiveStatCard();
+  const finalScreen = $("finalScreen");
+  if(finalScreen) finalScreen.classList.toggle("active", !!state.finalVisible);
+  if(state.finalVisible) renderFinalScreen(config);
+}
+function handleMessage(raw){
+  let msg;
+  try{msg = normalizeMessage(raw);}catch{return;}
+  state.connected = true;
+  state.updates++;
+  const incomingClock = gameClock(msg.payload);
+  const nextMatchLooksReady = state.matchEnded
+    && incomingClock !== null
+    && incomingClock >= 250
+    && hasFieldPlayers(msg.payload);
+  if(nextMatchLooksReady) resetForNextMatch();
+  const messageEndsMatch = matchEndedFlag(msg.payload, msg.event);
+  if(messageEndsMatch){
+    state.replay = false;
+    state.matchEnded = true;
+  }
+  updateTeams(msg.payload);
+  updatePlayers(msg.payload);
+  const focusName = focusNameFromPayload(msg.payload);
+  if(focusName) state.focusedPlayerName = focusName;
+  const eventName = compactEventName(msg.event);
+  if(state.matchEnded && (eventName.includes("matchcreated") || eventName.includes("matchinitialized") || eventName.includes("roundstarted")) && hasFieldPlayers(msg.payload)){
+    resetForNextMatch();
+  }
+  if(eventName.includes("ballhit")){
+    const hitPlayer = playerNameFromValue(firstDefined(valueByKey(msg.payload,["Player","player","playerName","PlayerName","lastTouchPlayer","LastTouchPlayer"]), msg.payload?.BallLastTouch?.Player, msg.payload?.ballLastTouch?.player));
+    const team = normalizeTeam(valueByKey(msg.payload,["team","Team"]));
+    const p = ensurePlayer(hitPlayer, team);
+    if(p){
+      p.stats.touches = (p.stats.touches || 0) + 1;
+    }
+  }
+  if(eventName.includes("statfeed")){
+    const statPlayer = playerNameFromValue(firstDefined(msg.payload?.MainTarget, msg.payload?.mainTarget, msg.payload?.Player, msg.payload?.player));
+    const statType = String(firstDefined(valueByKey(msg.payload,["Type","type","EventName","eventName"]), "")).toLowerCase();
+    const team = normalizeTeam(valueByKey(msg.payload,["team","Team"]));
+    const p = ensurePlayer(statPlayer, team);
+    if(p){
+      if(statType.includes("goal")) p.stats.goals = (p.stats.goals || 0) + 1;
+      if(statType.includes("shot")) p.stats.shots = (p.stats.shots || 0) + 1;
+      if(statType.includes("assist")) p.stats.assists = (p.stats.assists || 0) + 1;
+      if(statType.includes("save")) p.stats.saves = (p.stats.saves || 0) + 1;
+      if(statType.includes("demo")) p.stats.demos = (p.stats.demos || 0) + 1;
+    }
+  }
+  const clock = incomingClock;
+  if(clock !== null) state.clock = clock;
+  const replay = replayFlag(msg.payload);
+  if(replay !== null) state.replay = replay;
+  if(eventName.includes("goalreplay")) state.replay = !(eventName.includes("ended") || eventName.endsWith("end") || eventName.includes("willend"));
+  if(messageEndsMatch){
+    const config = readConfig();
+    if(!state.finalVisible) playFinalTransition(config);
+    state.finalVisible = true;
+  }
+  render();
+}
+function updateStageScale(){
+  const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+  document.documentElement.style.setProperty("--stage-scale", String(scale || 1));
+}
+function connect(){
+  const wsUrl = `${location.origin.replace(/^http/, "ws")}/api/live-api`;
+  const ws = new WebSocket(wsUrl);
+  ws.addEventListener("open", ()=>{state.connected = true; render();});
+  ws.addEventListener("message", event=>handleMessage(event.data));
+  ws.addEventListener("close", ()=>{
+    state.connected = false;
+    render();
+    setTimeout(connect, 1500);
+  });
+  ws.addEventListener("error", ()=>{state.connected = false; render();});
+}
+function startHeartbeat(){
+  const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const endpoint = `${location.origin}/api/spark-heartbeat`;
+  function post(closing=false){
+    const payload = JSON.stringify({id, closing, path:location.pathname, overlay:true});
+    if(closing && navigator.sendBeacon){
+      navigator.sendBeacon(endpoint, new Blob([payload], {type:"application/json"}));
+      return;
+    }
+    fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:payload,cache:"no-store"}).catch(()=>{});
+  }
+  post(false);
+  const timer = setInterval(()=>post(false), 15000);
+  window.addEventListener("pagehide", ()=>{clearInterval(timer); post(true);});
+}
+window.addEventListener("resize", updateStageScale);
+window.addEventListener("storage", event=>{
+  if(event.key === overlayConfigKey) render();
+});
+updateStageScale();
+refreshServerConfig().finally(()=>{
+  setInterval(refreshServerConfig, 2000);
+  startHeartbeat();
+  connect();
+  render();
+});
+</script>
+</body>
+</html>

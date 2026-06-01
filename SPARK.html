@@ -3791,8 +3791,8 @@ const isObsOverlayMode = new URLSearchParams(location.search).get("overlay") ===
 const forceObsFinalPreview = new URLSearchParams(location.search).get("finalPreview") === "1";
 const obsOverlayFileUrl = `${location.href.split("?")[0]}?overlay=obs`;
 const obsOverlayUrl = location.protocol === "file:"
-  ? "http://127.0.0.1:8765/SPARK.html?overlay=obs"
-  : `${location.origin}/SPARK.html?overlay=obs`;
+  ? "http://127.0.0.1:8765/1NE_Overlay"
+  : `${location.origin}/1NE_Overlay`;
 const overlayLogoUrl = "assets/Spark%20Logo.png";
 const oneNeLogoUrl = "assets/1NE_Vector_edited.png";
 const overlayLogoRoute = "/__spark_logo.png";
