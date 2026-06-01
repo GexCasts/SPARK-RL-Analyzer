@@ -3785,8 +3785,7 @@ const liveApiBridgeEndpoint = location.protocol.startsWith("http")
   ? `${location.origin.replace(/^http/, "ws")}/api/live-api`
   : "ws://127.0.0.1:8765/api/live-api";
 const liveApiEndpoints=[
-  {url:liveApiBridgeEndpoint,label:"SPARK local Live API bridge"},
-  {url:"ws://127.0.0.1:49124",label:"legacy local Live API bridge"}
+  {url:liveApiBridgeEndpoint,label:"SPARK local Live API bridge"}
 ];
 const isObsOverlayMode = new URLSearchParams(location.search).get("overlay") === "obs" || location.pathname.endsWith("/1NE_Overlay") || location.pathname.endsWith("/SPARK_Overlay");
 const forceObsFinalPreview = new URLSearchParams(location.search).get("finalPreview") === "1";

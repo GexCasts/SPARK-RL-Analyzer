@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.06.01.0029",
-    "generatedUtc":  "2026-06-01T00:29:46.4754133Z",
+    "appVersion":  "2026.06.01.0038",
+    "generatedUtc":  "2026-06-01T00:38:03.0176357Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -102,13 +102,6 @@
                       "modifiedUtc":  "2026-05-19T13:16:06.9675675Z"
                   },
                   {
-                      "path":  "rocket-league-stats-api-bridge.mjs",
-                      "version":  "8a9edc24bf43",
-                      "sha256":  "8a9edc24bf43832eafead1d9a797e2becfc967c7a6402c0ef37a49deb32323d6",
-                      "size":  3833,
-                      "modifiedUtc":  "2026-05-19T13:19:30.9074046Z"
-                  },
-                  {
                       "path":  "shared/README.md",
                       "version":  "a8ea1145c5dc",
                       "sha256":  "a8ea1145c5dc819e49e4d9d2cbb3e2831746ac7e989e1691ef303c97b2a4e1f8",
@@ -145,10 +138,10 @@
                   },
                   {
                       "path":  "SPARK.html",
-                      "version":  "b004d6669f14",
-                      "sha256":  "b004d6669f1494612bdca9fcbbf74b9aa1b5fb4a257b9746d2791366a55b04f4",
-                      "size":  3576482,
-                      "modifiedUtc":  "2026-06-01T00:25:58.6525689Z"
+                      "version":  "71e148b90d1a",
+                      "sha256":  "71e148b90d1ab6ab6cc5c1c5b76b05d428fa38b49717f0d7f25b22a294f3b208",
+                      "size":  3576413,
+                      "modifiedUtc":  "2026-06-01T00:37:16.4807381Z"
                   },
                   {
                       "path":  "SPARK-Launcher.cs",
