@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.06.02.1002",
-    "generatedUtc":  "2026-06-02T10:02:23.6124815Z",
+    "appVersion":  "2026.06.02.1013",
+    "generatedUtc":  "2026-06-02T10:13:51.3803965Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -152,10 +152,10 @@
                   },
                   {
                       "path":  "SPARK Personal Overlay.exe",
-                      "version":  "ed93cebc6ad7",
-                      "sha256":  "ed93cebc6ad7709c2e4918c8384f8d329a002e679542d4d8a8324a02cb0cfa9f",
-                      "size":  54784,
-                      "modifiedUtc":  "2026-06-02T09:56:36.1289117Z"
+                      "version":  "56e74e73a239",
+                      "sha256":  "56e74e73a239e362007036f1ffa3ecf8e1953d69304b7485ca8edf7d2fd570dd",
+                      "size":  58368,
+                      "modifiedUtc":  "2026-06-02T10:13:06.9414100Z"
                   },
                   {
                       "path":  "SPARK.html",
@@ -187,10 +187,10 @@
                   },
                   {
                       "path":  "SPARK-PersonalOverlay.cs",
-                      "version":  "54a10c394e82",
-                      "sha256":  "54a10c394e82cd35a07c6bd3b54c7be3b6ac813ff2974ade6ae1064dcee5b07b",
-                      "size":  46702,
-                      "modifiedUtc":  "2026-06-02T09:55:53.4574291Z"
+                      "version":  "e5ea70c2b08c",
+                      "sha256":  "e5ea70c2b08c73db3277efe575097fa5fe7a083e5a7efb6bb044a7e98c725b93",
+                      "size":  54130,
+                      "modifiedUtc":  "2026-06-02T10:12:49.3869934Z"
                   },
                   {
                       "path":  "static-download-server.mjs",

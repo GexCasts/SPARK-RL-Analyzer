@@ -135,7 +135,7 @@ namespace SparkPersonalOverlay
             DrawBoostRows(g, snap.Players.Where(p => p.Team == "Blue").ToList(), true, cfg);
             DrawBoostRows(g, snap.Players.Where(p => p.Team == "Orange").ToList(), false, cfg);
 
-            DrawPlayerStatsBoard(g, snap.Players, snap.FocusedPlayerName, cfg);
+            if (!snap.MatchEnded) DrawPlayerStatsBoard(g, snap.Players, snap.FocusedPlayerName, cfg);
             if (snap.ReplayActive) DrawReplayBanner(g, cfg);
             if (!snap.Connected || snap.UpdateCount == 0) DrawWaitingBadge(g, "SPARK personal overlay", "Waiting for live feed", cfg);
         }
@@ -163,8 +163,34 @@ namespace SparkPersonalOverlay
                 DrawText(g, blueScore.ToString(), scoreFont, Color.White, new RectangleF(822, 18, 92, 55), ContentAlignment.MiddleCenter);
                 DrawText(g, orangeScore.ToString(), scoreFont, Color.White, new RectangleF(1006, 18, 92, 55), ContentAlignment.MiddleCenter);
                 DrawText(g, FormatClock(clock), clockFont, Color.White, new RectangleF(914, 18, 92, 55), ContentAlignment.MiddleCenter);
-                DrawText(g, SeriesLabel(cfg), tagFont, Color.FromArgb(230, accent), new RectangleF(856, 76, 208, 15), ContentAlignment.MiddleCenter);
+                DrawSeriesPips(g, new RectangleF(856, 76, 208, 15), cfg);
             }
+        }
+
+        private void DrawSeriesPips(Graphics g, RectangleF rect, OverlayConfig cfg)
+        {
+            int winsNeeded = Math.Max(2, Math.Min(4, (int)Math.Ceiling(cfg.SeriesBestOf / 2.0)));
+            float pipWidth = 16f;
+            float pipHeight = 7f;
+            float gap = 5f;
+            float y = rect.Y + (rect.Height - pipHeight) / 2f;
+            float blueStart = rect.X + 18f;
+            float orangeStart = rect.Right - 18f - pipWidth;
+            for (int i = 0; i < winsNeeded; i++)
+            {
+                RectangleF bluePip = new RectangleF(blueStart + i * (pipWidth + gap), y, pipWidth, pipHeight);
+                RectangleF orangePip = new RectangleF(orangeStart - i * (pipWidth + gap), y, pipWidth, pipHeight);
+                DrawSeriesPip(g, bluePip, cfg.BlueBoostColor, i < cfg.BlueSeriesScore);
+                DrawSeriesPip(g, orangePip, cfg.OrangeBoostColor, i < cfg.OrangeSeriesScore);
+            }
+        }
+
+        private void DrawSeriesPip(Graphics g, RectangleF rect, Color teamColor, bool filled)
+        {
+            Color border = Color.FromArgb(220, teamColor);
+            Color fill = filled ? Color.FromArgb(235, teamColor) : Color.FromArgb(120, 34, 37, 43);
+            FillRound(g, rect, fill, 2);
+            using (Pen pen = new Pen(border, 1f)) DrawRound(g, pen, rect, 2);
         }
 
         private void DrawBoostRows(Graphics g, List<PlayerState> players, bool blueSide, OverlayConfig cfg)
@@ -490,10 +516,35 @@ namespace SparkPersonalOverlay
                     state.UpdateCount++;
                     state.LastMessageUtc = DateTime.UtcNow;
                     double? clock = GameClock(payload);
+                    string matchGuid = MatchGuid(payload);
+                    bool nextMatchStartSignal = state.MatchEnded && NextMatchStartEvent(eventName);
+                    bool messageEndsMatch = !nextMatchStartSignal && MatchEndedFlag(payload, eventName);
+                    if (nextMatchStartSignal)
+                    {
+                        state.ResetForNewMatch(matchGuid);
+                    }
+                    else if (ShouldResetForNextMatch(payload, eventName, clock, messageEndsMatch, matchGuid))
+                    {
+                        state.ResetForNewMatch(matchGuid);
+                    }
+                    else if (!String.IsNullOrWhiteSpace(matchGuid) && !String.IsNullOrWhiteSpace(state.MatchGuid) && !state.MatchEnded && !String.Equals(matchGuid, state.MatchGuid, StringComparison.OrdinalIgnoreCase))
+                    {
+                        state.ResetForNewMatch(matchGuid);
+                    }
+                    else if (!String.IsNullOrWhiteSpace(matchGuid) && String.IsNullOrWhiteSpace(state.MatchGuid))
+                    {
+                        state.MatchGuid = matchGuid;
+                    }
+                    if (messageEndsMatch)
+                    {
+                        state.MatchEnded = true;
+                        state.MatchEndedAtUtc = DateTime.UtcNow;
+                        state.ReplayActive = false;
+                    }
                     if (clock.HasValue) state.Clock = clock.Value;
                     bool? replay = ReplayFlag(payload);
-                    if (replay.HasValue) state.ReplayActive = replay.Value;
-                    if (eventName.Contains("goalreplay")) state.ReplayActive = !(eventName.Contains("ended") || eventName.EndsWith("end") || eventName.Contains("willend"));
+                    if (replay.HasValue) state.ReplayActive = replay.Value && !state.MatchEnded;
+                    if (eventName.Contains("goalreplay")) state.ReplayActive = !state.MatchEnded && !(eventName.Contains("ended") || eventName.EndsWith("end") || eventName.Contains("willend"));
                     UpdateTeams(payload);
                     UpdatePlayers(payload);
                     string focus = FocusName(payload);
@@ -555,6 +606,81 @@ namespace SparkPersonalOverlay
             if (type.Contains("assist")) player.Assists++;
             if (type.Contains("save")) player.Saves++;
             if (type.Contains("demo")) player.Demos++;
+        }
+
+        private bool ShouldResetForNextMatch(Dictionary<string, object> payload, string eventName, double? clock, bool messageEndsMatch, string matchGuid)
+        {
+            if (!state.MatchEnded || messageEndsMatch) return false;
+            if (!String.IsNullOrWhiteSpace(matchGuid) && !String.IsNullOrWhiteSpace(state.MatchGuid) && !String.Equals(matchGuid, state.MatchGuid, StringComparison.OrdinalIgnoreCase)) return true;
+            if (NextMatchStartEvent(eventName)) return true;
+            bool freshClock = clock.HasValue && clock.Value >= 285;
+            bool playersPresent = EnumeratePlayers(payload).Any();
+            double endedAgeMs = state.MatchEndedAtUtc == DateTime.MinValue ? 0 : (DateTime.UtcNow - state.MatchEndedAtUtc).TotalMilliseconds;
+            if (freshClock && playersPresent && PayloadScoresLookReset(payload)) return true;
+            return endedAgeMs > 2500 && freshClock && playersPresent;
+        }
+
+        private bool NextMatchStartEvent(string eventName)
+        {
+            string eventText = Compact(eventName);
+            return eventText.Contains("matchcreated")
+                || eventText.Contains("matchinitialized")
+                || eventText.Contains("roundstarted")
+                || eventText.Contains("countdownbegan")
+                || eventText.Contains("countdownbegin")
+                || eventText.Contains("countdownstarted")
+                || eventText.Contains("gamebegan")
+                || SpawnEventName(eventText);
+        }
+
+        private bool SpawnEventName(string eventName)
+        {
+            return eventName.Contains("playerspawn")
+                || eventName.Contains("carspawn")
+                || eventName.Contains("vehiclespawn")
+                || eventName.Contains("pawnspawn")
+                || eventName.Contains("playerrespawn")
+                || eventName.Contains("carrespawn")
+                || eventName.Contains("vehiclerespawn");
+        }
+
+        private bool PayloadScoresLookReset(Dictionary<string, object> payload)
+        {
+            bool found = false;
+            bool blueZero = false;
+            bool orangeZero = false;
+            object teamsObj = First(payload, "Teams", "teams") ?? First(Game(payload), "Teams", "teams");
+            foreach (Dictionary<string, object> team in EnumerateObjects(teamsObj))
+            {
+                string side = NormalizeTeam(First(team, "TeamNum", "teamNum", "Team", "team", "Index", "index"));
+                if (String.IsNullOrWhiteSpace(side)) continue;
+                object rawScore = First(team, "Score", "score", "Goals", "goals");
+                if (rawScore == null) continue;
+                found = true;
+                int score = ToInt(rawScore, 0);
+                if (side == "Blue") blueZero = score == 0;
+                if (side == "Orange") orangeZero = score == 0;
+            }
+            return found && blueZero && orangeZero;
+        }
+
+        private bool MatchEndedFlag(Dictionary<string, object> payload, string eventName)
+        {
+            string eventText = Compact(eventName);
+            if (eventText.Contains("matchended") || eventText.Contains("gameended")) return true;
+            Dictionary<string, object> game = Game(payload);
+            object raw = First(payload, "bHasWinner", "hasWinner", "HasWinner", "bMatchEnded", "matchEnded", "MatchEnded", "bGameEnded", "gameEnded", "GameEnded", "IsGameOver", "isGameOver")
+                ?? First(game, "bHasWinner", "hasWinner", "HasWinner", "bMatchEnded", "matchEnded", "MatchEnded", "bGameEnded", "gameEnded", "GameEnded", "IsGameOver", "isGameOver");
+            return raw != null && ToBool(raw);
+        }
+
+        private string MatchGuid(Dictionary<string, object> payload)
+        {
+            Dictionary<string, object> game = Game(payload);
+            return CleanName(Convert.ToString(
+                First(payload, "MatchGuid", "MatchGUID", "matchGuid", "matchGUID", "Guid", "guid")
+                ?? First(game, "MatchGuid", "MatchGUID", "matchGuid", "matchGUID", "Guid", "guid")
+                ?? ""));
         }
 
         private IEnumerable<Dictionary<string, object>> EnumeratePlayers(Dictionary<string, object> payload)
@@ -898,6 +1024,9 @@ namespace SparkPersonalOverlay
         public DateTime LastMessageUtc = DateTime.MinValue;
         public double Clock = 300;
         public bool ReplayActive;
+        public bool MatchEnded;
+        public DateTime MatchEndedAtUtc = DateTime.MinValue;
+        public string MatchGuid = "";
         public string FocusedPlayerName = "";
         public readonly TeamState Blue = new TeamState { Name = "Blue" };
         public readonly TeamState Orange = new TeamState { Name = "Orange" };
@@ -909,6 +1038,19 @@ namespace SparkPersonalOverlay
             return players[name];
         }
 
+        public void ResetForNewMatch(string matchGuid)
+        {
+            MatchGuid = matchGuid ?? "";
+            MatchEnded = false;
+            MatchEndedAtUtc = DateTime.MinValue;
+            ReplayActive = false;
+            FocusedPlayerName = "";
+            Clock = 300;
+            Blue.Score = 0;
+            Orange.Score = 0;
+            players.Clear();
+        }
+
         public OverlaySnapshot Snapshot()
         {
             return new OverlaySnapshot
@@ -917,6 +1059,7 @@ namespace SparkPersonalOverlay
                 UpdateCount = UpdateCount,
                 Clock = Clock,
                 ReplayActive = ReplayActive,
+                MatchEnded = MatchEnded,
                 FocusedPlayerName = FocusedPlayerName,
                 BlueName = Blue.Name,
                 OrangeName = Orange.Name,
@@ -933,6 +1076,7 @@ namespace SparkPersonalOverlay
         public int UpdateCount;
         public double Clock;
         public bool ReplayActive;
+        public bool MatchEnded;
         public string FocusedPlayerName;
         public string BlueName;
         public string OrangeName;
