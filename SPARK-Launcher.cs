@@ -767,7 +767,10 @@ namespace SparkLauncher
         private const int WS_MINIMIZEBOX = 0x00020000;
         private const int WS_MAXIMIZEBOX = 0x00010000;
         private const int WM_NCLBUTTONDOWN = 0x00A1;
+        private const int WM_NCCALCSIZE = 0x0083;
         private const int WM_NCHITTEST = 0x0084;
+        private const int WM_NCPAINT = 0x0085;
+        private const int WM_NCACTIVATE = 0x0086;
         private const int HTCAPTION = 2;
         private const int HTLEFT = 10;
         private const int HTRIGHT = 11;
@@ -1025,6 +1028,21 @@ namespace SparkLauncher
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_NCCALCSIZE && m.WParam != IntPtr.Zero)
+            {
+                m.Result = IntPtr.Zero;
+                return;
+            }
+            if (m.Msg == WM_NCPAINT)
+            {
+                m.Result = IntPtr.Zero;
+                return;
+            }
+            if (m.Msg == WM_NCACTIVATE)
+            {
+                m.Result = new IntPtr(1);
+                return;
+            }
             if (m.Msg == WM_NCHITTEST && !isCustomMaximized)
             {
                 int border = 10;
