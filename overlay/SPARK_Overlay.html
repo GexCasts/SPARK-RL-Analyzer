@@ -138,7 +138,7 @@ html,body{
 .maskSlot.seriesTitle .tickerTrack{
   display:inline-flex;
   align-items:center;
-  gap:36px;
+  gap:var(--ticker-gap,36px);
   min-width:max-content;
   will-change:transform;
 }
@@ -149,7 +149,7 @@ html,body{
   flex:0 0 auto;
 }
 @keyframes maskTickerScroll{
-  from{transform:translateX(calc(-50% - 18px))}
+  from{transform:translateX(calc(var(--ticker-distance,0px) * -1))}
   to{transform:translateX(0)}
 }
 .maskSlot.seriesDots{
@@ -1144,12 +1144,15 @@ function setMaskTicker(el, text, width){
   if(!shouldScroll){
     el.textContent = text;
     el.style.removeProperty("--ticker-duration");
+    el.style.removeProperty("--ticker-gap");
+    el.style.removeProperty("--ticker-distance");
     return;
   }
-  const duration = Math.max(22, Math.min(52, text.length * .72));
-  el.style.setProperty("--ticker-duration", `${duration}s`);
   const current = el.querySelector(".tickerCopy");
-  if(current?.textContent === text) return;
+  if(current?.textContent === text){
+    updateMaskTickerMetrics(el, width);
+    return;
+  }
   el.textContent = "";
   const track = document.createElement("span");
   track.className = "tickerTrack";
@@ -1161,6 +1164,20 @@ function setMaskTicker(el, text, width){
   second.textContent = text;
   track.append(first, second);
   el.append(track);
+  updateMaskTickerMetrics(el, width);
+}
+function updateMaskTickerMetrics(el, width){
+  const copy = el.querySelector(".tickerCopy");
+  if(!copy) return;
+  const baseGap = 36;
+  const maskWidth = Math.max(1, Number(width) || el.getBoundingClientRect().width || 1);
+  const textWidth = Math.max(1, copy.getBoundingClientRect().width || copy.scrollWidth || 1);
+  const gap = Math.max(baseGap, maskWidth - textWidth + baseGap);
+  const distance = textWidth + gap;
+  const duration = Math.max(22, Math.min(60, distance / 36));
+  el.style.setProperty("--ticker-gap", `${Math.round(gap)}px`);
+  el.style.setProperty("--ticker-distance", `${Math.round(distance)}px`);
+  el.style.setProperty("--ticker-duration", `${duration.toFixed(1)}s`);
 }
 function renderMaskDots(id, side, config){
   const el = $(id);
