@@ -40,8 +40,8 @@ namespace SparkPersonalOverlay
 
             webView = new WebView2();
             webView.Dock = DockStyle.Fill;
-            webView.BackColor = TransparentSurfaceColor;
-            webView.DefaultBackgroundColor = TransparentSurfaceColor;
+            webView.BackColor = Color.Transparent;
+            webView.DefaultBackgroundColor = Color.Transparent;
             Controls.Add(webView);
 
             placementTimer = new Timer();
@@ -96,7 +96,7 @@ namespace SparkPersonalOverlay
                 Directory.CreateDirectory(profile);
                 CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(null, profile);
                 await webView.EnsureCoreWebView2Async(environment);
-                webView.DefaultBackgroundColor = TransparentSurfaceColor;
+                webView.DefaultBackgroundColor = Color.Transparent;
                 webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
                 webView.CoreWebView2.Settings.IsStatusBarEnabled = false;

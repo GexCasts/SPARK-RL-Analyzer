@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.06.02.0650",
-    "generatedUtc":  "2026-06-02T06:50:37.7009578Z",
+    "appVersion":  "2026.06.02.0918",
+    "generatedUtc":  "2026-06-02T09:18:50.7398821Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -152,10 +152,10 @@
                   },
                   {
                       "path":  "SPARK Personal Overlay.exe",
-                      "version":  "b1f1100cc379",
-                      "sha256":  "b1f1100cc37903dea38623eb595d573aae2c0ada96514a04451a1fb64f11a16b",
+                      "version":  "1605fd03bc59",
+                      "sha256":  "1605fd03bc59a47aeb5bb9febf5e2f97afbca8c49c7ff6712319940f6e4efe12",
                       "size":  27648,
-                      "modifiedUtc":  "2026-06-02T06:49:51.6635166Z"
+                      "modifiedUtc":  "2026-06-02T09:17:48.5669758Z"
                   },
                   {
                       "path":  "SPARK.html",
@@ -166,10 +166,10 @@
                   },
                   {
                       "path":  "SPARK-Launcher.cs",
-                      "version":  "907575f80bad",
-                      "sha256":  "907575f80baddb24bf7f89cbcc0c83e942db8071875c3bdf9bb3283ea5367398",
-                      "size":  52183,
-                      "modifiedUtc":  "2026-06-02T06:49:35.0965119Z"
+                      "version":  "3177cf8a663c",
+                      "sha256":  "3177cf8a663ccef6d3aca1d3d826ca25fc7927bca5fdc672d156b10789c25780",
+                      "size":  52165,
+                      "modifiedUtc":  "2026-06-02T09:17:33.1131562Z"
                   },
                   {
                       "path":  "SPARK-Launcher.ps1",
@@ -187,10 +187,10 @@
                   },
                   {
                       "path":  "SPARK-PersonalOverlay.cs",
-                      "version":  "3f64ee0e189d",
-                      "sha256":  "3f64ee0e189d5020541ce9bff5d4ac851cb282ce059bec15a7a587fa40c798dd",
-                      "size":  8390,
-                      "modifiedUtc":  "2026-06-02T06:49:13.3568601Z"
+                      "version":  "afec362bb3f8",
+                      "sha256":  "afec362bb3f809e45d4984c658909220d20db7bfdae6afd59b27b229cfaa5569",
+                      "size":  8372,
+                      "modifiedUtc":  "2026-06-02T09:17:18.7822653Z"
                   },
                   {
                       "path":  "static-download-server.mjs",
