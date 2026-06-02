@@ -2698,9 +2698,10 @@ body.obsOverlayMode #obsOverlayRoot{
   display:grid;
   place-items:center;
   background:transparent;
-  font-size:34px;
+  font-family:var(--overlay-timer-font,var(--overlay-font,Inter,Segoe UI,Arial,sans-serif));
+  font-size:calc(34px * var(--overlay-timer-scale,1));
   font-weight:1000;
-  color:#fff;
+  color:var(--overlay-timer-color,#fff);
   z-index:2;
 }
 .obsMatchTag{
@@ -3375,9 +3376,10 @@ body.obsOverlayMode #obsOverlayRoot{
   left:50%;
   transform:translateX(-50%);
   width:120px;
-  color:#fff;
+  color:var(--overlay-timer-color,#fff);
   text-align:center;
-  font-size:34px;
+  font-family:var(--overlay-timer-font,var(--overlay-font,Inter,Segoe UI,Arial,sans-serif));
+  font-size:calc(34px * var(--overlay-timer-scale,1));
   font-weight:1000;
   line-height:1;
 }
@@ -3928,6 +3930,9 @@ const overlayDefaultConfig = {
   overlayGoalFontFamily:"Inter, Segoe UI, Arial, sans-serif",
   overlayGoalFontSize:100,
   overlayGoalColor:"#f7f7f7",
+  overlayTimerFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayTimerFontSize:100,
+  overlayTimerColor:"#f7f7f7",
   overlayTickerFontFamily:"Inter, Segoe UI, Arial, sans-serif",
   overlayTickerFontSize:100,
   overlayTickerColor:"#050609",
@@ -6085,6 +6090,20 @@ function renderOverlayAppearanceMenus(){
       </div>
     </details>
     <details class="overlaySubmenu">
+      <summary>Timer</summary>
+      <div class="overlaySubmenuBody overlayControlGrid">
+        <label class="overlayField">Font
+          ${renderOverlayFontSelect("overlayTimerFontInput", overlayConfig.overlayTimerFontFamily)}
+        </label>
+        <label class="overlayField">Size %
+          <input class="overlayInput" id="overlayTimerSizeInput" type="number" min="40" max="180" step="5" value="${Math.round(Number(overlayConfig.overlayTimerFontSize) || 100)}">
+        </label>
+        <label class="overlayField">Color
+          <input class="overlayColorInput" id="overlayTimerColorInput" type="color" value="${escapeHtml(overlayConfig.overlayTimerColor)}">
+        </label>
+      </div>
+    </details>
+    <details class="overlaySubmenu">
       <summary>Ticker</summary>
       <div class="overlaySubmenuBody overlayControlGrid">
         <label class="overlayField">Font
@@ -6356,6 +6375,9 @@ function renderOverlayControl(){
   bind("overlayGoalFontInput","overlayGoalFontFamily","change");
   bind("overlayGoalSizeInput","overlayGoalFontSize","input");
   bind("overlayGoalColorInput","overlayGoalColor","input");
+  bind("overlayTimerFontInput","overlayTimerFontFamily","change");
+  bind("overlayTimerSizeInput","overlayTimerFontSize","input");
+  bind("overlayTimerColorInput","overlayTimerColor","input");
   bind("overlayTickerFontInput","overlayTickerFontFamily","change");
   bind("overlayTickerSizeInput","overlayTickerFontSize","input");
   bind("overlayTickerColorInput","overlayTickerColor","input");
@@ -11267,6 +11289,9 @@ function normalizeOverlayTheme(config){
     overlayGoalFontFamily:font(config.overlayGoalFontFamily),
     overlayGoalFontSize:sanitizeOverlayPercent(config.overlayGoalFontSize, fallback.overlayGoalFontSize),
     overlayGoalColor:sanitizeOverlayColor(config.overlayGoalColor, fallback.overlayGoalColor),
+    overlayTimerFontFamily:font(config.overlayTimerFontFamily),
+    overlayTimerFontSize:sanitizeOverlayPercent(config.overlayTimerFontSize, fallback.overlayTimerFontSize),
+    overlayTimerColor:sanitizeOverlayColor(config.overlayTimerColor, fallback.overlayTimerColor),
     overlayTickerFontFamily:font(config.overlayTickerFontFamily),
     overlayTickerFontSize:sanitizeOverlayPercent(config.overlayTickerFontSize, fallback.overlayTickerFontSize),
     overlayTickerColor:sanitizeOverlayColor(config.overlayTickerColor, fallback.overlayTickerColor),
@@ -11289,6 +11314,9 @@ function applyOverlayThemeToElement(element, config=overlayConfig){
   element.style.setProperty("--overlay-team-name-color", theme.overlayTeamNameColor);
   element.style.setProperty("--overlay-goal-font", theme.overlayGoalFontFamily);
   element.style.setProperty("--overlay-goal-color", theme.overlayGoalColor);
+  element.style.setProperty("--overlay-timer-font", theme.overlayTimerFontFamily);
+  element.style.setProperty("--overlay-timer-scale", String(theme.overlayTimerFontSize / 100));
+  element.style.setProperty("--overlay-timer-color", theme.overlayTimerColor);
   element.style.setProperty("--overlay-ticker-font", theme.overlayTickerFontFamily);
   element.style.setProperty("--overlay-ticker-color", theme.overlayTickerColor);
   element.style.setProperty("--overlay-boost-font", theme.overlayBoostFontFamily);

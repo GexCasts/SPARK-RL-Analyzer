@@ -110,8 +110,9 @@ html,body{
   transform:translateY(-.045em);
 }
 .maskSlot.clock{
-  font-size:var(--slot-font,44px);
-  color:#fffdf3;
+  font-family:var(--mask-timer-font,var(--overlay-font));
+  font-size:calc(var(--slot-font,44px) * var(--mask-timer-scale,1));
+  color:var(--mask-timer-color,#fffdf3);
   letter-spacing:.02em;
 }
 .maskSlot.teamName{
@@ -253,9 +254,11 @@ html,body{
 }
 .clock{
   grid-column:2;
-  font-size:36px;
+  font-family:var(--mask-timer-font,var(--overlay-font));
+  font-size:calc(36px * var(--mask-timer-scale,1));
   font-weight:950;
   line-height:1;
+  color:var(--mask-timer-color,#fffdf3);
 }
 .match{
   grid-column:1/4;
@@ -845,6 +848,9 @@ const defaultConfig = {
   overlayGoalFontFamily:"Inter, Segoe UI, Arial, sans-serif",
   overlayGoalFontSize:100,
   overlayGoalColor:"#fffdf3",
+  overlayTimerFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayTimerFontSize:100,
+  overlayTimerColor:"#fffdf3",
   overlayTickerFontFamily:"Inter, Segoe UI, Arial, sans-serif",
   overlayTickerFontSize:100,
   overlayTickerColor:"#050609",
@@ -937,6 +943,9 @@ function applyOverlayTheme(config){
   root.style.setProperty("--mask-goal-font", font(config.overlayGoalFontFamily));
   root.style.setProperty("--mask-goal-scale", String(percent(config.overlayGoalFontSize, defaultConfig.overlayGoalFontSize) / 100));
   root.style.setProperty("--mask-goal-color", color(config.overlayGoalColor, defaultConfig.overlayGoalColor));
+  root.style.setProperty("--mask-timer-font", font(config.overlayTimerFontFamily));
+  root.style.setProperty("--mask-timer-scale", String(percent(config.overlayTimerFontSize, defaultConfig.overlayTimerFontSize) / 100));
+  root.style.setProperty("--mask-timer-color", color(config.overlayTimerColor, defaultConfig.overlayTimerColor));
   root.style.setProperty("--mask-ticker-font", font(config.overlayTickerFontFamily));
   root.style.setProperty("--mask-ticker-scale", String(percent(config.overlayTickerFontSize, defaultConfig.overlayTickerFontSize) / 100));
   root.style.setProperty("--mask-ticker-color", color(config.overlayTickerColor, defaultConfig.overlayTickerColor));
