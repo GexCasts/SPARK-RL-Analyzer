@@ -1060,8 +1060,11 @@ namespace SparkLauncher
     {
         private const int WS_EX_TRANSPARENT = 0x00000020;
         private const int WS_EX_TOOLWINDOW = 0x00000080;
+        private const int WS_EX_LAYERED = 0x00080000;
         private const int WS_EX_NOACTIVATE = 0x08000000;
+        private const int LWA_COLORKEY = 0x00000001;
 
+        private static readonly Color TransparentSurfaceColor = Color.FromArgb(1, 2, 3);
         private readonly string overlayUrl;
         private readonly string root;
         private readonly Screen fallbackScreen;
@@ -1079,11 +1082,13 @@ namespace SparkLauncher
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
             TopMost = true;
-            BackColor = Color.Black;
+            BackColor = TransparentSurfaceColor;
+            TransparencyKey = TransparentSurfaceColor;
 
             webView = new WebView2();
             webView.Dock = DockStyle.Fill;
-            webView.DefaultBackgroundColor = Color.Transparent;
+            webView.BackColor = TransparentSurfaceColor;
+            webView.DefaultBackgroundColor = TransparentSurfaceColor;
             Controls.Add(webView);
 
             placementTimer = new System.Windows.Forms.Timer();
@@ -1101,14 +1106,21 @@ namespace SparkLauncher
             get
             {
                 CreateParams cp = base.CreateParams;
-                cp.ExStyle |= WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+                cp.ExStyle |= WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_NOACTIVATE;
                 return cp;
             }
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            ApplyTransparentSurface();
         }
 
         protected override async void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            ApplyTransparentSurface();
             SyncToRocketLeagueScreen();
             placementTimer.Start();
             await InitializeWebViewAsync();
@@ -1131,6 +1143,7 @@ namespace SparkLauncher
                 Directory.CreateDirectory(userDataFolder);
                 CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
                 await webView.EnsureCoreWebView2Async(environment);
+                webView.DefaultBackgroundColor = TransparentSurfaceColor;
                 webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
                 webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
@@ -1161,6 +1174,19 @@ namespace SparkLauncher
             }
             TopMost = false;
             TopMost = true;
+            ApplyTransparentSurface();
+        }
+
+        private void ApplyTransparentSurface()
+        {
+            if (Handle == IntPtr.Zero) return;
+            try
+            {
+                SetLayeredWindowAttributes(Handle, ColorTranslator.ToWin32(TransparentSurfaceColor), 0, LWA_COLORKEY);
+            }
+            catch
+            {
+            }
         }
 
         private static Screen FindRocketLeagueScreen(Screen fallback)
@@ -1225,6 +1251,9 @@ namespace SparkLauncher
 
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetLayeredWindowAttributes(IntPtr hWnd, int colorKey, byte alpha, int flags);
     }
 
     internal static class Program
