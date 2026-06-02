@@ -32,6 +32,7 @@
   --spark-header-height:calc(var(--spark-header-logo-slot-height) + (var(--spark-header-pad-y) * 2));
   --spark-header-gap:calc(16px * var(--spark-header-scale));
   --spark-window-side-frame:2px;
+  --spark-native-frame-cover:6px;
   --spark-window-inner-radius:18px;
   --spark-focus:0 0 0 2px rgba(255,208,0,.88),0 0 0 5px rgba(255,208,0,.16);
   --spark-control-bg:#101113;
@@ -95,7 +96,10 @@ body::after{
   z-index:100000;
 }
 body::before{
-  height:var(--spark-window-top-frame);
+  left:calc(0px - var(--spark-native-frame-cover));
+  right:calc(0px - var(--spark-native-frame-cover));
+  top:calc(0px - var(--spark-native-frame-cover));
+  height:calc(var(--spark-window-top-frame) + var(--spark-native-frame-cover));
   background:
     radial-gradient(circle at 50% 0,rgba(255,255,255,.34),transparent 42%),
     linear-gradient(100deg,#050505 0 15%,rgba(255,208,0,.96) 25%,rgba(242,242,242,.98) 42%,rgba(240,160,32,.94) 61%,#060606 86%),
@@ -107,8 +111,12 @@ body::before{
   clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),76% calc(100% - 10px),71% 100%,29% 100%,24% calc(100% - 10px),0 calc(100% - 10px));
 }
 body::after{
+  inset:calc(0px - var(--spark-native-frame-cover));
   border-style:solid;
-  border-width:var(--spark-window-top-frame) var(--spark-window-side-frame) var(--spark-window-side-frame);
+  border-width:
+    calc(var(--spark-window-top-frame) + var(--spark-native-frame-cover))
+    calc(var(--spark-window-side-frame) + var(--spark-native-frame-cover))
+    calc(var(--spark-window-side-frame) + var(--spark-native-frame-cover));
   border-image:linear-gradient(135deg,var(--spark-yellow),var(--spark-chrome) 34%,var(--spark-amber) 68%,#202020) 1;
   border-radius:0 0 var(--spark-window-inner-radius) var(--spark-window-inner-radius);
   box-shadow:
@@ -119,8 +127,8 @@ body::after{
   position:fixed;
   inset:
     calc(var(--spark-window-top-frame) - 1px)
-    var(--spark-window-side-frame)
-    var(--spark-window-side-frame);
+    calc(var(--spark-window-side-frame) - 1px)
+    calc(var(--spark-window-side-frame) - 1px);
   border-radius:var(--spark-window-inner-radius);
   background:transparent;
   box-shadow:
