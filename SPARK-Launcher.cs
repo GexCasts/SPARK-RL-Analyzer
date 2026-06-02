@@ -816,8 +816,7 @@ namespace SparkLauncher
             {
                 CreateParams cp = base.CreateParams;
                 cp.Style &= ~WS_CAPTION;
-                cp.Style &= ~WS_THICKFRAME;
-                cp.Style |= WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+                cp.Style |= WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
                 return cp;
             }
         }
