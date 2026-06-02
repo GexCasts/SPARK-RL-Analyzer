@@ -216,6 +216,70 @@ body::after{
   gap:7px;
   pointer-events:auto;
 }
+.sparkResizeHandle{
+  position:fixed;
+  z-index:100000;
+  pointer-events:auto;
+  background:transparent;
+  user-select:none;
+  -webkit-user-select:none;
+  touch-action:none;
+}
+.sparkResizeHandle.top{
+  top:0;
+  left:16px;
+  right:176px;
+  height:10px;
+  cursor:ns-resize;
+}
+.sparkResizeHandle.bottom{
+  left:14px;
+  right:14px;
+  bottom:0;
+  height:12px;
+  cursor:ns-resize;
+}
+.sparkResizeHandle.left{
+  left:0;
+  top:12px;
+  bottom:12px;
+  width:12px;
+  cursor:ew-resize;
+}
+.sparkResizeHandle.right{
+  right:0;
+  top:12px;
+  bottom:12px;
+  width:12px;
+  cursor:ew-resize;
+}
+.sparkResizeHandle.topLeft,
+.sparkResizeHandle.topRight,
+.sparkResizeHandle.bottomLeft,
+.sparkResizeHandle.bottomRight{
+  width:18px;
+  height:18px;
+}
+.sparkResizeHandle.topLeft{
+  left:0;
+  top:0;
+  cursor:nwse-resize;
+}
+.sparkResizeHandle.topRight{
+  right:0;
+  top:0;
+  cursor:nesw-resize;
+}
+.sparkResizeHandle.bottomLeft{
+  left:0;
+  bottom:0;
+  cursor:nesw-resize;
+}
+.sparkResizeHandle.bottomRight{
+  right:0;
+  bottom:0;
+  cursor:nwse-resize;
+}
 .sparkWindowControl{
   width:42px;
   height:30px;
@@ -2415,7 +2479,8 @@ body.obsOverlayMode::before,
 body.obsOverlayMode::after,
 body.obsOverlayMode .sparkWindowFrame,
 body.obsOverlayMode .windowInnerCorners,
-body.obsOverlayMode .sparkScrollThumb{
+body.obsOverlayMode .sparkScrollThumb,
+body.obsOverlayMode .sparkResizeHandle{
   display:none!important;
 }
 body.obsOverlayMode header,
@@ -3497,6 +3562,14 @@ body.obsOverlayMode #obsOverlayRoot{
     <button class="sparkWindowControl close" type="button" data-window-action="close" aria-label="Close">X</button>
   </div>
 </div>
+<div class="sparkResizeHandle top" data-window-resize="top" aria-hidden="true"></div>
+<div class="sparkResizeHandle right" data-window-resize="right" aria-hidden="true"></div>
+<div class="sparkResizeHandle bottom" data-window-resize="bottom" aria-hidden="true"></div>
+<div class="sparkResizeHandle left" data-window-resize="left" aria-hidden="true"></div>
+<div class="sparkResizeHandle topLeft" data-window-resize="top-left" aria-hidden="true"></div>
+<div class="sparkResizeHandle topRight" data-window-resize="top-right" aria-hidden="true"></div>
+<div class="sparkResizeHandle bottomRight" data-window-resize="bottom-right" aria-hidden="true"></div>
+<div class="sparkResizeHandle bottomLeft" data-window-resize="bottom-left" aria-hidden="true"></div>
 <div class="windowInnerCorners" aria-hidden="true"></div>
 <div class="sparkScrollThumb" id="sparkScrollThumb" aria-hidden="true"></div>
 <header>
@@ -12634,7 +12707,7 @@ if($("obsOverlayBtn")){
 }
 function sendSparkWindowCommand(action){
   const normalized = String(action || "").toLowerCase();
-  if(!["minimize","maximize","close","drag"].includes(normalized)) return;
+  if(!["minimize","maximize","close","drag"].includes(normalized) && !/^resize-(top|right|bottom|left|top-left|top-right|bottom-right|bottom-left)$/.test(normalized)) return;
   if(window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === "function"){
     window.chrome.webview.postMessage({type:"spark-window-control", action:normalized});
     return;
@@ -12667,6 +12740,14 @@ document.querySelectorAll("[data-window-action]").forEach(control=>{
       sendSparkWindowCommand("drag");
     });
   }
+});
+document.querySelectorAll("[data-window-resize]").forEach(handle=>{
+  handle.addEventListener("pointerdown", event=>{
+    if(event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    sendSparkWindowCommand(`resize-${handle.dataset.windowResize}`);
+  });
 });
 
 const sparkScrollThumb = $("sparkScrollThumb");

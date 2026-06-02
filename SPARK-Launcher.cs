@@ -986,11 +986,40 @@ namespace SparkLauncher
                 ToggleCustomMaximize();
                 return;
             }
+            int resizeHitTest = ResizeHitTestForAction(action);
+            if (resizeHitTest != 0)
+            {
+                BeginNativeResize(resizeHitTest);
+                return;
+            }
             if (action == "drag")
             {
                 if (isCustomMaximized) RestoreFromCustomMaximize();
                 ReleaseCapture();
                 SendMessage(Handle, WM_NCLBUTTONDOWN, new IntPtr(HTCAPTION), IntPtr.Zero);
+            }
+        }
+
+        private void BeginNativeResize(int hitTest)
+        {
+            if (isCustomMaximized || WindowState == FormWindowState.Maximized || WindowState == FormWindowState.Minimized) return;
+            ReleaseCapture();
+            SendMessage(Handle, WM_NCLBUTTONDOWN, new IntPtr(hitTest), IntPtr.Zero);
+        }
+
+        private static int ResizeHitTestForAction(string action)
+        {
+            switch ((action ?? "").Trim().ToLowerInvariant())
+            {
+                case "resize-left": return HTLEFT;
+                case "resize-right": return HTRIGHT;
+                case "resize-top": return HTTOP;
+                case "resize-bottom": return HTBOTTOM;
+                case "resize-top-left": return HTTOPLEFT;
+                case "resize-top-right": return HTTOPRIGHT;
+                case "resize-bottom-left": return HTBOTTOMLEFT;
+                case "resize-bottom-right": return HTBOTTOMRIGHT;
+                default: return 0;
             }
         }
 
