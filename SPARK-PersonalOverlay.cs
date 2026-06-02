@@ -96,17 +96,24 @@ namespace SparkPersonalOverlay
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            base.OnPaint(e);
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-            float scale = Math.Min(ClientSize.Width / 1920f, ClientSize.Height / 1080f);
-            if (scale <= 0) scale = 1f;
-            e.Graphics.TranslateTransform((ClientSize.Width - 1920f * scale) / 2f, (ClientSize.Height - 1080f * scale) / 2f);
-            e.Graphics.ScaleTransform(scale, scale);
+            try
+            {
+                base.OnPaint(e);
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                float scale = Math.Min(ClientSize.Width / 1920f, ClientSize.Height / 1080f);
+                if (scale <= 0) scale = 1f;
+                e.Graphics.TranslateTransform((ClientSize.Width - 1920f * scale) / 2f, (ClientSize.Height - 1080f * scale) / 2f);
+                e.Graphics.ScaleTransform(scale, scale);
 
-            OverlaySnapshot snap;
-            lock (stateLock) snap = state.Snapshot();
-            DrawOverlay(e.Graphics, snap, config);
+                OverlaySnapshot snap;
+                lock (stateLock) snap = state.Snapshot();
+                DrawOverlay(e.Graphics, snap, config);
+            }
+            catch
+            {
+                e.Graphics.Clear(TransparentSurfaceColor);
+            }
         }
 
         protected override void Dispose(bool disposing)
@@ -186,9 +193,12 @@ namespace SparkPersonalOverlay
                     RectangleF bar = blueSide
                         ? new RectangleF(row.X + 2, row.Y + 2, boostWidth, h - 4)
                         : new RectangleF(row.Right - 2 - boostWidth, row.Y + 2, boostWidth, h - 4);
-                    using (LinearGradientBrush brush = new LinearGradientBrush(bar, Color.FromArgb(210, team), Color.FromArgb(220, cfg.AccentColor), LinearGradientMode.Horizontal))
+                    if (bar.Width > 0.5f && bar.Height > 0.5f)
                     {
-                        g.FillRectangle(brush, bar);
+                        using (LinearGradientBrush brush = new LinearGradientBrush(bar, Color.FromArgb(210, team), Color.FromArgb(220, cfg.AccentColor), LinearGradientMode.Horizontal))
+                        {
+                            g.FillRectangle(brush, bar);
+                        }
                     }
                     RectangleF valueBox = blueSide ? new RectangleF(row.Right - 38, row.Y, 38, h) : new RectangleF(row.X, row.Y, 38, h);
                     g.FillRectangle(new SolidBrush(Color.FromArgb(175, 0, 0, 0)), valueBox);
@@ -217,7 +227,7 @@ namespace SparkPersonalOverlay
                 RectangleF track = new RectangleF(52, 910, 248, 10);
                 FillRound(g, track, Color.FromArgb(190, 36, 38, 44), 5);
                 RectangleF fill = new RectangleF(track.X, track.Y, track.Width * Math.Max(0, Math.Min(100, player.Boost)) / 100f, track.Height);
-                FillRound(g, fill, cfg.AccentColor, 5);
+                if (fill.Width > 0.5f) FillRound(g, fill, cfg.AccentColor, 5);
                 DrawText(g, player.Boost + " boost", labelFont, cfg.TextColor, new RectangleF(304, 902, 45, 24), ContentAlignment.MiddleLeft);
             }
         }
@@ -263,6 +273,7 @@ namespace SparkPersonalOverlay
 
         private void FillRound(Graphics g, RectangleF rect, Color color, float radius)
         {
+            if (rect.Width <= 0.5f || rect.Height <= 0.5f) return;
             using (GraphicsPath path = RoundPath(rect, radius))
             using (SolidBrush brush = new SolidBrush(color))
             {
@@ -272,6 +283,7 @@ namespace SparkPersonalOverlay
 
         private void DrawRound(Graphics g, Pen pen, RectangleF rect, float radius)
         {
+            if (rect.Width <= 0.5f || rect.Height <= 0.5f) return;
             using (GraphicsPath path = RoundPath(rect, radius))
             {
                 g.DrawPath(pen, path);
@@ -280,7 +292,7 @@ namespace SparkPersonalOverlay
 
         private GraphicsPath RoundPath(RectangleF rect, float radius)
         {
-            float d = radius * 2f;
+            float d = Math.Min(radius * 2f, Math.Min(rect.Width, rect.Height));
             GraphicsPath path = new GraphicsPath();
             path.AddArc(rect.X, rect.Y, d, d, 180, 90);
             path.AddArc(rect.Right - d, rect.Y, d, d, 270, 90);
