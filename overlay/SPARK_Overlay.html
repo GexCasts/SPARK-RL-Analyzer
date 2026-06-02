@@ -130,7 +130,25 @@ html,body{
   color:var(--mask-ticker-color,#050609);
   text-shadow:none;
   white-space:nowrap;
+  overflow:hidden;
   transform:translateY(-.045em);
+}
+.maskSlot.seriesTitle .tickerTrack{
+  display:inline-flex;
+  align-items:center;
+  gap:36px;
+  min-width:max-content;
+  will-change:transform;
+}
+.maskSlot.seriesTitle.scrolling .tickerTrack{
+  animation:maskTickerScroll var(--ticker-duration,28s) linear infinite;
+}
+.maskSlot.seriesTitle .tickerCopy{
+  flex:0 0 auto;
+}
+@keyframes maskTickerScroll{
+  from{transform:translateX(calc(-50% - 18px))}
+  to{transform:translateX(0)}
 }
 .maskSlot.seriesDots{
   gap:8px;
@@ -1096,11 +1114,38 @@ function setMaskSlot(id, region, options={}){
   el.style.height = `${height}px`;
   if(options.fontScale){
     const text = options.text === undefined ? String(el.textContent || "") : String(options.text || "");
-    if(options.text !== undefined) el.textContent = text;
-    const chars = Math.max(1, text.length);
+    if(options.text !== undefined && !options.ticker) el.textContent = text;
+    const chars = Math.max(1, options.ticker ? Math.min(30, text.length) : text.length);
     const widthLimit = width / Math.max(1, chars * (options.charScale || .56));
     el.style.setProperty("--slot-font", `${Math.max(options.minFont || 8, Math.min(options.maxFont || 96, height * options.fontScale, widthLimit))}px`);
   }
+  if(options.ticker){
+    setMaskTicker(el, String(options.text || ""), width);
+  }
+}
+function setMaskTicker(el, text, width){
+  const shouldScroll = text.length > 30;
+  el.classList.toggle("scrolling", shouldScroll);
+  if(!shouldScroll){
+    el.textContent = text;
+    el.style.removeProperty("--ticker-duration");
+    return;
+  }
+  const duration = Math.max(22, Math.min(52, text.length * .72));
+  el.style.setProperty("--ticker-duration", `${duration}s`);
+  const current = el.querySelector(".tickerCopy");
+  if(current?.textContent === text) return;
+  el.textContent = "";
+  const track = document.createElement("span");
+  track.className = "tickerTrack";
+  const first = document.createElement("span");
+  first.className = "tickerCopy";
+  first.textContent = text;
+  const second = document.createElement("span");
+  second.className = "tickerCopy";
+  second.textContent = text;
+  track.append(first, second);
+  el.append(track);
 }
 function renderMaskDots(id, side, config){
   const el = $(id);
@@ -1148,7 +1193,7 @@ function renderCustomScoreboard(config){
   setMaskSlot("maskOrangeName", nameRegions[nameRegions.length - 1], {pad:8, fontScale:.72, charScale:.6, maxFont:58, text:orangeName});
   setMaskSlot("maskBlueSeries", seriesRegions[0], {pad:6});
   setMaskSlot("maskOrangeSeries", seriesRegions[seriesRegions.length - 1], {pad:6});
-  setMaskSlot("maskSeriesTitle", titleRegion, {pad:3, fontScale:.78, charScale:.48, maxFont:44, text:title});
+  setMaskSlot("maskSeriesTitle", titleRegion, {pad:3, fontScale:.78, charScale:.48, maxFont:44, text:title, ticker:true});
 
   setMaskLogo("maskBlueLogo", teamLogoFor("Blue", config));
   setMaskLogo("maskOrangeLogo", teamLogoFor("Orange", config));

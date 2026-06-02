@@ -3857,6 +3857,7 @@ let overlayServerConfig = {};
 let overlayConfig = readOverlayConfig();
 let overlayConfigRefreshStartedAt = 0;
 let overlayControlInteractionUntil = 0;
+const overlayDetailsOpenState = new Map();
 let obsFinalScreenVisible = false;
 let obsStingerTimer = null;
 let obsStingerFallbackTimer = null;
@@ -5921,6 +5922,29 @@ function refreshOverlayControlWhenIdle(){
   });
 }
 
+function overlayDetailsKey(details){
+  const summary = details?.querySelector?.(":scope > summary");
+  const label = (summary?.textContent || "").trim().replace(/\s+/g, " ");
+  const group = details?.classList?.contains("overlaySubmenu") ? "submenu" : "category";
+  return label ? `${group}:${label}` : "";
+}
+
+function rememberOverlayDetailsState(panel=$("overlayControlPanel")){
+  if(!panel) return;
+  panel.querySelectorAll("details.overlayCategory,details.overlaySubmenu").forEach(details=>{
+    const key = overlayDetailsKey(details);
+    if(key) overlayDetailsOpenState.set(key, details.open);
+  });
+}
+
+function restoreOverlayDetailsState(panel=$("overlayControlPanel")){
+  if(!panel) return;
+  panel.querySelectorAll("details.overlayCategory,details.overlaySubmenu").forEach(details=>{
+    const key = overlayDetailsKey(details);
+    if(key && overlayDetailsOpenState.has(key)) details.open = overlayDetailsOpenState.get(key);
+  });
+}
+
 function renderOverlayFontSelect(id, value){
   return `<select class="overlaySelect" id="${id}">
     ${overlayFontOptions().map(option=>`<option value="${escapeHtml(option.value)}" ${value===option.value?"selected":""}>${escapeHtml(option.label)}</option>`).join("")}
@@ -6011,6 +6035,7 @@ function renderOverlayControl(){
   const panel = $("overlayControlPanel");
   if(!panel) return;
   refreshOverlayControlWhenIdle();
+  rememberOverlayDetailsState(panel);
   overlayConfig = readOverlayConfig();
   const blueLogo = overlayLogoFor("Blue");
   const orangeLogo = overlayLogoFor("Orange");
@@ -6212,9 +6237,16 @@ function renderOverlayControl(){
         <div class="overlayCopyStatus" id="overlayCopyStatus"></div>
       </div>
     </div>`;
+  restoreOverlayDetailsState(panel);
 
-  ["pointerdown","focusin","input","change"].forEach(eventName=>{
+  ["pointerdown","focusin","input","change","toggle"].forEach(eventName=>{
     panel.addEventListener(eventName, ()=>markOverlayControlInteraction(), {capture:true});
+  });
+  panel.querySelectorAll("details.overlayCategory,details.overlaySubmenu").forEach(details=>{
+    details.addEventListener("toggle", ()=>{
+      const key = overlayDetailsKey(details);
+      if(key) overlayDetailsOpenState.set(key, details.open);
+    });
   });
 
   const bind = (id,key,eventName="change")=>{
