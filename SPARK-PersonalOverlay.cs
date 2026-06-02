@@ -174,12 +174,12 @@ namespace SparkPersonalOverlay
             float pipHeight = 7f;
             float gap = 5f;
             float y = rect.Y + (rect.Height - pipHeight) / 2f;
-            float blueStart = rect.X + 18f;
-            float orangeStart = rect.Right - 18f - pipWidth;
+            float blueInside = rect.X + rect.Width / 2f - 13f - pipWidth;
+            float orangeInside = rect.X + rect.Width / 2f + 13f;
             for (int i = 0; i < winsNeeded; i++)
             {
-                RectangleF bluePip = new RectangleF(blueStart + i * (pipWidth + gap), y, pipWidth, pipHeight);
-                RectangleF orangePip = new RectangleF(orangeStart - i * (pipWidth + gap), y, pipWidth, pipHeight);
+                RectangleF bluePip = new RectangleF(blueInside - i * (pipWidth + gap), y, pipWidth, pipHeight);
+                RectangleF orangePip = new RectangleF(orangeInside + i * (pipWidth + gap), y, pipWidth, pipHeight);
                 DrawSeriesPip(g, bluePip, cfg.BlueBoostColor, i < cfg.BlueSeriesScore);
                 DrawSeriesPip(g, orangePip, cfg.OrangeBoostColor, i < cfg.OrangeSeriesScore);
             }

@@ -132,7 +132,7 @@ html,body{
   text-shadow:none;
   white-space:nowrap;
   overflow:hidden;
-  transform:translateY(-.045em);
+  transform:translateY(.08em);
 }
 .maskSlot.seriesTitle .tickerTrack{
   display:inline-flex;
@@ -973,7 +973,10 @@ function overlayGameLabel(config){
 function renderDots(side, config){
   const maxWins = Math.ceil((Number(config.seriesBestOf) || 5) / 2);
   const score = Math.max(0, Math.min(maxWins, Number(side === "Blue" ? config.blueSeriesScore : config.orangeSeriesScore) || 0));
-  return Array.from({length:maxWins}, (_, index)=>`<span class="dot ${side.toLowerCase()} ${index < score ? "filled" : ""}"></span>`).join("");
+  return Array.from({length:maxWins}, (_, index)=>{
+    const fillIndex = side === "Blue" ? maxWins - 1 - index : index;
+    return `<span class="dot ${side.toLowerCase()} ${fillIndex < score ? "filled" : ""}"></span>`;
+  }).join("");
 }
 function teamLogoFor(side, config){
   const manual = String(side === "Blue" ? config.blueLogoUrl || "" : config.orangeLogoUrl || "").trim();

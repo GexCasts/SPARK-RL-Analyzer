@@ -11416,7 +11416,8 @@ function renderObsSeriesDots(side){
   const score = Math.max(0, Math.min(winsNeeded, Number(side === "Blue" ? cfg.blueSeriesScore : cfg.orangeSeriesScore) || 0));
   const colorClass = side === "Blue" ? "blue" : "orange";
   return Array.from({length:winsNeeded}, (_,index)=>{
-    const filled = index < score ? "filled" : "";
+    const fillIndex = index;
+    const filled = fillIndex < score ? "filled" : "";
     return `<span class="obsSeriesDot ${colorClass} ${filled}"></span>`;
   }).join("");
 }
