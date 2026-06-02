@@ -3384,7 +3384,10 @@ async function handlePersonalOverlay(req, res){
     return;
   }
 
-  if(isRunning){
+  if(isRunning && action === "open"){
+    try{ personalOverlayProcess.kill(); }catch{}
+    personalOverlayProcess = null;
+  }else if(isRunning){
     res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
     res.end(JSON.stringify({ok:true, action:"open", alreadyOpen:true}));
     return;
@@ -3393,6 +3396,11 @@ async function handlePersonalOverlay(req, res){
     res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
     res.end(JSON.stringify({ok:false, reason:"SPARK Personal Overlay.exe is missing. Update SPARK or use Open Overlay as a browser source."}));
     return;
+  }
+
+  try{
+    await runExecFile("taskkill.exe", ["/IM", "SPARK Personal Overlay.exe", "/F", "/T"], {timeout:5000});
+  }catch{
   }
 
   const overlayUrl = "http://127.0.0.1:8765/1NE_Overlay?personal=1";
