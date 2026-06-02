@@ -1077,24 +1077,24 @@ canvas{width:100%!important;height:100%!important}
   display:none;
   align-items:center;
   justify-content:center;
-  border:2px solid rgba(255,208,0,.95);
+  border:2px solid transparent;
   border-radius:4px;
-  background:rgba(255,208,0,.06);
-  box-shadow:0 0 0 1px rgba(0,0,0,.72),0 10px 26px rgba(0,0,0,.28);
-  cursor:move;
+  background:transparent;
+  box-shadow:none;
+  cursor:pointer;
   pointer-events:auto;
   touch-action:none;
 }
-.overlayTournamentEditor.active{display:flex}
-.overlayTournamentEditor img{
-  width:100%;
-  height:100%;
-  object-fit:contain;
-  pointer-events:none;
-  filter:drop-shadow(0 4px 8px rgba(0,0,0,.48));
+.overlayTournamentEditor.active{display:block}
+.overlayTournamentEditor.selected{
+  border-color:rgba(255,208,0,.95);
+  background:rgba(255,208,0,.06);
+  box-shadow:0 0 0 1px rgba(0,0,0,.72),0 10px 26px rgba(0,0,0,.28);
+  cursor:move;
 }
 .overlayTournamentEditor::before{
   content:"Tournament logo";
+  display:none;
   position:absolute;
   left:0;
   top:-28px;
@@ -1108,7 +1108,9 @@ canvas{width:100%!important;height:100%!important}
   text-transform:uppercase;
   white-space:nowrap;
 }
+.overlayTournamentEditor.selected::before{display:block}
 .overlayTournamentResize{
+  display:none;
   position:absolute;
   right:-8px;
   bottom:-8px;
@@ -1119,6 +1121,18 @@ canvas{width:100%!important;height:100%!important}
   background:var(--spark-yellow);
   box-shadow:0 4px 10px rgba(0,0,0,.4);
   cursor:nwse-resize;
+  pointer-events:auto;
+}
+.overlayTournamentEditor.selected .overlayTournamentResize{display:block}
+.overlayTournamentDismissLayer{
+  display:none;
+  position:absolute;
+  inset:0;
+  z-index:3;
+  background:transparent;
+}
+.overlayTournamentDismissLayer.active{
+  display:block;
   pointer-events:auto;
 }
 .overlayQuickControls{
@@ -1308,6 +1322,12 @@ canvas{width:100%!important;height:100%!important}
 }
 .overlayLogoTools{display:flex;gap:8px;flex-wrap:wrap}
 .overlayLogoTools button{border-radius:8px}
+.overlayTeamActions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+.overlayTeamActions button{border-radius:8px}
 .overlaySkinStatus{
   display:grid;
   gap:8px;
@@ -3946,6 +3966,10 @@ let overlayConfig = readOverlayConfig();
 let overlayConfigRefreshStartedAt = 0;
 let overlayControlInteractionUntil = 0;
 const overlayDetailsOpenState = new Map();
+let overlayConfigSyncTimer = null;
+let overlayPreviewPushTimer = null;
+let overlayConfigStorageTimer = null;
+let overlayTournamentEditorSelected = false;
 let obsFinalScreenVisible = false;
 let obsStingerTimer = null;
 let obsStingerFallbackTimer = null;
@@ -5719,6 +5743,22 @@ async function setOverlaySeriesScore(side, delta){
   updateOverlayConfigField(key, Math.max(0, Math.min(maxWins, Number(overlayConfig[key] || 0) + delta)));
 }
 
+function swapOverlayTeamNames(){
+  saveOverlayConfig({
+    ...overlayConfig,
+    blueTeamName:overlayConfig.orangeTeamName || "",
+    orangeTeamName:overlayConfig.blueTeamName || ""
+  });
+}
+
+function swapOverlayTeamLogos(){
+  saveOverlayConfig({
+    ...overlayConfig,
+    blueLogoUrl:overlayConfig.orangeLogoUrl || "",
+    orangeLogoUrl:overlayConfig.blueLogoUrl || ""
+  });
+}
+
 function toggleOverlayFinalStatsPreview(){
   updateOverlayConfigField("testFinalStatsPreview", !overlayConfig.testFinalStatsPreview);
 }
@@ -5850,7 +5890,11 @@ function loadOverlaySkinFile(key, input){
     }
     const saveUploadedUrl = url=>{
       if(key === "tournamentLogoUrl" && Number.isFinite(tournamentRatio)){
+        overlayTournamentEditorSelected = true;
         saveOverlayConfig({...overlayConfig, tournamentLogoUrl:url, tournamentLogoRatio:tournamentRatio});
+      }else if(key === "tournamentLogoUrl"){
+        overlayTournamentEditorSelected = true;
+        updateOverlayConfigField(key, url);
       }else if(key === "stingerTransitionUrl"){
         saveOverlayConfig({
           ...overlayConfig,
@@ -5898,32 +5942,33 @@ function loadOverlaySkinFile(key, input){
 }
 
 function setOverlayTournamentPlacement(partial){
-  const next = {
-    ...overlayConfig,
-    ...partial
-  };
+  const next = {...overlayConfig, ...partial};
   next.tournamentLogoX = Math.round(Math.max(0, Math.min(1920, Number(next.tournamentLogoX) || 0)));
   next.tournamentLogoY = Math.round(Math.max(0, Math.min(1080, Number(next.tournamentLogoY) || 0)));
   next.tournamentLogoWidth = Math.round(Math.max(24, Math.min(900, Number(next.tournamentLogoWidth) || 280)));
   next.tournamentLogoRatio = Math.max(.2, Math.min(8, Number(next.tournamentLogoRatio) || 2.2));
-  overlayConfig = next;
-  try{ localStorage.setItem(overlayConfigKey, JSON.stringify(overlayConfig)); }
-  catch(err){ console.warn("Could not save overlay config:", err); }
+  saveOverlayConfig(next, {renderControl:false, debounceSync:true, syncDelay:180, previewDebounce:true, previewDelay:32, deferStorage:true, storageDelay:32, renderOverlay:false});
   applyOverlayTournamentEditor();
-  renderObsOverlay();
+}
+
+function setOverlayTournamentEditorSelected(selected){
+  overlayTournamentEditorSelected = !!selected && !!String(overlayConfig.tournamentLogoUrl || "").trim();
+  applyOverlayTournamentEditor();
 }
 
 function applyOverlayTournamentEditor(){
   const editor = $("overlayTournamentEditor");
   if(!editor) return;
   const logoUrl = String(overlayConfig.tournamentLogoUrl || "");
+  if(!logoUrl) overlayTournamentEditorSelected = false;
   editor.classList.toggle("active", !!logoUrl);
+  editor.classList.toggle("selected", !!logoUrl && overlayTournamentEditorSelected);
   editor.style.setProperty("--x", String(Number(overlayConfig.tournamentLogoX) || 0));
   editor.style.setProperty("--y", String(Number(overlayConfig.tournamentLogoY) || 0));
   editor.style.setProperty("--w", String(Number(overlayConfig.tournamentLogoWidth) || 280));
   editor.style.setProperty("--ratio", String(Number(overlayConfig.tournamentLogoRatio) || 2.2));
-  const img = editor.querySelector("img");
-  if(img && logoUrl && img.src !== logoUrl) img.src = logoUrl;
+  const dismissLayer = $("overlayTournamentDismissLayer");
+  if(dismissLayer) dismissLayer.classList.toggle("active", !!logoUrl && overlayTournamentEditorSelected);
   ["X","Y","Width"].forEach(part=>{
     const input = $(`overlayTournament${part}Input`);
     const key = `tournamentLogo${part}`;
@@ -5936,9 +5981,15 @@ function bindOverlayTournamentEditor(){
   const wrap = editor?.closest(".overlayPreviewFrameWrap");
   if(!editor || !wrap) return;
   const resizeHandle = editor.querySelector(".overlayTournamentResize");
+  $("overlayTournamentDismissLayer")?.addEventListener("pointerdown", event=>{
+    event.preventDefault();
+    event.stopPropagation();
+    setOverlayTournamentEditorSelected(false);
+  });
   const startDrag = (event, mode)=>{
     event.preventDefault();
     event.stopPropagation();
+    setOverlayTournamentEditorSelected(true);
     const start = {
       pointerId:event.pointerId,
       clientX:event.clientX,
@@ -5973,6 +6024,9 @@ function bindOverlayTournamentEditor(){
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
+      flushOverlayConfigStorage();
+      flushOverlayConfigSync();
+      flushOverlayPreviewPush();
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
@@ -6168,11 +6222,41 @@ function renderOverlayControl(){
                   <option value="7" ${overlayConfig.seriesBestOf===7?"selected":""}>Best of 7</option>
                 </select>
               </label>
+            </div>
+          </div>
+        </details>
+
+        <details class="overlayCategory" open>
+          <summary>Team Settings</summary>
+          <div class="overlayCategoryBody">
+            <div class="overlayTeamActions">
+              <button type="button" onclick="swapOverlayTeamNames()">Swap Team Names</button>
+              <button type="button" onclick="swapOverlayTeamLogos()">Swap Team Logos</button>
+            </div>
+            <div class="overlayControlGrid">
               <label class="overlayField">Left / Blue Team Name
                 <input class="overlayInput" id="overlayBlueNameInput" value="${escapeHtml(overlayConfig.blueTeamName)}" placeholder="Leave blank to use live API team name">
               </label>
               <label class="overlayField">Right / Orange Team Name
                 <input class="overlayInput" id="overlayOrangeNameInput" value="${escapeHtml(overlayConfig.orangeTeamName)}" placeholder="Leave blank to use live API team name">
+              </label>
+            </div>
+            <div class="overlayControlGrid">
+              <label class="overlayField">Left / Blue Logo URL
+                <input class="overlayInput" id="overlayBlueLogoInput" value="${escapeHtml(overlayConfig.blueLogoUrl)}" placeholder="https://... or blank for no logo">
+                <div class="overlayLogoTools">
+                  <button type="button" onclick="$('overlayBlueLogoFile').click()">Choose Local Logo</button>
+                  <button type="button" onclick="updateOverlayConfigField('blueLogoUrl','')">Clear Logo</button>
+                  <input class="overlayFileInput" id="overlayBlueLogoFile" type="file" accept="image/*" onchange="loadOverlayLogoFile('Blue',this)">
+                </div>
+              </label>
+              <label class="overlayField">Right / Orange Logo URL
+                <input class="overlayInput" id="overlayOrangeLogoInput" value="${escapeHtml(overlayConfig.orangeLogoUrl)}" placeholder="https://... or blank for no logo">
+                <div class="overlayLogoTools">
+                  <button type="button" onclick="$('overlayOrangeLogoFile').click()">Choose Local Logo</button>
+                  <button type="button" onclick="updateOverlayConfigField('orangeLogoUrl','')">Clear Logo</button>
+                  <input class="overlayFileInput" id="overlayOrangeLogoFile" type="file" accept="image/*" onchange="loadOverlayLogoFile('Orange',this)">
+                </div>
               </label>
             </div>
           </div>
@@ -6182,28 +6266,6 @@ function renderOverlayControl(){
           <summary>Appearance</summary>
           <div class="overlayCategoryBody">
             ${renderOverlayAppearanceMenus()}
-          </div>
-        </details>
-
-        <details class="overlayCategory">
-          <summary>Logos</summary>
-          <div class="overlayCategoryBody">
-            <label class="overlayField">Left / Blue Logo URL
-              <input class="overlayInput" id="overlayBlueLogoInput" value="${escapeHtml(overlayConfig.blueLogoUrl)}" placeholder="https://... or blank for no logo">
-              <div class="overlayLogoTools">
-                <button type="button" onclick="$('overlayBlueLogoFile').click()">Choose Local Logo</button>
-                <button type="button" onclick="updateOverlayConfigField('blueLogoUrl','')">Clear Logo</button>
-                <input class="overlayFileInput" id="overlayBlueLogoFile" type="file" accept="image/*" onchange="loadOverlayLogoFile('Blue',this)">
-              </div>
-            </label>
-            <label class="overlayField">Right / Orange Logo URL
-              <input class="overlayInput" id="overlayOrangeLogoInput" value="${escapeHtml(overlayConfig.orangeLogoUrl)}" placeholder="https://... or blank for no logo">
-              <div class="overlayLogoTools">
-                <button type="button" onclick="$('overlayOrangeLogoFile').click()">Choose Local Logo</button>
-                <button type="button" onclick="updateOverlayConfigField('orangeLogoUrl','')">Clear Logo</button>
-                <input class="overlayFileInput" id="overlayOrangeLogoFile" type="file" accept="image/*" onchange="loadOverlayLogoFile('Orange',this)">
-              </div>
-            </label>
           </div>
         </details>
 
@@ -6312,8 +6374,8 @@ function renderOverlayControl(){
       <div class="overlayPreviewDesk">
         <div class="overlayPreviewFrameWrap">
           <iframe class="overlayPreviewFrame" src="${escapeHtml(previewUrl)}" title="Overlay Preview"></iframe>
-          <div class="overlayTournamentEditor ${overlayConfig.tournamentLogoUrl ? "active" : ""}" id="overlayTournamentEditor" style="--x:${Number(overlayConfig.tournamentLogoX) || 0};--y:${Number(overlayConfig.tournamentLogoY) || 0};--w:${Number(overlayConfig.tournamentLogoWidth) || 280};--ratio:${Number(overlayConfig.tournamentLogoRatio) || 2.2}">
-            <img src="${escapeHtml(overlayConfig.tournamentLogoUrl || "")}" alt="">
+          <div class="overlayTournamentDismissLayer ${overlayTournamentEditorSelected ? "active" : ""}" id="overlayTournamentDismissLayer" aria-hidden="true"></div>
+          <div class="overlayTournamentEditor ${overlayConfig.tournamentLogoUrl ? "active" : ""} ${overlayTournamentEditorSelected ? "selected" : ""}" id="overlayTournamentEditor" style="--x:${Number(overlayConfig.tournamentLogoX) || 0};--y:${Number(overlayConfig.tournamentLogoY) || 0};--w:${Number(overlayConfig.tournamentLogoWidth) || 280};--ratio:${Number(overlayConfig.tournamentLogoRatio) || 2.2}">
             <span class="overlayTournamentResize" aria-hidden="true"></span>
           </div>
         </div>
@@ -6358,32 +6420,44 @@ function renderOverlayControl(){
       updateOverlayConfigField(key, el.value, {renderControl:false});
     });
   };
+  const bindColor = (id,key)=>{
+    const el = $(id);
+    if(!el) return;
+    el.addEventListener("input", ()=>{
+      markOverlayControlInteraction();
+      updateOverlayConfigField(key, el.value, {renderControl:false, debounceSync:true, syncDelay:180, previewDebounce:true, previewDelay:120, deferStorage:true, storageDelay:120, renderOverlay:false});
+    });
+    el.addEventListener("change", ()=>{
+      markOverlayControlInteraction();
+      updateOverlayConfigField(key, el.value, {renderControl:false});
+    });
+  };
   bind("overlayBlueNameInput","blueTeamName");
   bind("overlayOrangeNameInput","orangeTeamName");
   bind("overlayBlueLogoInput","blueLogoUrl");
   bind("overlayOrangeLogoInput","orangeLogoUrl");
   bind("overlayBestOfInput","seriesBestOf","change");
   bind("overlaySeriesTitleInput","seriesTitle","input");
-  bind("overlayTextColorInput","overlayTextColor","input");
-  bind("overlayAccentColorInput","overlayAccentColor","input");
-  bind("overlayBlueBoostColorInput","overlayBlueBoostColor","input");
-  bind("overlayOrangeBoostColorInput","overlayOrangeBoostColor","input");
+  bindColor("overlayTextColorInput","overlayTextColor");
+  bindColor("overlayAccentColorInput","overlayAccentColor");
+  bindColor("overlayBlueBoostColorInput","overlayBlueBoostColor");
+  bindColor("overlayOrangeBoostColorInput","overlayOrangeBoostColor");
   bind("overlayFontInput","overlayFontFamily","change");
   bind("overlayTeamNameFontInput","overlayTeamNameFontFamily","change");
   bind("overlayTeamNameSizeInput","overlayTeamNameFontSize","input");
-  bind("overlayTeamNameColorInput","overlayTeamNameColor","input");
+  bindColor("overlayTeamNameColorInput","overlayTeamNameColor");
   bind("overlayGoalFontInput","overlayGoalFontFamily","change");
   bind("overlayGoalSizeInput","overlayGoalFontSize","input");
-  bind("overlayGoalColorInput","overlayGoalColor","input");
+  bindColor("overlayGoalColorInput","overlayGoalColor");
   bind("overlayTimerFontInput","overlayTimerFontFamily","change");
   bind("overlayTimerSizeInput","overlayTimerFontSize","input");
-  bind("overlayTimerColorInput","overlayTimerColor","input");
+  bindColor("overlayTimerColorInput","overlayTimerColor");
   bind("overlayTickerFontInput","overlayTickerFontFamily","change");
   bind("overlayTickerSizeInput","overlayTickerFontSize","input");
-  bind("overlayTickerColorInput","overlayTickerColor","input");
+  bindColor("overlayTickerColorInput","overlayTickerColor");
   bind("overlayBoostFontInput","overlayBoostFontFamily","change");
   bind("overlayBoostSizeInput","overlayBoostFontSize","input");
-  bind("overlayBoostTextColorInput","overlayBoostTextColor","input");
+  bindColor("overlayBoostTextColorInput","overlayBoostTextColor");
   bind("overlayStingerCutInput","stingerTransitionCutMs","input");
   const tournamentBindings = [
     ["overlayTournamentXInput","tournamentLogoX"],
@@ -11327,6 +11401,58 @@ function applyOverlayThemeToPreview(){
   applyOverlayThemeToElement(document.querySelector(".obsStage"), overlayConfig);
 }
 
+function persistOverlayConfigLocally(config=overlayConfig){
+  try{ localStorage.setItem(overlayConfigKey, JSON.stringify(config)); }
+  catch(err){ console.warn("Could not save overlay config:", err); }
+}
+
+function scheduleOverlayConfigStorage(config=overlayConfig, delay=120){
+  const snapshot = {...(config || {})};
+  if(overlayConfigStorageTimer) clearTimeout(overlayConfigStorageTimer);
+  overlayConfigStorageTimer = setTimeout(()=>{
+    overlayConfigStorageTimer = null;
+    persistOverlayConfigLocally(snapshot);
+  }, Math.max(0, Number(delay) || 0));
+}
+
+function flushOverlayConfigStorage(){
+  if(!overlayConfigStorageTimer) return;
+  clearTimeout(overlayConfigStorageTimer);
+  overlayConfigStorageTimer = null;
+  persistOverlayConfigLocally(overlayConfig);
+}
+
+function pushOverlayConfigToPreviewFrame(config=overlayConfig){
+  const frame = document.querySelector(".overlayPreviewFrame");
+  const previewWindow = frame?.contentWindow;
+  if(!previewWindow) return;
+  try{
+    const payload = JSON.stringify({...overlayDefaultConfig, ...(config || {})});
+    previewWindow.localStorage.setItem(overlayConfigKey, payload);
+    if(typeof previewWindow.render === "function"){
+      previewWindow.render();
+    }else{
+      previewWindow.dispatchEvent(new StorageEvent("storage", {key:overlayConfigKey, newValue:payload}));
+    }
+  }catch{}
+}
+
+function scheduleOverlayPreviewPush(config=overlayConfig, delay=120){
+  const snapshot = {...(config || {})};
+  if(overlayPreviewPushTimer) clearTimeout(overlayPreviewPushTimer);
+  overlayPreviewPushTimer = setTimeout(()=>{
+    overlayPreviewPushTimer = null;
+    pushOverlayConfigToPreviewFrame(snapshot);
+  }, Math.max(0, Number(delay) || 0));
+}
+
+function flushOverlayPreviewPush(){
+  if(!overlayPreviewPushTimer) return;
+  clearTimeout(overlayPreviewPushTimer);
+  overlayPreviewPushTimer = null;
+  pushOverlayConfigToPreviewFrame(overlayConfig);
+}
+
 async function refreshOverlayConfigFromServer(){
   if(!location.protocol.startsWith("http")) return;
   try{
@@ -11363,11 +11489,29 @@ function saveOverlayConfig(nextConfig, options={}){
     testFinalStatsPreview:nextConfig.testFinalStatsPreview === true
   };
   overlayServerConfig = {...overlayServerConfig, ...overlayConfig};
-  try{ localStorage.setItem(overlayConfigKey, JSON.stringify(overlayConfig)); }
-  catch(err){ console.warn("Could not save overlay config:", err); }
-  syncOverlayConfigToServer(overlayConfig);
+  if(options.deferStorage) scheduleOverlayConfigStorage(overlayConfig, options.storageDelay ?? options.previewDelay ?? 120);
+  else{
+    if(overlayConfigStorageTimer){
+      clearTimeout(overlayConfigStorageTimer);
+      overlayConfigStorageTimer = null;
+    }
+    persistOverlayConfigLocally(overlayConfig);
+  }
+  if(options.previewDebounce) scheduleOverlayPreviewPush(overlayConfig, options.previewDelay ?? 120);
+  else{
+    if(overlayPreviewPushTimer){
+      clearTimeout(overlayPreviewPushTimer);
+      overlayPreviewPushTimer = null;
+    }
+    pushOverlayConfigToPreviewFrame(overlayConfig);
+  }
+  if(options.debounceSync) scheduleOverlayConfigSync(overlayConfig, options.syncDelay ?? 180);
+  else{
+    flushOverlayConfigSync(false);
+    syncOverlayConfigToServer(overlayConfig);
+  }
   if(options.renderControl !== false) renderOverlayControl();
-  renderObsOverlay();
+  if(options.renderOverlay !== false) renderObsOverlay();
 }
 
 function overlayConfigForServer(config){
@@ -11391,6 +11535,23 @@ function syncOverlayConfigToServer(config){
     body:JSON.stringify({config:overlayConfigForServer(config)}),
     cache:"no-store"
   }).catch(err=>console.warn("Could not sync overlay config:", err));
+}
+
+function scheduleOverlayConfigSync(config=overlayConfig, delay=180){
+  if(!location.protocol.startsWith("http")) return;
+  const snapshot = {...(config || {})};
+  if(overlayConfigSyncTimer) clearTimeout(overlayConfigSyncTimer);
+  overlayConfigSyncTimer = setTimeout(()=>{
+    overlayConfigSyncTimer = null;
+    syncOverlayConfigToServer(snapshot);
+  }, Math.max(0, Number(delay) || 0));
+}
+
+function flushOverlayConfigSync(send=true){
+  if(!overlayConfigSyncTimer) return;
+  clearTimeout(overlayConfigSyncTimer);
+  overlayConfigSyncTimer = null;
+  if(send) syncOverlayConfigToServer(overlayConfig);
 }
 
 function updateOverlayConfigField(key, value, options={}){
