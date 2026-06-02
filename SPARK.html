@@ -2690,16 +2690,18 @@ body.obsOverlayMode #obsOverlayRoot{
 }
 .obsBoostName span{position:relative;z-index:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .obsBoostFill{
+  --boostEnd:var(--overlay-accent,#ffd000);
   position:absolute;
   inset:0 auto 0 0;
   width:var(--boost,0%);
   background:
-    linear-gradient(90deg,color-mix(in srgb,var(--boostTeam) 90%,#fff 6%),var(--overlay-accent,#ffd000)),
+    linear-gradient(90deg,color-mix(in srgb,var(--boostTeam) 90%,#fff 6%),var(--boostEnd)),
     linear-gradient(180deg,rgba(255,255,255,.28),transparent);
   opacity:.78;
   box-shadow:0 0 16px color-mix(in srgb,var(--boostTeam) 72%,transparent);
   transition:width .18s cubic-bezier(.22,1,.36,1);
 }
+.obsBoostColumn.left .obsBoostFill{--boostEnd:#80eeff}
 .obsBoostColumn.right .obsBoostFill{left:auto;right:0}
 .obsBoostValue{
   position:relative;

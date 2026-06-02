@@ -135,8 +135,7 @@ namespace SparkPersonalOverlay
             DrawBoostRows(g, snap.Players.Where(p => p.Team == "Blue").ToList(), true, cfg);
             DrawBoostRows(g, snap.Players.Where(p => p.Team == "Orange").ToList(), false, cfg);
 
-            PlayerState focus = snap.Players.FirstOrDefault(p => NamesMatch(p.Name, snap.FocusedPlayerName));
-            if (focus != null) DrawFocusCard(g, focus, cfg);
+            DrawPlayerStatsBoard(g, snap.Players, snap.FocusedPlayerName, cfg);
             if (snap.ReplayActive) DrawReplayBanner(g, cfg);
             if (!snap.Connected || snap.UpdateCount == 0) DrawWaitingBadge(g, "SPARK personal overlay", "Waiting for live feed", cfg);
         }
@@ -152,12 +151,12 @@ namespace SparkPersonalOverlay
             using (Font clockFont = FontFor(37, FontStyle.Bold))
             using (Font tagFont = FontFor(9, FontStyle.Bold))
             {
-                FillRound(g, new RectangleF(418, 18, 404, 55), Color.FromArgb(224, 6, 8, 12), 8);
-                FillRound(g, new RectangleF(1098, 18, 404, 55), Color.FromArgb(224, 6, 8, 12), 8);
+                FillRoundGradient(g, new RectangleF(418, 18, 404, 55), Color.FromArgb(228, 22, 25, 31), Color.FromArgb(232, 10, 12, 17), 8);
+                FillRoundGradient(g, new RectangleF(1098, 18, 404, 55), Color.FromArgb(228, 22, 25, 31), Color.FromArgb(232, 10, 12, 17), 8);
                 FillRound(g, new RectangleF(822, 18, 92, 55), blue, 5);
                 FillRound(g, new RectangleF(1006, 18, 92, 55), orange, 5);
-                FillRound(g, new RectangleF(914, 18, 92, 55), Color.FromArgb(232, 72, 72, 72), 4);
-                FillRound(g, new RectangleF(856, 76, 208, 15), Color.FromArgb(190, 5, 6, 9), 5);
+                FillRoundGradient(g, new RectangleF(914, 18, 92, 55), Color.FromArgb(236, 88, 88, 90), Color.FromArgb(236, 48, 50, 55), 4);
+                FillRoundGradient(g, new RectangleF(856, 76, 208, 15), Color.FromArgb(205, 24, 27, 34), Color.FromArgb(210, 10, 12, 17), 5);
 
                 DrawText(g, blueName.ToUpperInvariant(), teamFont, text, new RectangleF(440, 18, 352, 55), ContentAlignment.MiddleCenter);
                 DrawText(g, orangeName.ToUpperInvariant(), teamFont, text, new RectangleF(1128, 18, 352, 55), ContentAlignment.MiddleCenter);
@@ -180,6 +179,7 @@ namespace SparkPersonalOverlay
             float w = 236;
             float h = 24;
             Color team = blueSide ? cfg.BlueBoostColor : cfg.OrangeBoostColor;
+            Color boostEnd = blueSide ? BlendColor(cfg.BlueBoostColor, Color.FromArgb(128, 238, 255), 0.72f) : BlendColor(cfg.OrangeBoostColor, cfg.AccentColor, 0.58f);
             using (Font nameFont = FontFor(11, FontStyle.Bold))
             using (Font valueFont = FontFor(11, FontStyle.Bold))
             {
@@ -187,7 +187,7 @@ namespace SparkPersonalOverlay
                 {
                     PlayerState player = players[i];
                     RectangleF row = new RectangleF(x, y + i * 30, w, h);
-                    FillRound(g, row, Color.FromArgb(210, 5, 6, 9), 4);
+                    FillRoundGradient(g, row, Color.FromArgb(218, 24, 27, 34), Color.FromArgb(224, 12, 14, 19), 4);
                     using (Pen pen = new Pen(Color.FromArgb(170, team), 1f)) g.DrawRectangle(pen, row.X, row.Y, row.Width, row.Height);
                     float boostWidth = Math.Max(0, Math.Min(100, player.Boost)) / 100f * (w - 44);
                     RectangleF bar = blueSide
@@ -195,13 +195,13 @@ namespace SparkPersonalOverlay
                         : new RectangleF(row.Right - 2 - boostWidth, row.Y + 2, boostWidth, h - 4);
                     if (bar.Width > 0.5f && bar.Height > 0.5f)
                     {
-                        using (LinearGradientBrush brush = new LinearGradientBrush(bar, Color.FromArgb(210, team), Color.FromArgb(220, cfg.AccentColor), LinearGradientMode.Horizontal))
+                        using (LinearGradientBrush brush = new LinearGradientBrush(bar, Color.FromArgb(218, team), Color.FromArgb(228, boostEnd), LinearGradientMode.Horizontal))
                         {
                             g.FillRectangle(brush, bar);
                         }
                     }
                     RectangleF valueBox = blueSide ? new RectangleF(row.Right - 38, row.Y, 38, h) : new RectangleF(row.X, row.Y, 38, h);
-                    g.FillRectangle(new SolidBrush(Color.FromArgb(175, 0, 0, 0)), valueBox);
+                    using (SolidBrush valueBrush = new SolidBrush(Color.FromArgb(175, 18, 20, 25))) g.FillRectangle(valueBrush, valueBox);
                     RectangleF nameBox = blueSide ? new RectangleF(row.X + 8, row.Y, w - 52, h) : new RectangleF(row.X + 44, row.Y, w - 52, h);
                     DrawText(g, TrimName(player.Name), nameFont, cfg.BoostTextColor, nameBox, blueSide ? ContentAlignment.MiddleLeft : ContentAlignment.MiddleRight);
                     DrawText(g, player.Boost.ToString(), valueFont, cfg.AccentColor, valueBox, ContentAlignment.MiddleCenter);
@@ -209,26 +209,52 @@ namespace SparkPersonalOverlay
             }
         }
 
-        private void DrawFocusCard(Graphics g, PlayerState player, OverlayConfig cfg)
+        private void DrawPlayerStatsBoard(Graphics g, List<PlayerState> players, string focusedPlayerName, OverlayConfig cfg)
         {
-            RectangleF card = new RectangleF(36, 820, 322, 112);
-            FillRound(g, card, Color.FromArgb(215, 5, 6, 9), 6);
-            using (Pen pen = new Pen(Color.FromArgb(195, cfg.AccentColor), 1.5f)) DrawRound(g, pen, card, 6);
-            using (Font titleFont = FontFor(12, FontStyle.Bold))
-            using (Font statFont = FontFor(18, FontStyle.Bold))
-            using (Font labelFont = FontFor(8, FontStyle.Bold))
+            List<PlayerState> roster = players
+                .Where(p => !String.IsNullOrWhiteSpace(p.Name))
+                .OrderBy(p => p.Team == "Orange" ? 1 : 0)
+                .ThenBy(p => p.Shortcut)
+                .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+                .Take(6)
+                .ToList();
+            RectangleF card = new RectangleF(36, 782, 372, 232);
+            FillRoundGradient(g, card, Color.FromArgb(222, 28, 31, 38), Color.FromArgb(232, 12, 14, 19), 7);
+            using (Pen pen = new Pen(Color.FromArgb(185, cfg.AccentColor), 1.2f)) DrawRound(g, pen, card, 7);
+            using (Font titleFont = FontFor(10, FontStyle.Bold))
+            using (Font headerFont = FontFor(8, FontStyle.Bold))
+            using (Font nameFont = FontFor(10, FontStyle.Bold))
+            using (Font statFont = FontFor(10, FontStyle.Bold))
             {
-                DrawText(g, TrimName(player.Name).ToUpperInvariant(), titleFont, cfg.TextColor, new RectangleF(50, 832, 206, 20), ContentAlignment.MiddleLeft);
-                DrawText(g, "FOCUSED", labelFont, cfg.AccentColor, new RectangleF(236, 832, 100, 20), ContentAlignment.MiddleRight);
-                DrawStat(g, "Goals", player.Goals, 52, 864, statFont, labelFont, cfg);
-                DrawStat(g, "Shots", player.Shots, 118, 864, statFont, labelFont, cfg);
-                DrawStat(g, "Assists", player.Assists, 184, 864, statFont, labelFont, cfg);
-                DrawStat(g, "Saves", player.Saves, 250, 864, statFont, labelFont, cfg);
-                RectangleF track = new RectangleF(52, 910, 248, 10);
-                FillRound(g, track, Color.FromArgb(190, 36, 38, 44), 5);
-                RectangleF fill = new RectangleF(track.X, track.Y, track.Width * Math.Max(0, Math.Min(100, player.Boost)) / 100f, track.Height);
-                if (fill.Width > 0.5f) FillRound(g, fill, cfg.AccentColor, 5);
-                DrawText(g, player.Boost + " boost", labelFont, cfg.TextColor, new RectangleF(304, 902, 45, 24), ContentAlignment.MiddleLeft);
+                DrawText(g, "PLAYER STATS", titleFont, cfg.AccentColor, new RectangleF(50, 794, 180, 18), ContentAlignment.MiddleLeft);
+                DrawText(g, "G", headerFont, cfg.TextColor, new RectangleF(216, 814, 30, 14), ContentAlignment.MiddleCenter);
+                DrawText(g, "SH", headerFont, cfg.TextColor, new RectangleF(252, 814, 30, 14), ContentAlignment.MiddleCenter);
+                DrawText(g, "A", headerFont, cfg.TextColor, new RectangleF(288, 814, 30, 14), ContentAlignment.MiddleCenter);
+                DrawText(g, "SV", headerFont, cfg.TextColor, new RectangleF(324, 814, 30, 14), ContentAlignment.MiddleCenter);
+                DrawText(g, "B", headerFont, cfg.TextColor, new RectangleF(360, 814, 30, 14), ContentAlignment.MiddleCenter);
+                for (int i = 0; i < roster.Count; i++)
+                {
+                    PlayerState player = roster[i];
+                    bool focused = NamesMatch(player.Name, focusedPlayerName);
+                    Color team = TeamColor(player.Team, cfg);
+                    RectangleF row = new RectangleF(48, 832 + i * 29, 340, 24);
+                    FillRoundGradient(g, row, focused ? Color.FromArgb(226, 42, 48, 58) : Color.FromArgb(168, 26, 29, 36), focused ? Color.FromArgb(232, 20, 23, 30) : Color.FromArgb(188, 13, 15, 20), 4);
+                    using (SolidBrush strip = new SolidBrush(Color.FromArgb(230, team))) g.FillRectangle(strip, row.X, row.Y, 4, row.Height);
+                    if (focused)
+                    {
+                        using (Pen focusPen = new Pen(Color.FromArgb(210, team), 1.4f)) DrawRound(g, focusPen, row, 4);
+                    }
+                    DrawText(g, TrimName(player.Name), nameFont, focused ? Color.White : cfg.BoostTextColor, new RectangleF(58, row.Y, 140, row.Height), ContentAlignment.MiddleLeft);
+                    DrawText(g, player.Goals.ToString(), statFont, cfg.TextColor, new RectangleF(216, row.Y, 30, row.Height), ContentAlignment.MiddleCenter);
+                    DrawText(g, player.Shots.ToString(), statFont, cfg.TextColor, new RectangleF(252, row.Y, 30, row.Height), ContentAlignment.MiddleCenter);
+                    DrawText(g, player.Assists.ToString(), statFont, cfg.TextColor, new RectangleF(288, row.Y, 30, row.Height), ContentAlignment.MiddleCenter);
+                    DrawText(g, player.Saves.ToString(), statFont, cfg.TextColor, new RectangleF(324, row.Y, 30, row.Height), ContentAlignment.MiddleCenter);
+                    DrawText(g, player.Boost.ToString(), statFont, team, new RectangleF(360, row.Y, 30, row.Height), ContentAlignment.MiddleCenter);
+                }
+                if (!roster.Any())
+                {
+                    DrawText(g, "Waiting for players", nameFont, Color.FromArgb(220, cfg.TextColor), new RectangleF(54, 850, 260, 24), ContentAlignment.MiddleLeft);
+                }
             }
         }
 
@@ -250,7 +276,7 @@ namespace SparkPersonalOverlay
         private void DrawWaitingBadge(Graphics g, string title, string detail, OverlayConfig cfg)
         {
             RectangleF badge = new RectangleF(24, 1014, 230, 46);
-            FillRound(g, badge, Color.FromArgb(220, 5, 6, 9), 7);
+            FillRoundGradient(g, badge, Color.FromArgb(222, 27, 30, 37), Color.FromArgb(232, 12, 14, 19), 7);
             using (Pen pen = new Pen(Color.FromArgb(205, cfg.AccentColor), 1f)) DrawRound(g, pen, badge, 7);
             using (Font titleFont = FontFor(9, FontStyle.Bold))
             using (Font detailFont = FontFor(8, FontStyle.Regular))
@@ -281,6 +307,16 @@ namespace SparkPersonalOverlay
             }
         }
 
+        private void FillRoundGradient(Graphics g, RectangleF rect, Color top, Color bottom, float radius)
+        {
+            if (rect.Width <= 0.5f || rect.Height <= 0.5f) return;
+            using (GraphicsPath path = RoundPath(rect, radius))
+            using (LinearGradientBrush brush = new LinearGradientBrush(rect, top, bottom, LinearGradientMode.Vertical))
+            {
+                g.FillPath(brush, path);
+            }
+        }
+
         private void DrawRound(Graphics g, Pen pen, RectangleF rect, float radius)
         {
             if (rect.Width <= 0.5f || rect.Height <= 0.5f) return;
@@ -305,6 +341,20 @@ namespace SparkPersonalOverlay
         private Font FontFor(float size, FontStyle style)
         {
             return new Font("Segoe UI", size, style, GraphicsUnit.Pixel);
+        }
+
+        private Color TeamColor(string team, OverlayConfig cfg)
+        {
+            return String.Equals(team, "Orange", StringComparison.OrdinalIgnoreCase) ? cfg.OrangeBoostColor : cfg.BlueBoostColor;
+        }
+
+        private Color BlendColor(Color from, Color to, float amount)
+        {
+            amount = Math.Max(0f, Math.Min(1f, amount));
+            int r = (int)Math.Round(from.R + (to.R - from.R) * amount);
+            int g = (int)Math.Round(from.G + (to.G - from.G) * amount);
+            int b = (int)Math.Round(from.B + (to.B - from.B) * amount);
+            return Color.FromArgb(r, g, b);
         }
 
         private void LiveApiLoop(CancellationToken token)

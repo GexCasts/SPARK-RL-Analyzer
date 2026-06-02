@@ -13,6 +13,7 @@
   --overlay-text:#f7f7f4;
   --overlay-accent:#ffd000;
   --overlay-boost-blue:#1b8cff;
+  --overlay-boost-blue-end:#80eeff;
   --overlay-boost-orange:#ff8400;
   --overlay-font:Inter,Segoe UI,Arial,sans-serif;
   --panel:#050609;
@@ -315,6 +316,7 @@ html,body{
 .boosts.right{right:30px}
 .boostRow{
   --boostTeam:var(--overlay-boost-blue);
+  --boostEnd:var(--overlay-boost-blue-end);
   position:relative;
   height:22px;
   background:linear-gradient(180deg,rgba(9,11,16,.94),rgba(3,4,7,.98));
@@ -332,6 +334,7 @@ html,body{
 }
 .boosts.right .boostRow{
   --boostTeam:var(--overlay-boost-orange);
+  --boostEnd:var(--overlay-accent);
   grid-template-columns:38px minmax(0,1fr);
   text-align:right;
   clip-path:polygon(4% 0,100% 0,100% 100%,4% 100%,0 50%);
@@ -342,7 +345,7 @@ html,body{
   height:100%;
   width:var(--boost,0%);
   background:
-    linear-gradient(90deg,color-mix(in srgb,var(--boostTeam) 90%,#fff 6%),var(--overlay-accent)),
+    linear-gradient(90deg,color-mix(in srgb,var(--boostTeam) 90%,#fff 6%),var(--boostEnd)),
     linear-gradient(180deg,rgba(255,255,255,.28),transparent);
   opacity:.78;
   box-shadow:0 0 16px color-mix(in srgb,var(--boostTeam) 72%,transparent);
