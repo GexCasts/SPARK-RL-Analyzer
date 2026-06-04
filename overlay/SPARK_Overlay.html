@@ -1410,7 +1410,8 @@ function setMaskTicker(el, text, width){
     return;
   }
   let state = maskTickerStates.get(el);
-  if(!state || state.text !== text){
+  const maskWidth = Math.max(1, Number(width) || el.getBoundingClientRect().width || 1);
+  if(!state || state.text !== text || Math.abs((state.maskWidth || 0) - maskWidth) > 2){
     stopMaskTicker(el);
     el.textContent = "";
     const track = document.createElement("span");
@@ -1421,7 +1422,7 @@ function setMaskTicker(el, text, width){
       track,
       text,
       copies:[],
-      maskWidth:Math.max(1, Number(width) || el.getBoundingClientRect().width || 1),
+      maskWidth,
       textWidth:1,
       gap:32,
       speed:30,
@@ -1458,13 +1459,29 @@ function updateMaskTickerMetrics(state, width){
   const baseGap = 32;
   state.maskWidth = Math.max(1, Number(width) || state.el.getBoundingClientRect().width || 1);
   const sample = state.copies[0]?.node;
-  state.textWidth = Math.max(1, sample?.getBoundingClientRect().width || sample?.scrollWidth || 1);
-  state.gap = Math.max(baseGap, Math.min(78, Math.round(state.maskWidth * .08)));
+  const measuredTextWidth = Math.max(1, sample?.getBoundingClientRect().width || sample?.scrollWidth || 1);
+  const measuredGap = Math.max(baseGap, Math.min(78, Math.round(state.maskWidth * .08)));
+  const spacingChanged = Math.abs((state.textWidth || 1) - measuredTextWidth) > 2 || Math.abs((state.gap || 0) - measuredGap) > 2;
+  state.textWidth = measuredTextWidth;
+  state.gap = measuredGap;
   state.speed = 30;
+  if(spacingChanged && state.copies.length > 1){
+    const current = state.copies
+      .filter(copy=>copy.x <= state.maskWidth + 1 && copy.x + state.textWidth >= -state.gap)
+      .sort((a,b)=>Math.abs(a.x) - Math.abs(b.x))[0] || state.copies[0];
+    const keepX = Math.max(-state.textWidth - state.gap, Math.min(state.maskWidth, current?.x || 0));
+    state.copies.forEach(copy=>copy.node.remove());
+    state.copies = [];
+    addMaskTickerCopy(state, keepX);
+  }
   const leftmost = state.copies.reduce((min, copy)=>Math.min(min, copy.x), 0);
   if(leftmost > -state.textWidth - state.gap){
     addMaskTickerCopy(state, leftmost - state.textWidth - state.gap);
   }
+}
+
+function resetAllMaskTickers(){
+  Array.from(maskTickerStates.keys()).forEach(stopMaskTicker);
 }
 
 function ensureMaskTickerLoop(){
@@ -1744,6 +1761,7 @@ function payloadHasKickoffCountdown(payload){
   return Number.isFinite(countdown) && countdown > 0 && countdown <= 10;
 }
 function resetForNextMatch(){
+  resetAllMaskTickers();
   state.replay = false;
   state.matchEnded = false;
   state.matchEndedAt = 0;
