@@ -19,7 +19,8 @@ const tileLayoutPath = path.join(here, "SPARK-layout.json");
 const overlayAssetDir = path.join(here, ".tmp", "overlay-assets");
 const overlayConfigPath = path.join(overlayAssetDir, "overlay-config.json");
 const replayFolderConfigPath = path.join(overlayAssetDir, "replay-folder.json");
-const defaultReplayFolderPath = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Rocket League\\TAGame\\Demos";
+const legacySteamReplayFolderPath = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Rocket League\\TAGame\\Demos";
+const defaultReplayFolderPath = defaultWindowsReplayFolderPath();
 const rrrocketVersion = "0.11.1";
 const rrrocketCandidates = [
   process.env.SPARK_RRROCKET_PATH,
@@ -509,6 +510,13 @@ function readRequestBody(req, limitBytes=128 * 1024 * 1024){
   });
 }
 
+function defaultWindowsReplayFolderPath(){
+  const userHome = String(process.env.USERPROFILE || "").trim()
+    || (process.env.HOMEDRIVE && process.env.HOMEPATH ? `${process.env.HOMEDRIVE}${process.env.HOMEPATH}` : "")
+    || (process.env.USERNAME ? `C:\\Users\\${process.env.USERNAME}` : "C:\\Users\\DefaultUser");
+  return path.join(userHome, "Documents", "My Games", "Rocket League", "TAGame", "Demos");
+}
+
 async function pathIsDirectory(folderPath){
   const text = String(folderPath || "").trim();
   if(!text) return false;
@@ -517,6 +525,15 @@ async function pathIsDirectory(folderPath){
     return stat.isDirectory();
   }catch{
     return false;
+  }
+}
+
+async function replayFileCount(folderPath){
+  try{
+    const entries = await fs.readdir(folderPath, {withFileTypes:true});
+    return entries.filter(entry=>entry.isFile() && entry.name.toLowerCase().endsWith(".replay")).length;
+  }catch{
+    return 0;
   }
 }
 
@@ -541,18 +558,15 @@ async function writeReplayFolderConfig(folderPath, source="manual"){
 async function resolveReplayFolder(){
   const config = await readReplayFolderConfig();
   const savedPath = String(config.path || "").trim();
-  const savedSource = String(config.source || (sameFolderPath(savedPath, defaultReplayFolderPath) ? "auto" : "manual")).toLowerCase();
+  const savedSource = String(config.source || (sameFolderPath(savedPath, defaultReplayFolderPath) || sameFolderPath(savedPath, legacySteamReplayFolderPath) ? "auto" : "manual")).toLowerCase();
   if(await pathIsDirectory(savedPath)){
     if(savedSource === "manual"){
-      return {ok:true, path:savedPath, status:"set", message:"Replay Folder Set", source:"manual"};
-    }
-    if(!sameFolderPath(savedPath, defaultReplayFolderPath)){
-      return {ok:true, path:savedPath, status:"set", message:"Replay Folder Set", source:"manual"};
+      return {ok:true, path:savedPath, status:"set", message:"Replay Folder Set", source:"manual", replayFiles:await replayFileCount(savedPath)};
     }
   }
   if(await pathIsDirectory(defaultReplayFolderPath)){
     await writeReplayFolderConfig(defaultReplayFolderPath, "auto");
-    return {ok:true, path:defaultReplayFolderPath, status:"auto-detected", message:"Replay folder auto-detected", source:"auto"};
+    return {ok:true, path:defaultReplayFolderPath, status:"auto-detected", message:"Replay folder auto-detected", source:"auto", replayFiles:await replayFileCount(defaultReplayFolderPath)};
   }
   return {ok:false, path:"", status:"missing", message:"Replay folder not set"};
 }
@@ -564,7 +578,7 @@ async function setReplayFolder(folderPath){
     return {ok:false, path:normalized, status:"invalid", message:"Selected folder was not found"};
   }
   await writeReplayFolderConfig(normalized, "manual");
-  return {ok:true, path:normalized, status:"set", message:"Replay Folder Set", source:"manual"};
+  return {ok:true, path:normalized, status:"set", message:"Replay Folder Set", source:"manual", replayFiles:await replayFileCount(normalized)};
 }
 
 function pickReplayFolderWithPowerShell(){
@@ -575,10 +589,25 @@ function pickReplayFolderWithPowerShell(){
     }
     const script = `
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$owner = New-Object System.Windows.Forms.Form
+$owner.TopMost = $true
+$owner.ShowInTaskbar = $false
+$owner.StartPosition = "CenterScreen"
+$owner.Size = New-Object System.Drawing.Size(1, 1)
+$owner.Opacity = 0
+$owner.Show()
+$owner.Activate()
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
 $dialog.Description = "Select the Rocket League replay folder"
 $dialog.ShowNewFolderButton = $false
-if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+try {
+  $result = $dialog.ShowDialog($owner)
+} finally {
+  $owner.Close()
+  $owner.Dispose()
+}
+if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
   [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
   Write-Output $dialog.SelectedPath
 }

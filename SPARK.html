@@ -6637,26 +6637,9 @@ async function chooseReplayFolder(){
     result = await response.json().catch(()=>null);
     if(!response.ok) throw new Error(result?.message || "Could not open the replay folder picker.");
   }catch(error){
-    const manualPath = prompt(`${error?.message || "Could not open the folder picker."}\nPaste the replay folder path:`);
-    if(!manualPath){
-      replayFolderStatus = {ok:false, status:"cancelled", message:"Replay folder not changed", path:replayFolderStatus.path || ""};
-      applyReplayFolderStatus();
-      return;
-    }
-    try{
-      const response = await fetch(replayFolderEndpoint(), {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({path:manualPath}),
-        cache:"no-store"
-      });
-      result = await response.json().catch(()=>null);
-      if(!response.ok && result?.message) throw new Error(result.message);
-    }catch(setError){
-      replayFolderStatus = {ok:false, status:"invalid", message:setError?.message || "Replay folder could not be set", path:manualPath};
-      applyReplayFolderStatus();
-      return;
-    }
+    replayFolderStatus = {ok:false, status:"invalid", message:error?.message || "Could not open the replay folder picker.", path:replayFolderStatus.path || ""};
+    applyReplayFolderStatus();
+    return;
   }
   replayFolderStatus = result && typeof result === "object" ? result : {ok:false, status:"missing", message:"Replay folder not set", path:""};
   replayFolderStatusLoaded = true;
