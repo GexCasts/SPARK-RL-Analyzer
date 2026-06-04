@@ -6627,24 +6627,84 @@ async function refreshReplayFolderStatus({renderControl=false}={}){
   else applyReplayFolderStatus();
 }
 
+async function saveReplayFolderPath(folderPath){
+  const path = String(folderPath || "").trim();
+  if(!path){
+    replayFolderStatus = {ok:false, status:"invalid", message:"No replay folder was selected.", path:""};
+    applyReplayFolderStatus();
+    return;
+  }
+  replayFolderStatus = {ok:false, status:"checking", message:"Saving replay folder...", path};
+  applyReplayFolderStatus();
+  try{
+    const response = await fetch(replayFolderEndpoint(), {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({path}),
+      cache:"no-store"
+    });
+    const json = await response.json().catch(()=>null);
+    if(!response.ok) throw new Error(json?.message || "Replay folder could not be set.");
+    replayFolderStatus = json && typeof json === "object" ? json : {ok:true, status:"set", message:"Replay Folder Set", path};
+    replayFolderStatusLoaded = true;
+    renderOverlayControl();
+  }catch(error){
+    replayFolderStatus = {ok:false, status:"invalid", message:error?.message || "Replay folder could not be set.", path};
+    applyReplayFolderStatus();
+  }
+}
+
+function folderPathFromSelectedReplayFile(file){
+  const fullPath = String(file?.path || file?.fullPath || file?.mozFullPath || "");
+  if(!fullPath) return "";
+  return fullPath.replace(/[\\/][^\\/]*$/, "");
+}
+
+function chooseReplayFolderFromInput(input){
+  const files = Array.from(input?.files || []);
+  const fileWithPath = files.find(file=>folderPathFromSelectedReplayFile(file)) || null;
+  const folderPath = folderPathFromSelectedReplayFile(fileWithPath);
+  if(folderPath){
+    saveReplayFolderPath(folderPath);
+    return;
+  }
+  replayFolderStatus = {
+    ok:false,
+    status:"invalid",
+    message:"SPARK could open the folder picker, but this browser did not share the folder path. Use the SPARK Launcher window.",
+    path:replayFolderStatus.path || ""
+  };
+  applyReplayFolderStatus();
+}
+
 async function chooseReplayFolder(){
   markOverlayControlInteraction(5000);
   replayFolderStatus = {ok:false, status:"checking", message:"Opening folder picker...", path:replayFolderStatus.path || ""};
   applyReplayFolderStatus();
-  let result = null;
-  try{
-    const response = await fetch(replayFolderEndpoint("/api/replay-folder/pick"), {method:"POST", cache:"no-store"});
-    result = await response.json().catch(()=>null);
-    if(!response.ok) throw new Error(result?.message || "Could not open the replay folder picker.");
-  }catch(error){
-    replayFolderStatus = {ok:false, status:"invalid", message:error?.message || "Could not open the replay folder picker.", path:replayFolderStatus.path || ""};
-    applyReplayFolderStatus();
+  if(postSparkShellMessage({type:"spark-replay-folder", action:"choose"})) return;
+  const input = $("overlayReplayFolderInput");
+  if(input){
+    input.value = "";
+    input.click();
     return;
   }
-  replayFolderStatus = result && typeof result === "object" ? result : {ok:false, status:"missing", message:"Replay folder not set", path:""};
-  replayFolderStatusLoaded = true;
-  renderOverlayControl();
+  replayFolderStatus = {ok:false, status:"invalid", message:"Could not open the replay folder picker.", path:replayFolderStatus.path || ""};
+  applyReplayFolderStatus();
 }
+
+window.addEventListener("message", event=>{
+  let message = event.data;
+  if(typeof message === "string"){
+    try{ message = JSON.parse(message); }catch{}
+  }
+  if(!message || typeof message !== "object" || message.type !== "spark-replay-folder") return;
+  if(message.ok && message.path){
+    saveReplayFolderPath(message.path);
+    return;
+  }
+  replayFolderStatus = {ok:false, status:"cancelled", message:message.message || "Replay folder not changed", path:replayFolderStatus.path || ""};
+  applyReplayFolderStatus();
+});
 
 function renderOverlayFontSelect(id, value){
   return `<select class="overlaySelect" id="${id}">
@@ -6775,6 +6835,7 @@ function renderOverlayControl(){
           <div class="overlayCategoryBody">
             <div class="overlayReplayFolderTools">
               <button type="button" id="overlayReplayFolderButton">Choose Replay Folder</button>
+              <input class="overlayFileInput" id="overlayReplayFolderInput" type="file" accept=".replay" webkitdirectory directory multiple onchange="chooseReplayFolderFromInput(this)">
               <div class="overlayReplayFolderStatus ${replayFolderStatusClass()}" id="overlayReplayFolderStatus" title="${escapeHtml(replayFolderStatus.path || "")}">${escapeHtml(replayFolderStatusText())}</div>
             </div>
           </div>

@@ -926,7 +926,56 @@ namespace SparkLauncher
             if (String.Equals(type, "spark-overlay-control", StringComparison.OrdinalIgnoreCase))
             {
                 ApplyOverlayAction(action);
+                return;
             }
+            if (String.Equals(type, "spark-replay-folder", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyReplayFolderAction(action);
+                return;
+            }
+        }
+
+        private void ApplyReplayFolderAction(string action)
+        {
+            action = (action ?? "").Trim().ToLowerInvariant();
+            if (action != "choose") return;
+            using (FolderBrowserDialog dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = "Select the folder where Rocket League saves replay files";
+                dialog.ShowNewFolderButton = false;
+                string defaultPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                    "My Games",
+                    "Rocket League",
+                    "TAGame",
+                    "Demos");
+                if (Directory.Exists(defaultPath)) dialog.SelectedPath = defaultPath;
+                DialogResult result = dialog.ShowDialog(this);
+                if (result == DialogResult.OK && !String.IsNullOrWhiteSpace(dialog.SelectedPath))
+                {
+                    PostReplayFolderResult(true, dialog.SelectedPath, "");
+                }
+                else
+                {
+                    PostReplayFolderResult(false, "", "Replay folder not changed");
+                }
+            }
+        }
+
+        private void PostReplayFolderResult(bool ok, string path, string message)
+        {
+            if (webView == null || webView.CoreWebView2 == null) return;
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            string payload = serializer.Serialize(new Dictionary<string, object>
+            {
+                {"type", "spark-replay-folder"},
+                {"action", ok ? "chosen" : "cancelled"},
+                {"ok", ok},
+                {"path", path ?? ""},
+                {"message", message ?? ""}
+            });
+            string script = "window.dispatchEvent(new MessageEvent('message',{data:" + serializer.Serialize(payload) + "}));";
+            try { webView.CoreWebView2.ExecuteScriptAsync(script); } catch { }
         }
 
         private void ApplyOverlayAction(string action)
