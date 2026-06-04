@@ -970,9 +970,11 @@ html,body{
 }
 .finalHeatmapField{
   position:relative;
+  justify-self:center;
+  align-self:center;
+  width:100%;
   min-height:0;
   aspect-ratio:1748 / 1147;
-  height:100%;
   border:1px solid color-mix(in srgb,var(--team) 46%,rgba(248,243,222,.18));
   border-radius:6px;
   background:#05080c url("../assets/Field%20background.png") center / 100% 100% no-repeat;
@@ -1997,7 +1999,7 @@ function finalInsetMapPercent(point, insetX=.55, insetY=.55){
   };
 }
 function renderPlayerHeatmapCanvas(player, index){
-  return `<canvas class="finalHeatmapCanvas" width="${finalHeatmapFieldMap.width}" height="${finalHeatmapFieldMap.height}" data-heatmap-player="${index}" aria-label="${escapeHtml(player.name)} heatmap"></canvas>`;
+  return `<canvas class="finalHeatmapCanvas" width="${finalHeatmapFieldMap.width}" height="${finalHeatmapFieldMap.height}" data-heatmap-player="${index}" data-heatmap-name="${escapeHtml(player.name)}" aria-label="${escapeHtml(player.name)} heatmap"></canvas>`;
 }
 
 function renderHeatmapTeam(players, team, label){
@@ -2194,7 +2196,9 @@ function drawFinalHeatmapCanvases(){
   if(!heatmap?.players?.length) return;
   document.querySelectorAll(".finalHeatmapCanvas").forEach(canvas=>{
     const index = Number(canvas.dataset.heatmapPlayer);
-    const player = Number.isFinite(index) ? heatmap.players[index] : null;
+    const name = cleanName(canvas.dataset.heatmapName || "");
+    const player = (name ? heatmap.players.find(candidate=>cleanName(candidate.name).toLowerCase() === name.toLowerCase()) : null)
+      || (Number.isFinite(index) ? heatmap.players[index] : null);
     drawFinalHeatmapCanvas(canvas, player);
   });
 }
