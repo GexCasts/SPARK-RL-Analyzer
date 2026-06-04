@@ -529,20 +529,30 @@ async function readReplayFolderConfig(){
   }
 }
 
-async function writeReplayFolderConfig(folderPath){
+function sameFolderPath(left, right){
+  return path.normalize(String(left || "")).toLowerCase() === path.normalize(String(right || "")).toLowerCase();
+}
+
+async function writeReplayFolderConfig(folderPath, source="manual"){
   await fs.mkdir(path.dirname(replayFolderConfigPath), {recursive:true});
-  await fs.writeFile(replayFolderConfigPath, JSON.stringify({path:folderPath, updatedAt:new Date().toISOString()}, null, 2), "utf8");
+  await fs.writeFile(replayFolderConfigPath, JSON.stringify({path:folderPath, source, updatedAt:new Date().toISOString()}, null, 2), "utf8");
 }
 
 async function resolveReplayFolder(){
-  if(await pathIsDirectory(defaultReplayFolderPath)){
-    await writeReplayFolderConfig(defaultReplayFolderPath);
-    return {ok:true, path:defaultReplayFolderPath, status:"auto-detected", message:"Replay folder auto-detected"};
-  }
   const config = await readReplayFolderConfig();
   const savedPath = String(config.path || "").trim();
+  const savedSource = String(config.source || (sameFolderPath(savedPath, defaultReplayFolderPath) ? "auto" : "manual")).toLowerCase();
   if(await pathIsDirectory(savedPath)){
-    return {ok:true, path:savedPath, status:"set", message:"Replay Folder Set"};
+    if(savedSource === "manual"){
+      return {ok:true, path:savedPath, status:"set", message:"Replay Folder Set", source:"manual"};
+    }
+    if(!sameFolderPath(savedPath, defaultReplayFolderPath)){
+      return {ok:true, path:savedPath, status:"set", message:"Replay Folder Set", source:"manual"};
+    }
+  }
+  if(await pathIsDirectory(defaultReplayFolderPath)){
+    await writeReplayFolderConfig(defaultReplayFolderPath, "auto");
+    return {ok:true, path:defaultReplayFolderPath, status:"auto-detected", message:"Replay folder auto-detected", source:"auto"};
   }
   return {ok:false, path:"", status:"missing", message:"Replay folder not set"};
 }
@@ -553,8 +563,8 @@ async function setReplayFolder(folderPath){
   if(!await pathIsDirectory(normalized)){
     return {ok:false, path:normalized, status:"invalid", message:"Selected folder was not found"};
   }
-  await writeReplayFolderConfig(normalized);
-  return {ok:true, path:normalized, status:"set", message:"Replay Folder Set"};
+  await writeReplayFolderConfig(normalized, "manual");
+  return {ok:true, path:normalized, status:"set", message:"Replay Folder Set", source:"manual"};
 }
 
 function pickReplayFolderWithPowerShell(){
@@ -3038,7 +3048,8 @@ async function handleReplayFolderPick(req, res){
     return;
   }
   const result = await pickReplayFolderWithPowerShell();
-  res.writeHead(result.ok ? 200 : 400, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  const status = result.ok || result.status === "cancelled" ? 200 : 400;
+  res.writeHead(status, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
   res.end(JSON.stringify(result));
 }
 

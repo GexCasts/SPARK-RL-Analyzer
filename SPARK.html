@@ -6635,7 +6635,7 @@ async function chooseReplayFolder(){
   try{
     const response = await fetch(replayFolderEndpoint("/api/replay-folder/pick"), {method:"POST", cache:"no-store"});
     result = await response.json().catch(()=>null);
-    if(!response.ok && result?.message) throw new Error(result.message);
+    if(!response.ok) throw new Error(result?.message || "Could not open the replay folder picker.");
   }catch(error){
     const manualPath = prompt(`${error?.message || "Could not open the folder picker."}\nPaste the replay folder path:`);
     if(!manualPath){
@@ -6791,7 +6791,7 @@ function renderOverlayControl(){
           <summary>Replay Folder</summary>
           <div class="overlayCategoryBody">
             <div class="overlayReplayFolderTools">
-              <button type="button" id="overlayReplayFolderButton">Link Replay Folder</button>
+              <button type="button" id="overlayReplayFolderButton">Choose Replay Folder</button>
               <div class="overlayReplayFolderStatus ${replayFolderStatusClass()}" id="overlayReplayFolderStatus" title="${escapeHtml(replayFolderStatus.path || "")}">${escapeHtml(replayFolderStatusText())}</div>
             </div>
           </div>
