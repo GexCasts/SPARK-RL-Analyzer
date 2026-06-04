@@ -138,8 +138,9 @@ html,body{
 .maskSlot.seriesTitle .tickerTrack{
   display:inline-flex;
   align-items:center;
-  gap:var(--ticker-gap,36px);
+  gap:var(--ticker-gap,32px);
   min-width:max-content;
+  transform:translate3d(calc(var(--ticker-step,0px) * -1),0,0);
   will-change:transform;
 }
 .maskSlot.seriesTitle.scrolling .tickerTrack{
@@ -149,8 +150,8 @@ html,body{
   flex:0 0 auto;
 }
 @keyframes maskTickerScroll{
-  from{transform:translateX(calc(var(--ticker-distance,0px) * -1))}
-  to{transform:translateX(0)}
+  from{transform:translate3d(calc(var(--ticker-step,0px) * -1),0,0)}
+  to{transform:translate3d(0,0,0)}
 }
 .maskSlot.seriesDots{
   gap:8px;
@@ -1408,7 +1409,7 @@ function setMaskTicker(el, text, width){
     el.textContent = text;
     el.style.removeProperty("--ticker-duration");
     el.style.removeProperty("--ticker-gap");
-    el.style.removeProperty("--ticker-distance");
+    el.style.removeProperty("--ticker-step");
     return;
   }
   const current = el.querySelector(".tickerCopy");
@@ -1422,25 +1423,35 @@ function setMaskTicker(el, text, width){
   const first = document.createElement("span");
   first.className = "tickerCopy";
   first.textContent = text;
-  const second = document.createElement("span");
-  second.className = "tickerCopy";
-  second.textContent = text;
-  track.append(first, second);
+  track.append(first);
   el.append(track);
   updateMaskTickerMetrics(el, width);
+}
+function setTickerStyle(el, key, value){
+  if(el.style.getPropertyValue(key) !== value) el.style.setProperty(key, value);
 }
 function updateMaskTickerMetrics(el, width){
   const copy = el.querySelector(".tickerCopy");
   if(!copy) return;
-  const baseGap = 36;
+  const track = el.querySelector(".tickerTrack");
+  if(!track) return;
+  const baseGap = 32;
   const maskWidth = Math.max(1, Number(width) || el.getBoundingClientRect().width || 1);
   const textWidth = Math.max(1, copy.getBoundingClientRect().width || copy.scrollWidth || 1);
-  const gap = Math.max(baseGap, maskWidth - textWidth + baseGap);
-  const distance = textWidth + gap;
-  const duration = Math.max(22, Math.min(60, distance / 36));
-  el.style.setProperty("--ticker-gap", `${Math.round(gap)}px`);
-  el.style.setProperty("--ticker-distance", `${Math.round(distance)}px`);
-  el.style.setProperty("--ticker-duration", `${duration.toFixed(1)}s`);
+  const gap = Math.max(baseGap, Math.min(72, Math.round(maskWidth * .08)));
+  const step = Math.ceil(textWidth + gap);
+  const desiredCopies = Math.max(3, Math.ceil(maskWidth / Math.max(1, step)) + 3);
+  while(track.children.length < desiredCopies){
+    const duplicate = document.createElement("span");
+    duplicate.className = "tickerCopy";
+    duplicate.textContent = copy.textContent;
+    track.append(duplicate);
+  }
+  while(track.children.length > desiredCopies) track.lastElementChild?.remove();
+  const duration = Math.max(18, Math.min(56, step / 30));
+  setTickerStyle(el, "--ticker-gap", `${gap}px`);
+  setTickerStyle(el, "--ticker-step", `${step}px`);
+  setTickerStyle(el, "--ticker-duration", `${duration.toFixed(2)}s`);
 }
 function renderMaskDots(id, side, config){
   const el = $(id);
