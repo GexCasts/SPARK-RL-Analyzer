@@ -6662,6 +6662,11 @@ function folderPathFromSelectedReplayFile(file){
 
 function chooseReplayFolderFromInput(input){
   const files = Array.from(input?.files || []);
+  if(!files.length){
+    replayFolderStatus = {ok:false, status:"cancelled", message:"Replay folder not changed", path:replayFolderStatus.path || ""};
+    applyReplayFolderStatus();
+    return;
+  }
   const fileWithPath = files.find(file=>folderPathFromSelectedReplayFile(file)) || null;
   const folderPath = folderPathFromSelectedReplayFile(fileWithPath);
   if(folderPath){
@@ -6677,17 +6682,22 @@ function chooseReplayFolderFromInput(input){
   applyReplayFolderStatus();
 }
 
+function cancelReplayFolderInput(){
+  replayFolderStatus = {ok:false, status:"cancelled", message:"Replay folder not changed", path:replayFolderStatus.path || ""};
+  applyReplayFolderStatus();
+}
+
 async function chooseReplayFolder(){
   markOverlayControlInteraction(5000);
   replayFolderStatus = {ok:false, status:"checking", message:"Opening folder picker...", path:replayFolderStatus.path || ""};
   applyReplayFolderStatus();
-  if(postSparkShellMessage({type:"spark-replay-folder", action:"choose"})) return;
   const input = $("overlayReplayFolderInput");
   if(input){
     input.value = "";
     input.click();
     return;
   }
+  if(postSparkShellMessage({type:"spark-replay-folder", action:"choose"})) return;
   replayFolderStatus = {ok:false, status:"invalid", message:"Could not open the replay folder picker.", path:replayFolderStatus.path || ""};
   applyReplayFolderStatus();
 }
@@ -6835,7 +6845,7 @@ function renderOverlayControl(){
           <div class="overlayCategoryBody">
             <div class="overlayReplayFolderTools">
               <button type="button" id="overlayReplayFolderButton">Choose Replay Folder</button>
-              <input class="overlayFileInput" id="overlayReplayFolderInput" type="file" accept=".replay" webkitdirectory directory multiple onchange="chooseReplayFolderFromInput(this)">
+              <input class="overlayFileInput" id="overlayReplayFolderInput" type="file" accept=".replay" webkitdirectory directory multiple onchange="chooseReplayFolderFromInput(this)" oncancel="cancelReplayFolderInput()">
               <div class="overlayReplayFolderStatus ${replayFolderStatusClass()}" id="overlayReplayFolderStatus" title="${escapeHtml(replayFolderStatus.path || "")}">${escapeHtml(replayFolderStatusText())}</div>
             </div>
           </div>
