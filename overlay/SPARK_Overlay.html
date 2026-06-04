@@ -565,12 +565,14 @@ html,body{
   position:absolute;
   inset:0;
   z-index:20;
-  color:#fffdf3;
+  color:#f8f3de;
   isolation:isolate;
-  box-shadow:inset 0 0 0 9999px #050607;
+  box-shadow:inset 0 0 0 9999px oklch(9% .018 92);
   background:
-    radial-gradient(circle at 24% 18%,rgba(255,208,0,.18),transparent 28%),
-    linear-gradient(135deg,rgba(5,6,9,.96),rgba(20,21,25,.98) 58%,rgba(5,6,9,.98));
+    radial-gradient(circle at 50% 8%,rgba(255,208,0,.28),transparent 25%),
+    radial-gradient(circle at 18% 80%,rgba(27,140,255,.14),transparent 32%),
+    radial-gradient(circle at 82% 78%,rgba(255,132,0,.16),transparent 34%),
+    linear-gradient(135deg,oklch(8.5% .018 92),oklch(15% .024 88) 46%,oklch(7% .016 92));
   overflow:hidden;
 }
 .finalScreen.active{display:block}
@@ -586,9 +588,11 @@ html,body{
   position:absolute;
   inset:0;
   background:
-    linear-gradient(104deg,rgba(255,255,255,.14) 0 2px,transparent 2px 100%) left 0 top 0 / 90px 100% no-repeat,
-    linear-gradient(76deg,rgba(255,255,255,.14) 0 2px,transparent 2px 100%) right 0 top 0 / 90px 100% no-repeat;
-  opacity:.76;
+    linear-gradient(112deg,transparent 0 31%,rgba(255,208,0,.16) 32%,rgba(248,243,222,.18) 33%,transparent 35%),
+    linear-gradient(68deg,transparent 0 67%,rgba(255,132,0,.13) 68%,rgba(248,243,222,.16) 69%,transparent 71%),
+    linear-gradient(104deg,rgba(248,243,222,.15) 0 2px,transparent 2px 100%) left 0 top 0 / 104px 100% no-repeat,
+    linear-gradient(76deg,rgba(248,243,222,.15) 0 2px,transparent 2px 100%) right 0 top 0 / 104px 100% no-repeat;
+  opacity:.82;
 }
 .finalScreen::after{
   content:"";
@@ -597,10 +601,11 @@ html,body{
   z-index:0;
   background:
     repeating-radial-gradient(circle at 18% 24%,rgba(255,208,0,.13) 0 1px,transparent 1px 5px),
-    repeating-linear-gradient(97deg,rgba(255,182,23,.055) 0 1px,transparent 1px 9px),
-    radial-gradient(circle at 52% 46%,rgba(255,208,0,.10),transparent 32%);
+    repeating-linear-gradient(97deg,rgba(255,182,23,.075) 0 1px,transparent 1px 9px),
+    radial-gradient(circle at 52% 46%,rgba(255,208,0,.18),transparent 30%),
+    linear-gradient(90deg,rgba(27,140,255,.10),transparent 31% 69%,rgba(255,132,0,.11));
   mix-blend-mode:screen;
-  opacity:.24;
+  opacity:.36;
   animation:amberStatic 1.7s steps(5,end) infinite;
   pointer-events:none;
 }
@@ -614,65 +619,76 @@ html,body{
 .finalContent{
   position:relative;
   z-index:1;
-  width:1500px;
+  width:min(1580px,calc(100% - 124px));
   top:50%;
   margin:0 auto;
   transform:translateY(-50%);
 }
 .finalHeader{
-  display:flex;
-  justify-content:space-between;
+  display:grid;
+  grid-template-columns:1fr auto;
   align-items:end;
-  margin-bottom:34px;
+  gap:28px;
+  margin-bottom:24px;
 }
 .finalKicker{
   color:var(--spark-gold);
-  font-size:58px;
+  font-size:42px;
   font-weight:1000;
   letter-spacing:.06em;
   line-height:1;
   text-transform:uppercase;
+  text-shadow:0 0 24px rgba(255,208,0,.34);
 }
 .finalSeries{
-  color:rgba(247,247,244,.72);
-  font-size:24px;
+  color:rgba(248,243,222,.78);
+  font-size:20px;
   font-weight:900;
   text-transform:uppercase;
 }
 .finalScore{
   display:grid;
-  grid-template-columns:1fr 170px 1fr;
+  grid-template-columns:minmax(0,1fr) 220px minmax(0,1fr);
   align-items:center;
-  gap:24px;
-  margin-bottom:28px;
+  gap:18px;
+  margin-bottom:22px;
 }
 .finalTeam{
-  min-height:92px;
-  padding:15px 24px 12px;
-  background:rgba(255,255,255,.075);
-  border:1px solid rgba(255,255,255,.16);
+  min-height:112px;
+  padding:16px 22px 14px;
+  background:
+    linear-gradient(180deg,rgba(248,243,222,.12),rgba(248,243,222,.04)),
+    color-mix(in srgb,var(--team) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--team) 72%,rgba(248,243,222,.28));
+  box-shadow:0 18px 42px rgba(0,0,0,.46), inset 0 0 26px color-mix(in srgb,var(--team) 13%,transparent);
   font-size:34px;
   font-weight:1000;
   text-transform:uppercase;
   display:grid;
-  grid-template-columns:minmax(0,1fr) 54px;
+  grid-template-columns:minmax(0,1fr) 70px;
   align-content:center;
   align-items:center;
-  gap:10px;
+  gap:14px;
+  clip-path:polygon(0 0,97% 0,100% 100%,0 100%);
 }
+.finalTeam.blue{--team:var(--blue)}
+.finalTeam.orange{--team:var(--orange)}
 .finalTeam.right{
-  grid-template-columns:54px minmax(0,1fr);
-  text-align:right;
+  --team:var(--orange);
+  grid-template-columns:70px minmax(0,1fr);
+  clip-path:polygon(3% 0,100% 0,100% 100%,0 100%);
 }
+.finalTeam.right{text-align:right}
 .finalTeamName{
   min-width:0;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
+  text-shadow:0 2px 5px rgba(0,0,0,.46);
 }
 .finalTeamLogo{
-  width:42px;
-  height:42px;
+  width:58px;
+  height:58px;
   object-fit:contain;
   justify-self:end;
   filter:drop-shadow(0 3px 5px rgba(0,0,0,.45));
@@ -684,68 +700,171 @@ html,body{
   gap:10px;
   align-items:center;
   grid-column:1 / -1;
+  padding-top:2px;
 }
 .finalTeam.right .finalTeamSeries{justify-content:flex-end}
 .finalTeamSeries .dot{
-  width:22px;
-  height:12px;
+  width:28px;
+  height:10px;
   border-radius:3px;
-  background:rgba(5,6,9,.88);
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);
+  background:rgba(8,9,10,.82);
+  box-shadow:inset 0 0 0 1px rgba(248,243,222,.16);
 }
 .finalTeamSeries .dot.blue.filled{background:var(--blue)}
 .finalTeamSeries .dot.orange.filled{background:var(--orange)}
 .finalScoreCenter{
+  min-height:112px;
   display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:10px;
-  color:#050609;
-  font-size:58px;
-  font-weight:1000;
-}
-.finalScoreCenter span{
-  display:grid;
+  grid-template-rows:auto 1fr auto;
   place-items:center;
-  min-height:82px;
-}
-.finalScoreCenter .blue{background:var(--blue)}
-.finalScoreCenter .orange{background:var(--orange)}
-.finalBoard{
-  display:grid;
-  gap:10px;
-}
-.finalRow{
-  display:grid;
-  grid-template-columns:220px repeat(6,1fr);
-  align-items:center;
-  min-height:58px;
-  background:rgba(255,255,255,.075);
-  border:1px solid rgba(255,255,255,.12);
-}
-.finalRow.header{
-  min-height:42px;
-  background:rgba(255,208,0,.16);
-  color:var(--spark-gold);
-  font-size:13px;
+  background:linear-gradient(180deg,rgba(248,243,222,.18),rgba(8,9,10,.88));
+  border:1px solid rgba(255,208,0,.58);
+  box-shadow:0 16px 36px rgba(0,0,0,.44), inset 0 0 24px rgba(255,208,0,.12);
+  color:#f8f3de;
   font-weight:1000;
+}
+.finalGameLabel,
+.finalSeriesLabel{
+  font-size:12px;
   letter-spacing:.12em;
   text-transform:uppercase;
+  color:rgba(248,243,222,.68);
 }
-.finalRow > div{
-  padding:0 12px;
-  font-size:21px;
-  font-weight:900;
-  text-align:center;
+.finalGameScore{
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  align-items:center;
+  gap:12px;
+  font-size:56px;
+  line-height:1;
 }
-.finalRow .name{
-  text-align:left;
-  max-width:18ch;
+.finalGameScore span{
+  width:66px;
+  height:66px;
+  display:grid;
+  place-items:center;
+  color:#f8f3de;
+}
+.finalGameScore .blue{background:var(--blue)}
+.finalGameScore .orange{background:var(--orange)}
+.finalGameScore b{
+  color:rgba(248,243,222,.54);
+  font-size:34px;
+}
+.finalBoard{
+  min-height:512px;
+  display:grid;
+}
+.finalMatrix{
+  position:relative;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 178px minmax(0,1fr);
+  grid-template-rows:78px repeat(6,72px);
+  align-items:center;
+  gap:0 22px;
+  height:100%;
+  padding:20px 28px 24px;
+  background:
+    linear-gradient(180deg,rgba(248,243,222,.10),rgba(248,243,222,.035)),
+    rgba(8,9,10,.88);
+  border:1px solid rgba(255,208,0,.46);
+  box-shadow:0 22px 48px rgba(0,0,0,.50), inset 0 0 42px rgba(255,208,0,.08);
+  clip-path:polygon(2% 0,98% 0,100% 100%,0 100%);
+}
+.finalMatrix::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(90deg,rgba(27,140,255,.10),transparent 38% 62%,rgba(255,132,0,.10));
+  pointer-events:none;
+}
+.finalPlayerRail,
+.finalValueRail{
+  position:relative;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  align-items:center;
+  gap:10px;
+  min-width:0;
+}
+.finalPlayerRail{
+  height:100%;
+  color:rgba(248,243,222,.78);
+  font-size:19px;
+  font-weight:1000;
+  text-transform:uppercase;
+}
+.finalPlayerRail span,
+.finalValueRail span{
+  min-width:0;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
+  text-align:center;
 }
-.finalRow .blue{color:var(--blue)}
-.finalRow .orange{color:var(--orange)}
+.finalPlayerRail .mvp::after{
+  content:"*";
+  color:var(--spark-gold);
+  margin-left:6px;
+  text-shadow:0 0 12px rgba(255,208,0,.74);
+}
+.finalPlayerRail.blue span{color:color-mix(in srgb,var(--blue) 78%,#f8f3de)}
+.finalPlayerRail.orange span{color:color-mix(in srgb,var(--orange) 78%,#f8f3de)}
+.finalCategoryHead{
+  position:relative;
+  display:grid;
+  place-items:center;
+  color:var(--spark-gold);
+  font-size:13px;
+  font-weight:1000;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+}
+.finalValueRail{
+  height:100%;
+  border-top:1px solid rgba(248,243,222,.18);
+}
+.finalValueRail span{
+  position:relative;
+  height:48px;
+  display:grid;
+  place-items:center;
+  background:rgba(248,243,222,.055);
+  color:#f8f3de;
+  font-size:30px;
+  font-weight:1000;
+  box-shadow:inset 0 -3px 0 color-mix(in srgb,var(--team) 62%,transparent);
+}
+.finalValueRail.blue{--team:var(--blue)}
+.finalValueRail.orange{--team:var(--orange)}
+.finalValueRail .best{
+  color:var(--spark-gold);
+  background:rgba(255,208,0,.12);
+}
+.finalMetric{
+  position:relative;
+  min-height:100%;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  gap:8px;
+  border-top:1px solid rgba(248,243,222,.26);
+  color:#f8f3de;
+  font-size:22px;
+  font-weight:1000;
+  text-transform:uppercase;
+}
+.finalStatCompare{
+  width:128px;
+  height:9px;
+  display:grid;
+  grid-template-columns:var(--blue,1fr) var(--orange,1fr);
+  overflow:hidden;
+  border-radius:2px;
+  background:rgba(248,243,222,.14);
+}
+.finalStatCompare i:first-child{background:var(--blue)}
+.finalStatCompare i:last-child{background:var(--orange)}
 .stingerTransition{
   display:none;
   position:absolute;
@@ -1555,6 +1674,38 @@ function sortedFinalPlayers(){
       return (Number(b.stats?.score || 0) - Number(a.stats?.score || 0)) || a.name.localeCompare(b.name);
     });
 }
+function finalPlayerSlots(players, slots=3){
+  return Array.from({length:slots}, (_, index)=>players[index] || null);
+}
+function finalPlayerScore(player){
+  return Number(player?.stats?.score || 0);
+}
+function finalPlayerStat(player, stat){
+  return player ? stat.value(player) : 0;
+}
+function finalNameRow(players, mvpName){
+  return players.map(player=>{
+    if(!player) return "<span>--</span>";
+    const mvpClass = player.name === mvpName ? " class=\"mvp\"" : "";
+    return `<span${mvpClass}>${escapeHtml(player.name)}</span>`;
+  }).join("");
+}
+function finalNumberRow(players, stat, statMax){
+  return players.map(player=>{
+    if(!player) return "<span>--</span>";
+    const value = finalPlayerStat(player, stat);
+    const max = Math.max(1, statMax || value);
+    const alpha = Math.max(.18, Math.min(.92, value / max));
+    const isBest = value > 0 && value === statMax;
+    return `<span class="${isBest ? "best" : ""}" style="--a:${alpha.toFixed(2)}">${escapeHtml(stat.format(value))}</span>`;
+  }).join("");
+}
+function finalCompareBar(left, right){
+  const total = Math.max(1, left + right);
+  const blue = Math.max(6, Math.round((left / total) * 100));
+  const orange = Math.max(6, Math.round((right / total) * 100));
+  return `<div class="finalStatCompare" style="--blue:${blue}fr;--orange:${orange}fr"><i></i><i></i></div>`;
+}
 function renderFinalScreen(config){
   const screen = $("finalScreen");
   if(!screen) return;
@@ -1564,34 +1715,52 @@ function renderFinalScreen(config){
   const orangeLogo = teamLogoFor("Orange", config);
   $("finalSeries").textContent = `Best of ${Number(config.seriesBestOf) || 5}`;
   $("finalScore").innerHTML = `
-    <div class="finalTeam">
+    <div class="finalTeam blue">
       <div class="finalTeamName">${escapeHtml(blueName)}</div>
       <img class="finalTeamLogo ${blueLogo ? "" : "empty"}" src="${escapeHtml(blueLogo || "")}" alt="">
       <div class="finalTeamSeries">${renderDots("Blue", config)}</div>
     </div>
-    <div class="finalScoreCenter"><span class="blue">${scoreText(state.teams.Blue.score)}</span><span class="orange">${scoreText(state.teams.Orange.score)}</span></div>
-    <div class="finalTeam right">
+    <div class="finalScoreCenter">
+      <div class="finalGameLabel">${escapeHtml(overlayGameLabel(config))}</div>
+      <div class="finalGameScore"><span class="blue">${scoreText(state.teams.Blue.score)}</span><b>:</b><span class="orange">${scoreText(state.teams.Orange.score)}</span></div>
+      <div class="finalSeriesLabel">Series Score</div>
+    </div>
+    <div class="finalTeam orange right">
       <img class="finalTeamLogo ${orangeLogo ? "" : "empty"}" src="${escapeHtml(orangeLogo || "")}" alt="">
       <div class="finalTeamName">${escapeHtml(orangeName)}</div>
       <div class="finalTeamSeries">${renderDots("Orange", config)}</div>
     </div>`;
   const players = sortedFinalPlayers();
+  const bluePlayers = players.filter(player=>player.team === "Blue");
+  const orangePlayers = players.filter(player=>player.team === "Orange");
+  const allPlayers = [...bluePlayers, ...orangePlayers];
+  const mvpName = allPlayers.slice().sort((a,b)=>finalPlayerScore(b) - finalPlayerScore(a))[0]?.name || "";
+  const stats = [
+    {label:"Score",value:p=>Number(p.stats?.score || 0),format:v=>String(Math.round(v))},
+    {label:"Goals",value:p=>Number(p.stats?.goals || 0),format:v=>String(Math.round(v))},
+    {label:"Shots",value:p=>Number(p.stats?.shots || 0),format:v=>String(Math.round(v))},
+    {label:"Assists",value:p=>Number(p.stats?.assists || 0),format:v=>String(Math.round(v))},
+    {label:"Saves",value:p=>Number(p.stats?.saves || 0),format:v=>String(Math.round(v))},
+    {label:"Demos",value:p=>Number(p.stats?.demos || p.demos || 0),format:v=>String(Math.round(v))}
+  ];
+  const blueSlots = finalPlayerSlots(bluePlayers, 3);
+  const orangeSlots = finalPlayerSlots(orangePlayers, 3);
   $("finalBoard").innerHTML = `
-    <div class="finalRow header">
-      <div class="name">Player</div><div>Score</div><div>Goals</div><div>Shots</div><div>Assists</div><div>Saves</div><div>Demos</div>
-    </div>
-    ${players.map(player=>{
-      const stats = player.stats || {};
-      return `<div class="finalRow">
-        <div class="name ${player.team.toLowerCase()}">${escapeHtml(player.name)}</div>
-        <div>${Math.round(stats.score || 0)}</div>
-        <div>${Math.round(stats.goals || 0)}</div>
-        <div>${Math.round(stats.shots || 0)}</div>
-        <div>${Math.round(stats.assists || 0)}</div>
-        <div>${Math.round(stats.saves || 0)}</div>
-        <div>${Math.round(stats.demos || 0)}</div>
-      </div>`;
-    }).join("") || `<div class="finalRow"><div class="name">Waiting for final stats</div><div>0</div><div>0</div><div>0</div><div>0</div><div>0</div><div>0</div></div>`}`;
+    <div class="finalMatrix">
+      <div class="finalPlayerRail blue">${finalNameRow(blueSlots, mvpName)}</div>
+      <div class="finalCategoryHead">Categories</div>
+      <div class="finalPlayerRail orange">${finalNameRow(orangeSlots, mvpName)}</div>
+      ${stats.map(stat=>{
+        const allValues = [...blueSlots, ...orangeSlots].map(player=>finalPlayerStat(player, stat));
+        const statMax = Math.max(0, ...allValues);
+        const leftTotal = blueSlots.reduce((sum, player)=>sum + finalPlayerStat(player, stat), 0);
+        const rightTotal = orangeSlots.reduce((sum, player)=>sum + finalPlayerStat(player, stat), 0);
+        return `
+          <div class="finalValueRail blue">${finalNumberRow(blueSlots, stat, statMax)}</div>
+          <div class="finalMetric"><span>${escapeHtml(stat.label)}</span>${finalCompareBar(leftTotal, rightTotal)}</div>
+          <div class="finalValueRail orange">${finalNumberRow(orangeSlots, stat, statMax)}</div>`;
+      }).join("")}
+    </div>`;
 }
 
 function stingerExtension(config){
