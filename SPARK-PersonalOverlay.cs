@@ -196,6 +196,7 @@ namespace SparkPersonalOverlay
         private void DrawBoostRows(Graphics g, List<PlayerState> players, bool blueSide, OverlayConfig cfg)
         {
             players = players
+                .Where(p => IsPlayerNameUsable(p.Name))
                 .OrderBy(p => p.Shortcut)
                 .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
                 .Take(6)
@@ -238,7 +239,7 @@ namespace SparkPersonalOverlay
         private void DrawPlayerStatsBoard(Graphics g, List<PlayerState> players, string focusedPlayerName, OverlayConfig cfg)
         {
             List<PlayerState> roster = players
-                .Where(p => !String.IsNullOrWhiteSpace(p.Name))
+                .Where(p => IsPlayerNameUsable(p.Name))
                 .OrderBy(p => p.Team == "Orange" ? 1 : 0)
                 .ThenBy(p => p.Shortcut)
                 .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
@@ -577,7 +578,7 @@ namespace SparkPersonalOverlay
         {
             foreach (Dictionary<string, object> player in EnumeratePlayers(payload))
             {
-                string name = CleanName(Convert.ToString(First(player, "Name", "name", "PlayerName", "playerName", "Player", "player", "__playerKey") ?? ""));
+                string name = PlayerNameFromObject(First(player, "Name", "name", "PlayerName", "playerName", "Player", "player", "DisplayName", "displayName", "__playerKey"));
                 if (String.IsNullOrWhiteSpace(name)) continue;
                 string team = NormalizeTeam(First(player, "TeamNum", "teamNum", "Team", "team", "playerTeam", "PlayerTeam"));
                 PlayerState target = state.GetPlayer(name);
@@ -597,7 +598,7 @@ namespace SparkPersonalOverlay
 
         private void UpdateStatFeed(Dictionary<string, object> payload)
         {
-            string playerName = CleanName(Convert.ToString(First(payload, "MainTarget", "mainTarget", "Player", "player", "Target", "target") ?? ""));
+            string playerName = PlayerNameFromObject(First(payload, "MainTarget", "mainTarget", "Player", "player", "Target", "target", "Scorer", "scorer"));
             if (String.IsNullOrWhiteSpace(playerName)) return;
             PlayerState player = state.GetPlayer(playerName);
             string type = Convert.ToString(First(payload, "Type", "type", "EventName", "eventName") ?? "").ToLowerInvariant();
@@ -758,9 +759,7 @@ namespace SparkPersonalOverlay
             Dictionary<string, object> game = Game(payload);
             object raw = First(payload, "FocusedPlayer", "focusedPlayer", "FocusPlayer", "focusPlayer", "CameraPlayer", "cameraPlayer", "CameraTarget", "cameraTarget", "GameCameraPlayer", "gameCameraPlayer", "TargetPlayer", "targetPlayer", "Target", "target", "ViewedPlayer", "viewedPlayer", "SpectatedPlayer", "spectatedPlayer")
                 ?? First(game, "FocusedPlayer", "focusedPlayer", "FocusPlayer", "focusPlayer", "CameraPlayer", "cameraPlayer", "CameraTarget", "cameraTarget", "MainTarget", "mainTarget", "TargetPlayer", "targetPlayer", "Target", "target", "ViewedPlayer", "viewedPlayer", "SpectatedPlayer", "spectatedPlayer");
-            Dictionary<string, object> dict = AsDictionary(raw);
-            if (dict != null) raw = First(dict, "Name", "name", "PlayerName", "playerName", "Player", "player", "Id", "id");
-            return CleanName(Convert.ToString(raw ?? ""));
+            return PlayerNameFromObject(raw);
         }
 
         private int? BoostValue(Dictionary<string, object> player)
@@ -797,6 +796,31 @@ namespace SparkPersonalOverlay
             return value as Dictionary<string, object>;
         }
 
+        private string PlayerNameFromObject(object value)
+        {
+            Dictionary<string, object> dict = AsDictionary(value);
+            if (dict != null)
+            {
+                object raw = First(dict,
+                    "Name", "name",
+                    "PlayerName", "playerName",
+                    "DisplayName", "displayName",
+                    "MainTarget", "mainTarget",
+                    "Target", "target",
+                    "Scorer", "scorer",
+                    "Player", "player",
+                    "Id", "id",
+                    "__playerKey");
+                if (raw != null && !ReferenceEquals(raw, value))
+                {
+                    string nested = PlayerNameFromObject(raw);
+                    if (!String.IsNullOrWhiteSpace(nested)) return nested;
+                }
+                return "";
+            }
+            return CleanName(Convert.ToString(value ?? ""));
+        }
+
         private string NormalizeTeam(object value)
         {
             Dictionary<string, object> dict = AsDictionary(value);
@@ -830,7 +854,20 @@ namespace SparkPersonalOverlay
 
         private string CleanName(string name)
         {
-            return String.IsNullOrWhiteSpace(name) ? "" : name.Trim();
+            name = String.IsNullOrWhiteSpace(name) ? "" : name.Trim();
+            return IsPlayerNameUsable(name) ? name : "";
+        }
+
+        private bool IsPlayerNameUsable(string name)
+        {
+            if (String.IsNullOrWhiteSpace(name)) return false;
+            string text = name.Trim();
+            if (text.Equals("null", StringComparison.OrdinalIgnoreCase)) return false;
+            if (text.Equals("undefined", StringComparison.OrdinalIgnoreCase)) return false;
+            if (text.StartsWith("System.", StringComparison.OrdinalIgnoreCase)) return false;
+            if (text.IndexOf("System.Collections", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            if (text.IndexOf("Dictionary`", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            return true;
         }
 
         private string TrimName(string name)
