@@ -1726,58 +1726,22 @@ function matchEndedFlag(payload, event=""){
 }
 function nextMatchStartEvent(eventName){
   const compact = compactEventName(eventName);
-  return compact.includes("matchcreated")
-    || compact.includes("matchinitialized")
-    || compact.includes("roundstarted")
-    || compact.includes("countdownbegan")
+  return compact.includes("countdownbegan")
     || compact.includes("countdownbegin")
-    || compact.includes("countdownstarted")
-    || compact.includes("gamebegan")
-    || spawnEventName(compact);
-}
-function spawnEventName(compactEvent){
-  return compactEvent.includes("playerspawn")
-    || compactEvent.includes("carspawn")
-    || compactEvent.includes("vehiclespawn")
-    || compactEvent.includes("pawnspawn")
-    || compactEvent.includes("playerrespawn")
-    || compactEvent.includes("carrespawn")
-    || compactEvent.includes("vehiclerespawn");
+    || compact.includes("countdownstarted");
 }
 function nextMatchLooksReady(payload, eventName, incomingClock, messageEndsMatch){
   if(!state.matchEnded || messageEndsMatch) return false;
-  if(nextMatchStartEvent(eventName)) return true;
-  const endedAge = state.matchEndedAt ? Date.now() - state.matchEndedAt : 0;
-  const freshClock = incomingClock !== null && incomingClock >= 285;
-  const playersPresent = hasFieldPlayers(payload) || hasAnyPlayers(payload);
-  if(freshClock && playersPresent && payloadScoresLookReset(payload)) return true;
-  return endedAge > 2500 && freshClock && playersPresent;
+  return nextMatchStartEvent(eventName) || payloadHasKickoffCountdown(payload);
 }
-function payloadScoresLookReset(payload){
-  const scores = teamScoresFromPayload(payload);
-  return scores.found && scores.blue === 0 && scores.orange === 0;
-}
-function teamScoresFromPayload(payload){
-  const result = {found:false, blue:null, orange:null};
-  const teams = firstDefined(valueByKey(payload,["teams","Teams"]), valueByKey(payload?.Game,["teams","Teams"]));
-  const visit = (team, nameFallback="")=>{
-    const key = normalizeTeam(firstDefined(valueByKey(team,["TeamNum","teamNum","team","Team","Index","index"]), nameFallback));
-    if(!key) return;
-    const raw = valueByKey(team,["Score","score","Goals","goals"]);
-    if(raw === undefined) return;
-    result.found = true;
-    result[key.toLowerCase()] = Math.max(0, Math.round(toNumber(raw, 0)));
-  };
-  if(Array.isArray(teams)) teams.forEach(visit);
-  else if(teams && typeof teams === "object") Object.entries(teams).forEach(([name, team])=>visit(team, name));
-  return result;
-}
-function hasFieldPlayers(payload){
-  const players = extractPlayers(payload);
-  return players.some(player=>toBoolean(valueByKey(player,["bHasCar","hasCar","HasCar","inGame","InGame"])));
-}
-function hasAnyPlayers(payload){
-  return extractPlayers(payload).length > 0;
+function payloadHasKickoffCountdown(payload){
+  const value = firstDefined(
+    valueByKey(payload,["Countdown","countdown","CountdownTime","countdownTime","CountdownNumber","countdownNumber","roundCountdown","RoundCountdown","kickoffCountdown","KickoffCountdown"]),
+    valueByKey(payload?.Game,["Countdown","countdown","CountdownTime","countdownTime","CountdownNumber","countdownNumber","roundCountdown","RoundCountdown","kickoffCountdown","KickoffCountdown"]),
+    valueByKey(payload?.game,["Countdown","countdown","CountdownTime","countdownTime","CountdownNumber","countdownNumber","roundCountdown","RoundCountdown","kickoffCountdown","KickoffCountdown"])
+  );
+  const countdown = toNumber(value, NaN);
+  return Number.isFinite(countdown) && countdown > 0 && countdown <= 10;
 }
 function resetForNextMatch(){
   state.replay = false;

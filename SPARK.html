@@ -4368,6 +4368,7 @@ let overlayConfigStorageTimer = null;
 let overlayTournamentEditorSelected = false;
 let replayFolderStatus = {ok:false, status:"checking", message:"Checking replay folder...", path:""};
 let replayFolderStatusLoaded = false;
+let replayFolderShellFallbackTimer = null;
 let obsFinalScreenVisible = false;
 let obsStingerTimer = null;
 let obsStingerFallbackTimer = null;
@@ -6654,52 +6655,56 @@ async function saveReplayFolderPath(folderPath){
   }
 }
 
-function folderPathFromSelectedReplayFile(file){
-  const fullPath = String(file?.path || file?.fullPath || file?.mozFullPath || "");
-  if(!fullPath) return "";
-  return fullPath.replace(/[\\/][^\\/]*$/, "");
-}
-
-function chooseReplayFolderFromInput(input){
-  const files = Array.from(input?.files || []);
-  if(!files.length){
-    replayFolderStatus = {ok:false, status:"cancelled", message:"Replay folder not changed", path:replayFolderStatus.path || ""};
-    applyReplayFolderStatus();
-    return;
-  }
-  const fileWithPath = files.find(file=>folderPathFromSelectedReplayFile(file)) || null;
-  const folderPath = folderPathFromSelectedReplayFile(fileWithPath);
-  if(folderPath){
-    saveReplayFolderPath(folderPath);
-    return;
-  }
-  replayFolderStatus = {
-    ok:false,
-    status:"invalid",
-    message:"SPARK could open the folder picker, but this browser did not share the folder path. Use the SPARK Launcher window.",
-    path:replayFolderStatus.path || ""
-  };
-  applyReplayFolderStatus();
-}
-
-function cancelReplayFolderInput(){
-  replayFolderStatus = {ok:false, status:"cancelled", message:"Replay folder not changed", path:replayFolderStatus.path || ""};
-  applyReplayFolderStatus();
-}
-
 async function chooseReplayFolder(){
   markOverlayControlInteraction(5000);
   replayFolderStatus = {ok:false, status:"checking", message:"Opening folder picker...", path:replayFolderStatus.path || ""};
   applyReplayFolderStatus();
-  const input = $("overlayReplayFolderInput");
-  if(input){
-    input.value = "";
-    input.click();
+  try{
+    if(replayFolderShellFallbackTimer){
+      clearTimeout(replayFolderShellFallbackTimer);
+      replayFolderShellFallbackTimer = null;
+    }
+    const response = await fetch(replayFolderEndpoint("/api/replay-folder/pick"), {
+      method:"POST",
+      cache:"no-store"
+    });
+    const json = await response.json().catch(()=>null);
+    if(response.ok && json?.ok){
+      replayFolderStatus = json;
+      replayFolderStatusLoaded = true;
+      renderOverlayControl();
+      return;
+    }
+    if(response.ok && json?.status === "cancelled"){
+      replayFolderStatus = {ok:false, status:"cancelled", message:json.message || "Replay folder not changed", path:replayFolderStatus.path || ""};
+      applyReplayFolderStatus();
+      return;
+    }
+    throw new Error(json?.message || "Could not open the replay folder picker.");
+  }catch(error){
+    if(postSparkShellMessage({type:"spark-replay-folder", action:"choose"})){
+      replayFolderShellFallbackTimer = setTimeout(()=>{
+        replayFolderShellFallbackTimer = null;
+        if(replayFolderStatus.status !== "checking") return;
+        replayFolderStatus = {
+          ok:false,
+          status:"invalid",
+          message:"Folder dialog unavailable. Restart SPARK, then choose the replay folder again.",
+          path:replayFolderStatus.path || ""
+        };
+        applyReplayFolderStatus();
+      }, 4500);
+      return;
+    }
+    replayFolderStatus = {
+      ok:false,
+      status:"invalid",
+      message:error?.message || "Could not open the replay folder picker.",
+      path:replayFolderStatus.path || ""
+    };
+    applyReplayFolderStatus();
     return;
   }
-  if(postSparkShellMessage({type:"spark-replay-folder", action:"choose"})) return;
-  replayFolderStatus = {ok:false, status:"invalid", message:"Could not open the replay folder picker.", path:replayFolderStatus.path || ""};
-  applyReplayFolderStatus();
 }
 
 window.addEventListener("message", event=>{
@@ -6708,6 +6713,10 @@ window.addEventListener("message", event=>{
     try{ message = JSON.parse(message); }catch{}
   }
   if(!message || typeof message !== "object" || message.type !== "spark-replay-folder") return;
+  if(replayFolderShellFallbackTimer){
+    clearTimeout(replayFolderShellFallbackTimer);
+    replayFolderShellFallbackTimer = null;
+  }
   if(message.ok && message.path){
     saveReplayFolderPath(message.path);
     return;
@@ -6845,7 +6854,6 @@ function renderOverlayControl(){
           <div class="overlayCategoryBody">
             <div class="overlayReplayFolderTools">
               <button type="button" id="overlayReplayFolderButton">Choose Replay Folder</button>
-              <input class="overlayFileInput" id="overlayReplayFolderInput" type="file" accept=".replay" webkitdirectory directory multiple onchange="chooseReplayFolderFromInput(this)" oncancel="cancelReplayFolderInput()">
               <div class="overlayReplayFolderStatus ${replayFolderStatusClass()}" id="overlayReplayFolderStatus" title="${escapeHtml(replayFolderStatus.path || "")}">${escapeHtml(replayFolderStatusText())}</div>
             </div>
           </div>
@@ -11810,14 +11818,6 @@ function livePayloadGame(payload){
   return firstDefined(valueByKey(payload,["Game","game"]), payload);
 }
 
-function liveApiFieldHasPlayers(payload){
-  return extractLivePlayers(payload).some(player=>toBoolean(valueByKey(player,["bHasCar","hasCar","HasCar","inGame","InGame"])));
-}
-
-function liveApiPayloadHasPlayers(payload){
-  return extractLivePlayers(payload).length > 0;
-}
-
 function liveApiReplayFlag(payload){
   const game = livePayloadGame(payload);
   const value = firstDefined(
@@ -11835,58 +11835,25 @@ function setLiveReplayActive(active){
 
 function liveApiNextMatchStartEvent(eventName){
   const compact = String(eventName || "").toLowerCase().replace(/[^a-z]/g, "");
-  return compact.includes("matchcreated")
-    || compact.includes("matchinitialized")
-    || compact.includes("roundstarted")
-    || compact.includes("countdownbegan")
+  return compact.includes("countdownbegan")
     || compact.includes("countdownbegin")
-    || compact.includes("countdownstarted")
-    || compact.includes("gamebegan")
-    || liveApiSpawnEventName(compact);
+    || compact.includes("countdownstarted");
 }
 
-function liveApiSpawnEventName(compactEvent){
-  return compactEvent.includes("playerspawn")
-    || compactEvent.includes("carspawn")
-    || compactEvent.includes("vehiclespawn")
-    || compactEvent.includes("pawnspawn")
-    || compactEvent.includes("playerrespawn")
-    || compactEvent.includes("carrespawn")
-    || compactEvent.includes("vehiclerespawn");
-}
-
-function liveApiPayloadScoresLookReset(payload){
-  const teams = firstDefined(
-    valueByKey(payload,["teams","Teams"]),
-    valueByKey(payload?.Game,["teams","Teams"]),
-    valueByKey(payload?.game,["Teams","teams"])
+function liveApiPayloadHasKickoffCountdown(payload){
+  const game = livePayloadGame(payload);
+  const value = firstDefined(
+    valueByKey(payload,["Countdown","countdown","CountdownTime","countdownTime","CountdownNumber","countdownNumber","roundCountdown","RoundCountdown","kickoffCountdown","KickoffCountdown"]),
+    valueByKey(game,["Countdown","countdown","CountdownTime","countdownTime","CountdownNumber","countdownNumber","roundCountdown","RoundCountdown","kickoffCountdown","KickoffCountdown"])
   );
-  let found = false;
-  let blue = null;
-  let orange = null;
-  const visit = (team, fallback="")=>{
-    const teamKey = normalizeLiveTeam(firstDefined(valueByKey(team,["TeamNum","teamNum","Index","index","team","Team"]), fallback));
-    if(!teamKey) return;
-    const raw = valueByKey(team,["Score","score","Goals","goals"]);
-    if(raw === undefined) return;
-    found = true;
-    if(teamKey === "Blue") blue = Math.max(0, Math.round(toNumber(raw, 0)));
-    if(teamKey === "Orange") orange = Math.max(0, Math.round(toNumber(raw, 0)));
-  };
-  if(Array.isArray(teams)) teams.forEach(visit);
-  else if(teams && typeof teams === "object") Object.entries(teams).forEach(([name, team])=>visit(team, name));
-  return found && blue === 0 && orange === 0;
+  const countdown = toNumber(value, NaN);
+  return Number.isFinite(countdown) && countdown > 0 && countdown <= 10;
 }
 
 function clearLivePostGameIfNextFieldState(payload, eventName=""){
   if(!liveApiState?.matchEnded) return;
-  const clock = liveGameClockSeconds(payload);
-  const looksLikeFreshKickoff = Number.isFinite(clock) && clock >= 285;
-  const playersPresent = liveApiFieldHasPlayers(payload) || liveApiPayloadHasPlayers(payload);
-  const endedAge = liveApiState.endedAt ? Date.now() - liveApiState.endedAt : 0;
   const shouldReset = liveApiNextMatchStartEvent(eventName)
-    || (looksLikeFreshKickoff && playersPresent && liveApiPayloadScoresLookReset(payload))
-    || (endedAge > 2500 && looksLikeFreshKickoff && playersPresent);
+    || liveApiPayloadHasKickoffCountdown(payload);
   if(shouldReset){
     resetLiveApiForNewMatch(liveApiMatchGuid(payload) || liveApiState.pendingMatchGuid || liveApiState.matchGuid || "");
   }
