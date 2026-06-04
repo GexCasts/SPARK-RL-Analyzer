@@ -848,6 +848,14 @@ button.unitSwitch{
   border-color:rgba(255,208,0,.34);
 }
 .tileManaged:active{cursor:grabbing}
+.tileManaged.locked,
+.tileManaged.locked:active{
+  cursor:default;
+}
+.tileManaged.locked{
+  border-color:rgba(255,208,0,.42);
+  box-shadow:0 0 0 1px rgba(255,208,0,.1),0 12px 26px rgba(0,0,0,.24);
+}
 .tileManaged button,
 .tileManaged input,
 .tileManaged select,
@@ -897,12 +905,12 @@ button.unitSwitch{
 }
 .tileManaged > h2{
   user-select:none;
-  padding-right:42px;
+  padding-right:78px;
 }
-.tileCloseButton{
+.tileCloseButton,
+.tileLockButton{
   position:absolute;
   top:8px;
-  right:8px;
   z-index:12;
   width:28px;
   height:28px;
@@ -919,16 +927,36 @@ button.unitSwitch{
   transform:translateY(-2px);
   transition:opacity .16s var(--spark-ease),transform .16s var(--spark-ease),border-color .16s var(--spark-ease),box-shadow .16s var(--spark-ease);
 }
+.tileCloseButton{right:8px}
+.tileLockButton{right:42px}
 .tileManaged:hover .tileCloseButton,
-.tileCloseButton:focus-visible{
+.tileManaged:hover .tileLockButton,
+.tileManaged.locked .tileLockButton,
+.tileCloseButton:focus-visible,
+.tileLockButton:focus-visible{
   opacity:.9;
   pointer-events:auto;
   transform:translateY(0);
 }
-.tileCloseButton:hover{
+.tileCloseButton:hover,
+.tileLockButton:hover{
   opacity:1;
   border-color:rgba(255,208,0,.92);
   color:var(--spark-yellow);
+}
+.tileLockButton svg{
+  width:15px;
+  height:15px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.tileLockButton[aria-pressed="true"]{
+  color:var(--spark-yellow);
+  border-color:rgba(255,208,0,.72);
+  background:rgba(255,208,0,.12);
 }
 .tileResizeHandle{
   position:absolute;
@@ -5060,6 +5088,11 @@ function normalizeTileScopeLayout(layout){
   if(Array.isArray(layout?.hidden)) nextLayout.hidden = layout.hidden.filter(Boolean);
   if(layout?.sizes && typeof layout.sizes === "object") nextLayout.sizes = layout.sizes;
   if(layout?.positions && typeof layout.positions === "object") nextLayout.positions = layout.positions;
+  if(layout?.locked && typeof layout.locked === "object"){
+    nextLayout.locked = Object.fromEntries(
+      Object.entries(layout.locked).filter(([id, locked])=>id && !!locked)
+    );
+  }
   return nextLayout;
 }
 
@@ -5264,6 +5297,55 @@ function tileRows(tile){
   return Math.max(6, Number(tile?.style?.getPropertyValue("--tile-rows")) || 14);
 }
 
+function tileIsLocked(tile, scopeKind=currentTileScopeKind()){
+  const id = tile?.dataset?.tileId;
+  if(!id || id === "gameOverview") return false;
+  const scope = tileLayoutState?.[scopeKind] || {};
+  return !!scope.locked?.[id];
+}
+
+function tileLockIcon(locked){
+  return locked
+    ? `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>`
+    : `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M9 10V7a3 3 0 0 1 5.7-1.3"></path></svg>`;
+}
+
+function updateTileLockControl(tile, scopeKind=currentTileScopeKind()){
+  if(!tile || tile.dataset.tileId === "gameOverview") return;
+  const locked = tileIsLocked(tile, scopeKind);
+  tile.classList.toggle("locked", locked);
+  tile.draggable = !locked;
+  const button = tile.querySelector(".tileLockButton");
+  if(!button) return;
+  const label = locked
+    ? `Unlock ${tile.dataset.tileTitle || "panel"} position`
+    : `Lock ${tile.dataset.tileTitle || "panel"} position`;
+  button.setAttribute("aria-label", label);
+  button.setAttribute("title", label);
+  button.setAttribute("aria-pressed", locked ? "true" : "false");
+  button.innerHTML = tileLockIcon(locked);
+}
+
+function toggleTileLock(tile){
+  const id = tile?.dataset?.tileId;
+  if(!id || id === "gameOverview") return;
+  const scope = tileScopeState();
+  if(!scope.locked) scope.locked = {};
+  if(!scope.positions) scope.positions = {};
+  const locked = !scope.locked[id];
+  if(locked){
+    const placement = currentTilePlacement(tile);
+    scope.locked[id] = true;
+    scope.positions[id] = {col:placement.col,row:placement.row};
+  }else{
+    delete scope.locked[id];
+    if(!Object.keys(scope.locked).length) delete scope.locked;
+  }
+  saveTileLayoutState();
+  updateTileLockControl(tile);
+  resizeVisibleCharts();
+}
+
 function setTileGridPlacement(tile, placement=null){
   if(!tile) return;
   const span = tileSpan(tile);
@@ -5449,16 +5531,42 @@ function visibleGridTiles(){
 function resolveTileGridPlacements(targetTile, targetPlacement){
   const tiles = visibleGridTiles().filter(tile=>tile !== targetTile);
   const result = new Map();
-  const occupied = [{
+  const occupied = [];
+  tiles
+    .filter(tile=>tileIsLocked(tile))
+    .map(tile=>({tile, placement:tileDragStartPlacements?.get(tile) || currentTilePlacement(tile)}))
+    .sort((left,right)=>
+      (left.placement.row - right.placement.row) ||
+      (left.placement.col - right.placement.col)
+    )
+    .forEach(({tile, placement})=>{
+      const lockedPlacement = {
+        tile,
+        col:placement.col,
+        row:placement.row,
+        span:tileSpan(tile),
+        rows:tileRows(tile)
+      };
+      occupied.push(lockedPlacement);
+      result.set(tile, lockedPlacement);
+    });
+
+  const requestedTargetPlacement = {
     tile:targetTile,
     col:targetPlacement.col,
     row:targetPlacement.row,
     span:tileSpan(targetTile),
     rows:tileRows(targetTile)
-  }];
-  result.set(targetTile, occupied[0]);
+  };
+  const targetLocked = tileIsLocked(targetTile);
+  const finalTargetPlacement = !targetLocked && occupied.some(item=>placementsOverlap(requestedTargetPlacement, item))
+    ? firstOpenTilePlacement(targetTile, occupied, requestedTargetPlacement)
+    : requestedTargetPlacement;
+  occupied.push(finalTargetPlacement);
+  result.set(targetTile, finalTargetPlacement);
 
   tiles
+    .filter(tile=>!tileIsLocked(tile))
     .map(tile=>({tile, placement:tileDragStartPlacements?.get(tile) || currentTilePlacement(tile)}))
     .sort((left,right)=>
       (left.placement.row - right.placement.row) ||
@@ -5529,12 +5637,13 @@ function placeTileDropPreview(event){
   const targetPlacement = pointerGridPlacement(event, draggedTile);
   if(!targetPlacement) return;
   const placements = resolveTileGridPlacements(draggedTile, targetPlacement);
+  const finalTargetPlacement = placements.get(draggedTile) || targetPlacement;
   const previous = activeTileGridPlacements?.get(draggedTile);
-  if(preview.parentNode === dashboard && previous && previous.col === targetPlacement.col && previous.row === targetPlacement.row) return;
+  if(preview.parentNode === dashboard && previous && previous.col === finalTargetPlacement.col && previous.row === finalTargetPlacement.row) return;
   activeTileGridPlacements = placements;
   animateTileReflow(()=>{
     if(!preview.parentNode) dashboard.appendChild(preview);
-    setTileGridPlacement(preview, targetPlacement);
+    setTileGridPlacement(preview, finalTargetPlacement);
     applyTileGridPlacements(placements);
   });
 }
@@ -5610,6 +5719,10 @@ function hideTileInCurrentScope(tile){
   const hidden = new Set(scope.hidden || [...defaultHiddenTileSet(scopeKind)]);
   hidden.add(id);
   scope.hidden = [...hidden];
+  if(scope.locked){
+    delete scope.locked[id];
+    if(!Object.keys(scope.locked).length) delete scope.locked;
+  }
   saveTileLayoutState();
   applyManagedTiles();
 }
@@ -5623,6 +5736,10 @@ function showTileInScope(tileId, scopeKind=currentTileScopeKind()){
   const order = Array.isArray(scope.order) ? scope.order : defaultTileOrderForScope(scopeKind);
   scope.order = [...order.filter(id=>id !== tileId), tileId];
   if(scope.positions) delete scope.positions[tileId];
+  if(scope.locked){
+    delete scope.locked[tileId];
+    if(!Object.keys(scope.locked).length) delete scope.locked;
+  }
   saveTileLayoutState();
   applyManagedTiles();
   requestAnimationFrame(()=>{
@@ -5688,12 +5805,17 @@ function tileDragBlockedTarget(target){
     ".boostLegend",
     ".shootLegend",
     ".positioningLegend",
+    ".tileLockButton",
     ".tileMenu",
     ".tileMenuPanel"
   ].join(","));
 }
 
 function beginTileDrag(event, tile){
+  if(tileIsLocked(tile)){
+    event.preventDefault();
+    return;
+  }
   if(tileDragBlockedTarget(event.target)){
     event.preventDefault();
     return;
@@ -5738,6 +5860,15 @@ function initializeManagedTiles(){
     tile.style.setProperty("--tile-span", Number(tile.dataset.tileSpan) || 8);
     tile.addEventListener("dragstart", event=>beginTileDrag(event, tile));
     tile.addEventListener("dragend", ()=>finishTileDrag(tile));
+    const lockButton = document.createElement("button");
+    lockButton.type = "button";
+    lockButton.className = "tileLockButton";
+    lockButton.addEventListener("click", event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      toggleTileLock(tile);
+    });
+    tile.appendChild(lockButton);
     const closeButton = document.createElement("button");
     closeButton.type = "button";
     closeButton.className = "tileCloseButton";
@@ -5935,6 +6066,7 @@ function applyManagedTiles(){
 
   managedTileElements().forEach(tile=>{
     const id = tile.dataset.tileId;
+    updateTileLockControl(tile, scopeKind);
     if(scopeKind === "overview"){
       tile.style.display = id === "gameOverview" ? "" : "none";
       return;
