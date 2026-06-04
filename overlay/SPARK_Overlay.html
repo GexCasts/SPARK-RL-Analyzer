@@ -136,22 +136,18 @@ html,body{
   transform:translateY(.08em);
 }
 .maskSlot.seriesTitle .tickerTrack{
-  display:inline-flex;
-  align-items:center;
-  gap:var(--ticker-gap,32px);
-  min-width:max-content;
-  transform:translate3d(calc(var(--ticker-step,0px) * -1),0,0);
-  will-change:transform;
-}
-.maskSlot.seriesTitle.scrolling .tickerTrack{
-  animation:maskTickerScroll var(--ticker-duration,28s) linear infinite;
+  position:absolute;
+  inset:0;
+  overflow:hidden;
+  pointer-events:none;
 }
 .maskSlot.seriesTitle .tickerCopy{
-  flex:0 0 auto;
-}
-@keyframes maskTickerScroll{
-  from{transform:translate3d(calc(var(--ticker-step,0px) * -1),0,0)}
-  to{transform:translate3d(0,0,0)}
+  position:absolute;
+  left:0;
+  top:50%;
+  white-space:nowrap;
+  transform:translate3d(var(--ticker-x,0px),-50%,0);
+  will-change:transform;
 }
 .maskSlot.seriesDots{
   gap:8px;
@@ -1264,6 +1260,8 @@ const maskColorTargets = {
   title:{rgb:[0,255,0]}
 };
 const maskState = {source:"", regions:null, loading:false, token:0};
+const maskTickerStates = new Map();
+let maskTickerFrame = 0;
 function colorMatches(data, index, target){
   const r = data[index], g = data[index + 1], b = data[index + 2], a = data[index + 3];
   if(a < 80) return false;
@@ -1378,6 +1376,7 @@ function setMaskSlot(id, region, options={}){
   const el = $(id);
   if(!el) return;
   if(!region){
+    if(options.ticker) stopMaskTicker(el);
     el.style.display = "none";
     return;
   }
@@ -1406,52 +1405,101 @@ function setMaskTicker(el, text, width){
   const shouldScroll = text.length > 30;
   el.classList.toggle("scrolling", shouldScroll);
   if(!shouldScroll){
+    stopMaskTicker(el);
     el.textContent = text;
-    el.style.removeProperty("--ticker-duration");
-    el.style.removeProperty("--ticker-gap");
-    el.style.removeProperty("--ticker-step");
     return;
   }
-  const current = el.querySelector(".tickerCopy");
-  if(current?.textContent === text){
-    updateMaskTickerMetrics(el, width);
-    return;
+  let state = maskTickerStates.get(el);
+  if(!state || state.text !== text){
+    stopMaskTicker(el);
+    el.textContent = "";
+    const track = document.createElement("span");
+    track.className = "tickerTrack";
+    el.append(track);
+    state = {
+      el,
+      track,
+      text,
+      copies:[],
+      maskWidth:Math.max(1, Number(width) || el.getBoundingClientRect().width || 1),
+      textWidth:1,
+      gap:32,
+      speed:30,
+      lastTime:0
+    };
+    maskTickerStates.set(el, state);
+    addMaskTickerCopy(state, 0);
   }
-  el.textContent = "";
-  const track = document.createElement("span");
-  track.className = "tickerTrack";
-  const first = document.createElement("span");
-  first.className = "tickerCopy";
-  first.textContent = text;
-  track.append(first);
-  el.append(track);
-  updateMaskTickerMetrics(el, width);
+  updateMaskTickerMetrics(state, width);
+  ensureMaskTickerLoop();
 }
-function setTickerStyle(el, key, value){
-  if(el.style.getPropertyValue(key) !== value) el.style.setProperty(key, value);
+
+function stopMaskTicker(el){
+  const state = maskTickerStates.get(el);
+  if(!state) return;
+  state.copies.forEach(copy=>copy.node.remove());
+  state.track?.remove();
+  maskTickerStates.delete(el);
 }
-function updateMaskTickerMetrics(el, width){
-  const copy = el.querySelector(".tickerCopy");
-  if(!copy) return;
-  const track = el.querySelector(".tickerTrack");
-  if(!track) return;
+
+function addMaskTickerCopy(state, x){
+  const node = document.createElement("span");
+  node.className = "tickerCopy";
+  node.textContent = state.text;
+  node.style.setProperty("--ticker-x", `${Math.round(x)}px`);
+  state.track.append(node);
+  const copy = {node, x};
+  state.copies.push(copy);
+  return copy;
+}
+
+function updateMaskTickerMetrics(state, width){
+  if(!state?.el || !state.track) return;
   const baseGap = 32;
-  const maskWidth = Math.max(1, Number(width) || el.getBoundingClientRect().width || 1);
-  const textWidth = Math.max(1, copy.getBoundingClientRect().width || copy.scrollWidth || 1);
-  const gap = Math.max(baseGap, Math.min(72, Math.round(maskWidth * .08)));
-  const step = Math.ceil(textWidth + gap);
-  const desiredCopies = Math.max(3, Math.ceil(maskWidth / Math.max(1, step)) + 3);
-  while(track.children.length < desiredCopies){
-    const duplicate = document.createElement("span");
-    duplicate.className = "tickerCopy";
-    duplicate.textContent = copy.textContent;
-    track.append(duplicate);
+  state.maskWidth = Math.max(1, Number(width) || state.el.getBoundingClientRect().width || 1);
+  const sample = state.copies[0]?.node;
+  state.textWidth = Math.max(1, sample?.getBoundingClientRect().width || sample?.scrollWidth || 1);
+  state.gap = Math.max(baseGap, Math.min(78, Math.round(state.maskWidth * .08)));
+  state.speed = 30;
+  const leftmost = state.copies.reduce((min, copy)=>Math.min(min, copy.x), 0);
+  if(leftmost > -state.textWidth - state.gap){
+    addMaskTickerCopy(state, leftmost - state.textWidth - state.gap);
   }
-  while(track.children.length > desiredCopies) track.lastElementChild?.remove();
-  const duration = Math.max(18, Math.min(56, step / 30));
-  setTickerStyle(el, "--ticker-gap", `${gap}px`);
-  setTickerStyle(el, "--ticker-step", `${step}px`);
-  setTickerStyle(el, "--ticker-duration", `${duration.toFixed(2)}s`);
+}
+
+function ensureMaskTickerLoop(){
+  if(maskTickerFrame) return;
+  maskTickerFrame = requestAnimationFrame(animateMaskTickers);
+}
+
+function animateMaskTickers(now){
+  maskTickerFrame = 0;
+  maskTickerStates.forEach((state, el)=>{
+    if(!el.isConnected || !el.classList.contains("scrolling")){
+      stopMaskTicker(el);
+      return;
+    }
+    const lastTime = state.lastTime || now;
+    const dt = Math.min(.08, Math.max(0, (now - lastTime) / 1000));
+    state.lastTime = now;
+    if(!state.copies.length) addMaskTickerCopy(state, 0);
+    state.copies.forEach(copy=>{
+      copy.x += state.speed * dt;
+      copy.node.style.setProperty("--ticker-x", `${copy.x.toFixed(2)}px`);
+    });
+    const spawnDistance = Math.max(1, state.textWidth + state.gap);
+    let leftmost = state.copies.reduce((min, copy)=>Math.min(min, copy.x), Infinity);
+    while(leftmost > -spawnDistance + 1){
+      const copy = addMaskTickerCopy(state, leftmost - spawnDistance);
+      leftmost = copy.x;
+    }
+    state.copies = state.copies.filter(copy=>{
+      if(copy.x <= state.maskWidth + 1) return true;
+      copy.node.remove();
+      return false;
+    });
+  });
+  if(maskTickerStates.size) ensureMaskTickerLoop();
 }
 function renderMaskDots(id, side, config){
   const el = $(id);
