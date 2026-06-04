@@ -307,7 +307,7 @@ html,body{
 .boosts{
   position:absolute;
   top:96px;
-  width:286px;
+  width:243px;
   display:flex;
   flex-direction:column;
   gap:5px;
@@ -322,7 +322,7 @@ html,body{
   background:linear-gradient(180deg,rgba(9,11,16,.94),rgba(3,4,7,.98));
   border:1px solid color-mix(in srgb,var(--boostTeam) 45%,rgba(255,255,255,.2));
   display:grid;
-  grid-template-columns:minmax(0,1fr) 38px;
+  grid-template-columns:minmax(0,1fr);
   align-items:center;
   font-family:var(--boost-font,var(--overlay-font));
   font-size:calc(12px * var(--boost-font-scale,1));
@@ -330,14 +330,12 @@ html,body{
   text-transform:uppercase;
   overflow:hidden;
   box-shadow:0 5px 12px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.12);
-  clip-path:polygon(0 0,96% 0,100% 50%,96% 100%,0 100%);
+  border-radius:4px;
 }
 .boosts.right .boostRow{
   --boostTeam:var(--overlay-boost-orange);
   --boostEnd:var(--overlay-accent);
-  grid-template-columns:38px minmax(0,1fr);
   text-align:right;
-  clip-path:polygon(4% 0,100% 0,100% 100%,4% 100%,0 50%);
 }
 .bar{
   position:absolute;
@@ -356,16 +354,7 @@ html,body{
   inset:0 0 0 auto;
   transform-origin:right;
 }
-.name,.boostValue{position:relative;padding:0 8px;z-index:1;color:var(--boost-text-color,var(--overlay-text))}
-.boostValue{
-  height:100%;
-  display:grid;
-  place-items:center;
-  color:var(--overlay-accent);
-  background:rgba(0,0,0,.48);
-  font-size:13px;
-  font-weight:1000;
-}
+.name{position:relative;padding:0 9px;z-index:1;color:var(--boost-text-color,var(--overlay-text))}
 .replay{
   position:absolute;
   left:0;
@@ -597,13 +586,13 @@ html,body{
   inset:-80px;
   z-index:0;
   background:
-    repeating-radial-gradient(circle at 18% 24%,rgba(255,208,0,.13) 0 1px,transparent 1px 5px),
-    repeating-linear-gradient(97deg,rgba(255,182,23,.075) 0 1px,transparent 1px 9px),
-    radial-gradient(circle at 52% 46%,rgba(255,208,0,.18),transparent 30%),
-    linear-gradient(90deg,rgba(27,140,255,.10),transparent 31% 69%,rgba(255,132,0,.11));
+    repeating-radial-gradient(circle at 18% 24%,rgba(255,208,0,.18) 0 1px,transparent 1px 5px),
+    repeating-linear-gradient(97deg,rgba(255,182,23,.11) 0 1px,transparent 1px 8px),
+    radial-gradient(circle at 52% 46%,rgba(255,208,0,.22),transparent 30%),
+    linear-gradient(90deg,rgba(27,140,255,.12),transparent 31% 69%,rgba(255,132,0,.14));
   mix-blend-mode:screen;
-  opacity:.36;
-  animation:amberStatic 1.7s steps(5,end) infinite;
+  opacity:.48;
+  animation:amberStatic 1.45s steps(5,end) infinite;
   pointer-events:none;
 }
 @keyframes amberStatic{
@@ -719,8 +708,9 @@ html,body{
   height:100%;
   min-height:0;
   display:grid;
-  grid-template-rows:auto 1fr auto;
+  grid-template-rows:auto 1fr;
   place-items:center;
+  padding:12px 10px;
   background:linear-gradient(180deg,rgba(248,243,222,.18),rgba(8,9,10,.88));
   border:1px solid rgba(255,208,0,.58);
   border-radius:8px;
@@ -728,8 +718,7 @@ html,body{
   color:#f8f3de;
   font-weight:1000;
 }
-.finalGameLabel,
-.finalSeriesLabel{
+.finalGameLabel{
   font-size:12px;
   letter-spacing:.12em;
   text-transform:uppercase;
@@ -749,9 +738,11 @@ html,body{
   display:grid;
   place-items:center;
   color:#f8f3de;
+  border-radius:3px;
+  box-shadow:inset 0 1px rgba(248,243,222,.28), inset 0 -6px 18px rgba(0,0,0,.22);
 }
-.finalGameScore .blue{background:var(--blue)}
-.finalGameScore .orange{background:var(--orange)}
+.finalGameScore .blue{background:linear-gradient(160deg,color-mix(in srgb,var(--blue) 72%,#f8f3de),var(--blue) 68%,color-mix(in srgb,var(--blue) 62%,#05080c))}
+.finalGameScore .orange{background:linear-gradient(160deg,color-mix(in srgb,var(--orange) 74%,#f8f3de),var(--orange) 68%,color-mix(in srgb,var(--orange) 62%,#05080c))}
 .finalGameScore b{
   color:rgba(248,243,222,.54);
   font-size:34px;
@@ -814,15 +805,15 @@ html,body{
 .finalValueRail{
   position:relative;
   display:grid;
-  grid-template-columns:repeat(3,minmax(0,1fr));
+  grid-template-columns:repeat(var(--rail-count,3),minmax(0,1fr));
   align-items:center;
-  gap:9px;
+  gap:clamp(5px, .5vw, 9px);
   min-width:0;
 }
 .finalPlayerRail{
   height:100%;
   color:rgba(248,243,222,.78);
-  font-size:17px;
+  font-size:var(--rail-name-size,17px);
   font-weight:1000;
   text-transform:uppercase;
 }
@@ -865,7 +856,7 @@ html,body{
   border-radius:5px;
   background:linear-gradient(180deg,rgba(248,243,222,.075),rgba(248,243,222,.032));
   color:#f8f3de;
-  font-size:28px;
+  font-size:var(--rail-value-size,28px);
   font-weight:1000;
   box-shadow:inset 0 -3px 0 color-mix(in srgb,var(--team) 62%,transparent);
 }
@@ -945,9 +936,12 @@ html,body{
 }
 .finalHeatmapGrid{
   display:grid;
-  grid-template-columns:repeat(3,minmax(0,1fr));
+  grid-template-columns:repeat(var(--heatmap-count,3),minmax(0,1fr));
+  justify-content:center;
+  align-items:center;
   gap:10px;
   min-height:0;
+  overflow:hidden;
 }
 .finalHeatmapGrid .finalHeatmapEmpty{grid-column:1 / -1}
 .finalHeatmapCard{
@@ -1848,7 +1842,7 @@ function renderBoostRows(team){
       const boost = player.boostKnown ? Math.max(0, Math.min(100, Math.round(player.boost))) : 0;
       const name = escapeHtml(player.name);
       return `<div class="boostRow">
-        ${team === "Orange" ? `<span class="boostValue">${boost}</span><span class="name">${name}</span>` : `<span class="name">${name}</span><span class="boostValue">${boost}</span>`}
+        <span class="name">${name}</span>
         <span class="bar" style="--boost:${boost}%"></span>
       </div>`;
     }).join("");
@@ -1891,8 +1885,14 @@ function sortedFinalPlayers(){
       return (Number(b.stats?.score || 0) - Number(a.stats?.score || 0)) || a.name.localeCompare(b.name);
     });
 }
-function finalPlayerSlots(players, slots=3){
-  return Array.from({length:slots}, (_, index)=>players[index] || null);
+function finalPlayerSlots(players, slots=4){
+  return players.slice(0, slots);
+}
+function finalRailStyle(count){
+  const safeCount = Math.max(1, Math.min(4, Number(count) || 1));
+  const nameSize = safeCount >= 4 ? 15 : safeCount === 3 ? 17 : 18;
+  const valueSize = safeCount >= 4 ? 25 : safeCount === 3 ? 28 : 30;
+  return `--rail-count:${safeCount};--rail-name-size:${nameSize}px;--rail-value-size:${valueSize}px;grid-template-columns:repeat(${safeCount},minmax(0,1fr))`;
 }
 function finalPlayerScore(player){
   return Number(player?.stats?.score || 0);
@@ -1902,14 +1902,12 @@ function finalPlayerStat(player, stat){
 }
 function finalNameRow(players, mvpName){
   return players.map(player=>{
-    if(!player) return "<span>--</span>";
     const mvpClass = player.name === mvpName ? " class=\"mvp\"" : "";
     return `<span${mvpClass}>${escapeHtml(player.name)}</span>`;
   }).join("");
 }
 function finalNumberRow(players, stat, statMax){
   return players.map(player=>{
-    if(!player) return "<span>--</span>";
     const value = finalPlayerStat(player, stat);
     const max = Math.max(1, statMax || value);
     const alpha = Math.max(.18, Math.min(.92, value / max));
@@ -2002,8 +2000,16 @@ function renderPlayerHeatmapCanvas(player, index){
   return `<canvas class="finalHeatmapCanvas" width="${finalHeatmapFieldMap.width}" height="${finalHeatmapFieldMap.height}" data-heatmap-player="${index}" data-heatmap-name="${escapeHtml(player.name)}" aria-label="${escapeHtml(player.name)} heatmap"></canvas>`;
 }
 
+function finalHeatmapGridStyle(count){
+  const safeCount = Math.max(1, Math.min(4, Number(count) || 1));
+  if(safeCount === 1) return `--heatmap-count:1;grid-template-columns:minmax(0,34%)`;
+  if(safeCount === 2) return `--heatmap-count:2;grid-template-columns:repeat(2,minmax(0,34%))`;
+  return `--heatmap-count:${safeCount};grid-template-columns:repeat(${safeCount},minmax(0,1fr))`;
+}
+
 function renderHeatmapTeam(players, team, label){
-  const teamPlayers = players.map((player, index)=>({...player, heatmapIndex:index})).filter(player=>player.team === team).slice(0, 3);
+  const teamPlayers = players.map((player, index)=>({...player, heatmapIndex:index})).filter(player=>player.team === team).slice(0, 4);
+  const count = Math.max(1, teamPlayers.length);
   const cards = teamPlayers.length
     ? teamPlayers.map(player=>`<div class="finalHeatmapCard">
         <div class="finalHeatmapName">${escapeHtml(player.name)}</div>
@@ -2012,7 +2018,7 @@ function renderHeatmapTeam(players, team, label){
     : `<div class="finalHeatmapEmpty">No ${escapeHtml(label)} position samples found in this replay.</div>`;
   return `<div class="finalHeatmapTeam ${team.toLowerCase()}">
     <div class="finalHeatmapTeamTitle"><span>${escapeHtml(label)}</span></div>
-    <div class="finalHeatmapGrid">${cards}</div>
+    <div class="finalHeatmapGrid" style="${finalHeatmapGridStyle(count)}">${cards}</div>
   </div>`;
 }
 
@@ -2223,7 +2229,6 @@ function renderFinalScreen(config){
     <div class="finalScoreCenter">
       <div class="finalGameLabel">${escapeHtml(overlayGameLabel(config))}</div>
       <div class="finalGameScore"><span class="blue">${scoreText(state.teams.Blue.score)}</span><b>:</b><span class="orange">${scoreText(state.teams.Orange.score)}</span></div>
-      <div class="finalSeriesLabel">Series Score</div>
     </div>
     <div class="finalTeam orange right">
       <img class="finalTeamLogo ${orangeLogo ? "" : "empty"}" src="${escapeHtml(orangeLogo || "")}" alt="">
@@ -2243,22 +2248,26 @@ function renderFinalScreen(config){
     {label:"Saves",value:p=>Number(p.stats?.saves || 0),format:v=>String(Math.round(v))},
     {label:"Demos",value:p=>Number(p.stats?.demos || p.demos || 0),format:v=>String(Math.round(v))}
   ];
-  const blueSlots = finalPlayerSlots(bluePlayers, 3);
-  const orangeSlots = finalPlayerSlots(orangePlayers, 3);
+  const blueSlots = finalPlayerSlots(bluePlayers, 4);
+  const orangeSlots = finalPlayerSlots(orangePlayers, 4);
+  const blueRailCount = Math.max(1, blueSlots.length);
+  const orangeRailCount = Math.max(1, orangeSlots.length);
+  const blueRailStyle = finalRailStyle(blueRailCount);
+  const orangeRailStyle = finalRailStyle(orangeRailCount);
   if(statsPane) statsPane.innerHTML = `
     <div class="finalMatrix">
-      <div class="finalPlayerRail blue">${finalNameRow(blueSlots, mvpName)}</div>
+      <div class="finalPlayerRail blue" style="${blueRailStyle}">${finalNameRow(blueSlots, mvpName)}</div>
       <div class="finalCategoryHead">Categories</div>
-      <div class="finalPlayerRail orange">${finalNameRow(orangeSlots, mvpName)}</div>
+      <div class="finalPlayerRail orange" style="${orangeRailStyle}">${finalNameRow(orangeSlots, mvpName)}</div>
       ${stats.map(stat=>{
         const allValues = [...blueSlots, ...orangeSlots].map(player=>finalPlayerStat(player, stat));
         const statMax = Math.max(0, ...allValues);
         const leftTotal = blueSlots.reduce((sum, player)=>sum + finalPlayerStat(player, stat), 0);
         const rightTotal = orangeSlots.reduce((sum, player)=>sum + finalPlayerStat(player, stat), 0);
         return `
-          <div class="finalValueRail blue">${finalNumberRow(blueSlots, stat, statMax)}</div>
+          <div class="finalValueRail blue" style="${blueRailStyle}">${finalNumberRow(blueSlots, stat, statMax)}</div>
           <div class="finalMetric"><span>${escapeHtml(stat.label)}</span>${finalCompareBar(leftTotal, rightTotal)}</div>
-          <div class="finalValueRail orange">${finalNumberRow(orangeSlots, stat, statMax)}</div>`;
+          <div class="finalValueRail orange" style="${orangeRailStyle}">${finalNumberRow(orangeSlots, stat, statMax)}</div>`;
       }).join("")}
     </div>`;
   if(heatmapPane){
