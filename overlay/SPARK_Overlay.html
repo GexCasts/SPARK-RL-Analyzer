@@ -753,7 +753,33 @@ html,body{
 }
 .finalBoard{
   min-height:512px;
+  position:relative;
+  display:block;
+  overflow:hidden;
+}
+.finalBoardPane{
+  position:absolute;
+  inset:0;
   display:grid;
+  min-height:512px;
+  transition:transform .56s cubic-bezier(.16,1,.3,1), opacity .28s cubic-bezier(.16,1,.3,1);
+  will-change:transform,opacity;
+}
+.finalStatsPane{
+  transform:translate3d(0,0,0);
+  opacity:1;
+}
+.finalHeatmapPane{
+  transform:translate3d(104%,0,0);
+  opacity:0;
+}
+.finalScreen.heatmapActive .finalStatsPane{
+  transform:translate3d(-104%,0,0);
+  opacity:0;
+}
+.finalScreen.heatmapActive .finalHeatmapPane{
+  transform:translate3d(0,0,0);
+  opacity:1;
 }
 .finalMatrix{
   position:relative;
@@ -865,6 +891,102 @@ html,body{
 }
 .finalStatCompare i:first-child{background:var(--blue)}
 .finalStatCompare i:last-child{background:var(--orange)}
+.finalHeatmapReport{
+  display:grid;
+  grid-template-rows:1fr 1fr;
+  gap:18px;
+  min-height:512px;
+  padding:20px 26px 24px;
+  background:
+    linear-gradient(180deg,rgba(248,243,222,.11),rgba(248,243,222,.038)),
+    rgba(8,9,10,.90);
+  border:1px solid rgba(255,208,0,.48);
+  box-shadow:0 22px 48px rgba(0,0,0,.50), inset 0 0 48px rgba(255,208,0,.08);
+  clip-path:polygon(2% 0,98% 0,100% 100%,0 100%);
+}
+.finalHeatmapTeam{
+  display:grid;
+  grid-template-rows:auto 1fr;
+  gap:10px;
+  min-height:0;
+}
+.finalHeatmapTeam.blue{--team:var(--blue)}
+.finalHeatmapTeam.orange{--team:var(--orange)}
+.finalHeatmapTeamTitle{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  color:rgba(248,243,222,.78);
+  font-size:15px;
+  font-weight:1000;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.finalHeatmapTeamTitle::after{
+  content:"";
+  height:2px;
+  flex:1 1 auto;
+  background:linear-gradient(90deg,var(--team),transparent);
+  opacity:.78;
+}
+.finalHeatmapTeam.orange .finalHeatmapTeamTitle{flex-direction:row-reverse;text-align:right}
+.finalHeatmapTeam.orange .finalHeatmapTeamTitle::after{
+  background:linear-gradient(270deg,var(--team),transparent);
+}
+.finalHeatmapGrid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+  min-height:0;
+}
+.finalHeatmapCard{
+  min-width:0;
+  min-height:0;
+  display:grid;
+  grid-template-rows:auto 1fr;
+  gap:7px;
+}
+.finalHeatmapName{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:color-mix(in srgb,var(--team) 72%,#f8f3de);
+  font-size:17px;
+  font-weight:1000;
+  text-align:center;
+  text-transform:uppercase;
+}
+.finalHeatmapField{
+  min-height:0;
+  border:1px solid color-mix(in srgb,var(--team) 46%,rgba(248,243,222,.18));
+  background:
+    radial-gradient(circle at 50% 50%,rgba(255,208,0,.13),transparent 34%),
+    linear-gradient(90deg,rgba(27,140,255,.10),transparent 45% 55%,rgba(255,132,0,.10)),
+    rgba(5,7,9,.86);
+  box-shadow:inset 0 0 24px color-mix(in srgb,var(--team) 13%,transparent);
+  overflow:hidden;
+}
+.finalHeatmapField svg{
+  display:block;
+  width:100%;
+  height:100%;
+  min-height:128px;
+}
+.finalHeatmapEmpty{
+  min-height:512px;
+  display:grid;
+  place-items:center;
+  padding:28px;
+  border:1px solid rgba(255,208,0,.42);
+  background:rgba(8,9,10,.88);
+  color:rgba(248,243,222,.76);
+  font-size:24px;
+  font-weight:900;
+  text-align:center;
+  clip-path:polygon(2% 0,98% 0,100% 100%,0 100%);
+}
 .stingerTransition{
   display:none;
   position:absolute;
@@ -924,7 +1046,10 @@ html,body{
         <div class="finalSeries" id="finalSeries">Best of 5</div>
       </div>
       <div class="finalScore" id="finalScore"></div>
-      <div class="finalBoard" id="finalBoard"></div>
+      <div class="finalBoard" id="finalBoard">
+        <div class="finalBoardPane finalStatsPane" id="finalStatsPane"></div>
+        <div class="finalBoardPane finalHeatmapPane" id="finalHeatmapPane"></div>
+      </div>
     </div>
   </div>
   <video class="stingerTransition" id="stingerTransition" muted playsinline preload="auto"></video>
@@ -984,6 +1109,8 @@ const state = {
   matchEnded:false,
   matchEndedAt:0,
   finalVisible:false,
+  heatmapVisible:false,
+  replayHeatmap:null,
   clock:300,
   teams:{Blue:{name:"Blue",score:0},Orange:{name:"Orange",score:0}},
   players:new Map(),
@@ -995,6 +1122,9 @@ let stingerFallbackTimer = null;
 let finalTransitionTimer = null;
 let finalTransitionQueueTimer = null;
 let finalTransitionRunId = 0;
+let replayHeatmapLookupTimer = null;
+let replayHeatmapRevealTimer = null;
+let replayHeatmapRunId = 0;
 const $ = id=>document.getElementById(id);
 function firstDefined(...values){
   for(const value of values) if(value !== undefined && value !== null && value !== "") return value;
@@ -1581,6 +1711,8 @@ function resetForNextMatch(){
   state.matchEnded = false;
   state.matchEndedAt = 0;
   state.finalVisible = false;
+  state.heatmapVisible = false;
+  state.replayHeatmap = null;
   state.clock = 300;
   state.teams.Blue.score = 0;
   state.teams.Orange.score = 0;
@@ -1602,10 +1734,20 @@ function resetForNextMatch(){
     clearTimeout(stingerFallbackTimer);
     stingerFallbackTimer = null;
   }
+  if(replayHeatmapLookupTimer){
+    clearTimeout(replayHeatmapLookupTimer);
+    replayHeatmapLookupTimer = null;
+  }
+  if(replayHeatmapRevealTimer){
+    clearTimeout(replayHeatmapRevealTimer);
+    replayHeatmapRevealTimer = null;
+  }
   finalTransitionRunId += 1;
+  replayHeatmapRunId += 1;
   const stinger = $("stingerTransition");
   stinger?.classList.remove("active");
   try{ stinger?.pause(); }catch{}
+  $("finalScreen")?.classList.remove("heatmapActive");
 }
 function normalizeMessage(raw){
   const msg = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -1706,13 +1848,131 @@ function finalCompareBar(left, right){
   const orange = Math.max(6, Math.round((right / total) * 100));
   return `<div class="finalStatCompare" style="--blue:${blue}fr;--orange:${orange}fr"><i></i><i></i></div>`;
 }
+
+function replaySamplePoint(sample){
+  if(!sample || typeof sample !== "object") return null;
+  const location = sample.carLocation || sample.location || sample.position || sample;
+  const x = Number(firstDefined(location.x, location.X, location.fieldX, location.FieldX));
+  const y = Number(firstDefined(location.y, location.Y, location.fieldY, location.FieldY));
+  if(!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return {x, y};
+}
+
+function replayHeatmapTeam(player){
+  const direct = normalizeTeam(firstDefined(player?.team, player?.Team, player?.teamName, player?.TeamName));
+  if(direct) return direct;
+  const name = cleanName(player?.name || player?.playerName || player?.id);
+  const live = name ? state.players.get(name) : null;
+  return live?.team || "Blue";
+}
+
+function buildReplayHeatmapFromAnalysis(analysis){
+  const players = Array.isArray(analysis?.players) ? analysis.players : [];
+  const mapped = players.map(player=>{
+    const name = cleanName(firstDefined(player.name, player.playerName, player.id)) || "Player";
+    const samples = Array.isArray(player.positionSamples) ? player.positionSamples.map(replaySamplePoint).filter(Boolean) : [];
+    return {
+      name,
+      team:replayHeatmapTeam(player),
+      samples
+    };
+  }).filter(player=>player.samples.length);
+  return {
+    players:mapped.sort((a,b)=>{
+      if(a.team !== b.team) return a.team === "Blue" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    }),
+    replayFile:analysis?.replayFile || null,
+    totalSamples:mapped.reduce((sum, player)=>sum + player.samples.length, 0)
+  };
+}
+
+function heatmapColor(team){
+  return team === "Orange" ? "#ff8400" : "#1b8cff";
+}
+
+function replayPointToSvg(point){
+  const x = Math.max(0, Math.min(320, ((point.x + 4096) / 8192) * 320));
+  const y = Math.max(0, Math.min(180, ((5120 - point.y) / 10240) * 180));
+  return {x, y};
+}
+
+function renderPlayerHeatmapSvg(player){
+  const teamColor = heatmapColor(player.team);
+  const cols = 24;
+  const rows = 14;
+  const bins = Array.from({length:cols * rows}, ()=>0);
+  const limit = 1500;
+  const step = Math.max(1, Math.ceil(player.samples.length / limit));
+  const pathPoints = [];
+  for(let index = 0; index < player.samples.length; index += step){
+    const point = replayPointToSvg(player.samples[index]);
+    const col = Math.max(0, Math.min(cols - 1, Math.floor((point.x / 320) * cols)));
+    const row = Math.max(0, Math.min(rows - 1, Math.floor((point.y / 180) * rows)));
+    bins[row * cols + col] += 1;
+    if(pathPoints.length < 260) pathPoints.push(`${point.x.toFixed(1)},${point.y.toFixed(1)}`);
+  }
+  const max = Math.max(1, ...bins);
+  const heat = bins.map((count, index)=>{
+    if(!count) return "";
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const intensity = count / max;
+    const opacity = Math.max(.16, Math.min(.82, .14 + Math.pow(intensity, .62) * .68));
+    const w = (320 / cols) + .6;
+    const h = (180 / rows) + .6;
+    return `<rect x="${(col * 320 / cols).toFixed(2)}" y="${(row * 180 / rows).toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="${teamColor}" opacity="${opacity.toFixed(2)}"/>`;
+  }).join("");
+  const path = pathPoints.length > 1
+    ? `<polyline points="${pathPoints.join(" ")}" fill="none" stroke="${teamColor}" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round" opacity=".58"/>`
+    : "";
+  return `<svg viewBox="0 0 320 180" role="img" aria-label="${escapeHtml(player.name)} heatmap">
+    <rect x="1" y="1" width="318" height="178" fill="rgba(5,7,9,.32)" stroke="rgba(248,243,222,.20)" stroke-width="1.5"/>
+    <line x1="0" y1="90" x2="320" y2="90" stroke="rgba(248,243,222,.18)" stroke-width="1"/>
+    <line x1="160" y1="0" x2="160" y2="180" stroke="rgba(248,243,222,.10)" stroke-width="1"/>
+    <circle cx="160" cy="90" r="24" fill="none" stroke="rgba(248,243,222,.13)" stroke-width="1"/>
+    <rect x="104" y="0" width="112" height="20" fill="none" stroke="rgba(248,243,222,.12)" stroke-width="1"/>
+    <rect x="104" y="160" width="112" height="20" fill="none" stroke="rgba(248,243,222,.12)" stroke-width="1"/>
+    ${heat}
+    ${path}
+  </svg>`;
+}
+
+function renderHeatmapTeam(players, team, label){
+  const teamPlayers = players.filter(player=>player.team === team).slice(0, 3);
+  const cards = teamPlayers.length
+    ? teamPlayers.map(player=>`<div class="finalHeatmapCard">
+        <div class="finalHeatmapName">${escapeHtml(player.name)}</div>
+        <div class="finalHeatmapField">${renderPlayerHeatmapSvg(player)}</div>
+      </div>`).join("")
+    : `<div class="finalHeatmapEmpty">No ${escapeHtml(label)} position samples found in this replay.</div>`;
+  return `<div class="finalHeatmapTeam ${team.toLowerCase()}">
+    <div class="finalHeatmapTeamTitle"><span>${escapeHtml(label)}</span></div>
+    <div class="finalHeatmapGrid">${cards}</div>
+  </div>`;
+}
+
+function renderFinalHeatmapReport(config){
+  const heatmap = state.replayHeatmap;
+  if(!heatmap?.players?.length) return `<div class="finalHeatmapEmpty">No replay heatmap data found for this match.</div>`;
+  const blueName = config.blueTeamName || state.teams.Blue.name || "Blue";
+  const orangeName = config.orangeTeamName || state.teams.Orange.name || "Orange";
+  return `<div class="finalHeatmapReport">
+    ${renderHeatmapTeam(heatmap.players, "Blue", blueName)}
+    ${renderHeatmapTeam(heatmap.players, "Orange", orangeName)}
+  </div>`;
+}
+
 function renderFinalScreen(config){
   const screen = $("finalScreen");
   if(!screen) return;
+  const statsPane = $("finalStatsPane") || $("finalBoard");
+  const heatmapPane = $("finalHeatmapPane");
   const blueName = config.blueTeamName || state.teams.Blue.name || "Blue";
   const orangeName = config.orangeTeamName || state.teams.Orange.name || "Orange";
   const blueLogo = teamLogoFor("Blue", config);
   const orangeLogo = teamLogoFor("Orange", config);
+  screen.classList.toggle("heatmapActive", !!state.heatmapVisible && !!state.replayHeatmap);
   $("finalSeries").textContent = `Best of ${Number(config.seriesBestOf) || 5}`;
   $("finalScore").innerHTML = `
     <div class="finalTeam blue">
@@ -1745,7 +2005,7 @@ function renderFinalScreen(config){
   ];
   const blueSlots = finalPlayerSlots(bluePlayers, 3);
   const orangeSlots = finalPlayerSlots(orangePlayers, 3);
-  $("finalBoard").innerHTML = `
+  if(statsPane) statsPane.innerHTML = `
     <div class="finalMatrix">
       <div class="finalPlayerRail blue">${finalNameRow(blueSlots, mvpName)}</div>
       <div class="finalCategoryHead">Categories</div>
@@ -1761,6 +2021,7 @@ function renderFinalScreen(config){
           <div class="finalValueRail orange">${finalNumberRow(orangeSlots, stat, statMax)}</div>`;
       }).join("")}
     </div>`;
+  if(heatmapPane) heatmapPane.innerHTML = state.replayHeatmap ? renderFinalHeatmapReport(config) : "";
 }
 
 function stingerExtension(config){
@@ -1827,6 +2088,37 @@ function queueFinalTransition(config){
     if(!state.matchEnded || state.finalVisible) return;
     playFinalTransition(readConfig());
   }, 2500);
+}
+
+function scheduleRecentReplayHeatmap(){
+  if(personalOverlayMode || forceFinalPreview) return;
+  if(replayHeatmapLookupTimer) clearTimeout(replayHeatmapLookupTimer);
+  if(replayHeatmapRevealTimer) clearTimeout(replayHeatmapRevealTimer);
+  state.heatmapVisible = false;
+  state.replayHeatmap = null;
+  const runId = ++replayHeatmapRunId;
+  replayHeatmapLookupTimer = setTimeout(async()=>{
+    replayHeatmapLookupTimer = null;
+    if(runId !== replayHeatmapRunId || !state.matchEnded) return;
+    let report = null;
+    try{
+      const response = await fetch(`${location.origin}/api/latest-replay/analyze?maxAgeMs=120000&t=${Date.now()}`, {cache:"no-store"});
+      const json = await response.json().catch(()=>null);
+      if(!response.ok || !json?.ok || !json?.analysis) return;
+      report = buildReplayHeatmapFromAnalysis({...json.analysis, replayFile:json.replay});
+      if(!report.players.length) return;
+    }catch(error){
+      console.warn("Could not load recent replay heatmap:", error);
+      return;
+    }
+    replayHeatmapRevealTimer = setTimeout(()=>{
+      replayHeatmapRevealTimer = null;
+      if(runId !== replayHeatmapRunId || !state.matchEnded || !state.finalVisible) return;
+      state.replayHeatmap = report;
+      state.heatmapVisible = true;
+      render();
+    }, 8000);
+  }, 5000);
 }
 
 function playFinalTransition(config, onCut=revealFinalScreen){
@@ -2003,10 +2295,12 @@ function handleMessage(raw){
   const incomingClock = gameClock(msg.payload);
   const messageEndsMatch = matchEndedFlag(msg.payload, msg.event);
   if(nextMatchLooksReady(msg.payload, eventName, incomingClock, messageEndsMatch)) resetForNextMatch();
+  const firstMatchEnd = messageEndsMatch && !state.matchEnded;
   if(messageEndsMatch){
     state.replay = false;
-    if(!state.matchEnded) state.matchEndedAt = Date.now();
+    if(firstMatchEnd) state.matchEndedAt = Date.now();
     state.matchEnded = true;
+    if(firstMatchEnd) scheduleRecentReplayHeatmap();
   }
   updateTeams(msg.payload);
   updatePlayers(msg.payload);

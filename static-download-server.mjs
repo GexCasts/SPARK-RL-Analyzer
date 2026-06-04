@@ -18,6 +18,8 @@ const oneNeLogoPath = path.join(here, "assets", "1NE_Vector_edited.png");
 const tileLayoutPath = path.join(here, "SPARK-layout.json");
 const overlayAssetDir = path.join(here, ".tmp", "overlay-assets");
 const overlayConfigPath = path.join(overlayAssetDir, "overlay-config.json");
+const replayFolderConfigPath = path.join(overlayAssetDir, "replay-folder.json");
+const defaultReplayFolderPath = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Rocket League\\TAGame\\Demos";
 const rrrocketVersion = "0.11.1";
 const rrrocketCandidates = [
   process.env.SPARK_RRROCKET_PATH,
@@ -505,6 +507,119 @@ function readRequestBody(req, limitBytes=128 * 1024 * 1024){
     req.on("end", ()=>resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
+}
+
+async function pathIsDirectory(folderPath){
+  const text = String(folderPath || "").trim();
+  if(!text) return false;
+  try{
+    const stat = await fs.stat(text);
+    return stat.isDirectory();
+  }catch{
+    return false;
+  }
+}
+
+async function readReplayFolderConfig(){
+  try{
+    const raw = JSON.parse(await fs.readFile(replayFolderConfigPath, "utf8") || "{}");
+    return raw && typeof raw === "object" ? raw : {};
+  }catch{
+    return {};
+  }
+}
+
+async function writeReplayFolderConfig(folderPath){
+  await fs.mkdir(path.dirname(replayFolderConfigPath), {recursive:true});
+  await fs.writeFile(replayFolderConfigPath, JSON.stringify({path:folderPath, updatedAt:new Date().toISOString()}, null, 2), "utf8");
+}
+
+async function resolveReplayFolder(){
+  if(await pathIsDirectory(defaultReplayFolderPath)){
+    await writeReplayFolderConfig(defaultReplayFolderPath);
+    return {ok:true, path:defaultReplayFolderPath, status:"auto-detected", message:"Replay folder auto-detected"};
+  }
+  const config = await readReplayFolderConfig();
+  const savedPath = String(config.path || "").trim();
+  if(await pathIsDirectory(savedPath)){
+    return {ok:true, path:savedPath, status:"set", message:"Replay Folder Set"};
+  }
+  return {ok:false, path:"", status:"missing", message:"Replay folder not set"};
+}
+
+async function setReplayFolder(folderPath){
+  const normalized = String(folderPath || "").trim();
+  if(!normalized) return {ok:false, path:"", status:"missing", message:"Replay folder not set"};
+  if(!await pathIsDirectory(normalized)){
+    return {ok:false, path:normalized, status:"invalid", message:"Selected folder was not found"};
+  }
+  await writeReplayFolderConfig(normalized);
+  return {ok:true, path:normalized, status:"set", message:"Replay Folder Set"};
+}
+
+function pickReplayFolderWithPowerShell(){
+  return new Promise((resolve, reject)=>{
+    if(process.platform !== "win32"){
+      reject(new Error("Folder picker is only available on Windows. Paste a replay folder path instead."));
+      return;
+    }
+    const script = `
+Add-Type -AssemblyName System.Windows.Forms
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = "Select the Rocket League replay folder"
+$dialog.ShowNewFolderButton = $false
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+  [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+  Write-Output $dialog.SelectedPath
+}
+`;
+    execFile("powershell.exe", ["-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-Command", script], {windowsHide:false, maxBuffer:1024 * 1024}, (error, stdout, stderr)=>{
+      if(error){
+        reject(new Error(stderr?.trim() || error.message || "Could not open the replay folder picker."));
+        return;
+      }
+      const selected = String(stdout || "").trim();
+      if(!selected){
+        resolve({ok:false, path:"", status:"cancelled", message:"Replay folder not changed"});
+        return;
+      }
+      setReplayFolder(selected).then(resolve, reject);
+    });
+  });
+}
+
+async function newestRecentReplay(maxAgeMs=120000){
+  const folder = await resolveReplayFolder();
+  if(!folder.ok || !folder.path) return {ok:false, folder, replay:null, status:"no-folder", message:folder.message};
+  let entries = [];
+  try{
+    entries = await fs.readdir(folder.path, {withFileTypes:true});
+  }catch{
+    return {ok:false, folder, replay:null, status:"folder-unavailable", message:"Replay folder could not be read"};
+  }
+  const now = Date.now();
+  const candidates = [];
+  for(const entry of entries){
+    if(!entry.isFile() || !entry.name.toLowerCase().endsWith(".replay")) continue;
+    const replayPath = path.join(folder.path, entry.name);
+    try{
+      const stat = await fs.stat(replayPath);
+      const ageMs = now - stat.mtimeMs;
+      if(ageMs >= 0 && ageMs <= maxAgeMs){
+        candidates.push({
+          name:entry.name,
+          path:replayPath,
+          size:stat.size,
+          modifiedMs:stat.mtimeMs,
+          modifiedUtc:new Date(stat.mtimeMs).toISOString(),
+          ageMs
+        });
+      }
+    }catch{}
+  }
+  candidates.sort((a,b)=>b.modifiedMs - a.modifiedMs);
+  if(!candidates.length) return {ok:false, folder, replay:null, status:"no-recent-replay", message:"No recent replay file detected"};
+  return {ok:true, folder, replay:candidates[0], status:"recent-replay", message:"Recent replay detected"};
 }
 
 function runRrrocket(replayPath){
@@ -2796,8 +2911,7 @@ function mergeReplayParserSummaries(parsedReplay, boostSummary, shotSummary){
   };
 }
 
-async function parseReplayOnce(req, prefix){
-  const replayBytes = await readRequestBody(req);
+async function parseReplayBuffer(replayBytes, prefix){
   if(!replayBytes.length) throw new Error("No replay bytes were uploaded.");
 
   await fs.mkdir(tmpDir, {recursive:true});
@@ -2809,6 +2923,20 @@ async function parseReplayOnce(req, prefix){
   }finally{
     await fs.rm(replayPath, {force:true}).catch(()=>{});
   }
+}
+
+async function parseReplayOnce(req, prefix){
+  const replayBytes = await readRequestBody(req);
+  return parseReplayBuffer(replayBytes, prefix);
+}
+
+function buildReplayAnalysisPackage(parsed, metadata={}){
+  const boostSummary = summarizeBoostPickups(parsed);
+  const shotSummary = summarizeShotSamples(parsed);
+  return createReplayAnalysisPackage(
+    mergeReplayParserSummaries(parsed, boostSummary, shotSummary),
+    {source:"rrrocket", ...metadata}
+  );
 }
 
 async function handleBoostParse(req, res){
@@ -2860,18 +2988,103 @@ async function handleReplayParse(req, res){
   }
 
   const parsed = await parseReplayOnce(req, "replay");
-  const boostSummary = summarizeBoostPickups(parsed);
-  const shotSummary = summarizeShotSamples(parsed);
-  const summary = createReplayAnalysisPackage(
-    mergeReplayParserSummaries(parsed, boostSummary, shotSummary),
-    {source:"rrrocket"}
-  );
+  const summary = buildReplayAnalysisPackage(parsed);
   res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
   res.end(JSON.stringify(summary));
 }
 
 async function handleReplayAnalyze(req, res){
   await handleReplayParse(req, res);
+}
+
+async function handleReplayFolder(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+  if(req.method === "GET"){
+    const result = await resolveReplayFolder();
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify(result));
+    return;
+  }
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use GET or POST.");
+    return;
+  }
+  const body = await readRequestBody(req, 16 * 1024);
+  let message = {};
+  try{
+    message = JSON.parse(body.toString("utf8") || "{}");
+  }catch{
+    message = {};
+  }
+  const result = await setReplayFolder(message.path);
+  res.writeHead(result.ok ? 200 : 400, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify(result));
+}
+
+async function handleReplayFolderPick(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use POST.");
+    return;
+  }
+  const result = await pickReplayFolderWithPowerShell();
+  res.writeHead(result.ok ? 200 : 400, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify(result));
+}
+
+function latestReplayMaxAgeFromUrl(url){
+  const raw = Number(url.searchParams.get("maxAgeMs"));
+  return Number.isFinite(raw) ? Math.max(1000, Math.min(10 * 60 * 1000, Math.round(raw))) : 120000;
+}
+
+async function handleLatestReplay(req, res, url){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+  if(req.method !== "GET"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use GET.");
+    return;
+  }
+  const result = await newestRecentReplay(latestReplayMaxAgeFromUrl(url));
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify(result));
+}
+
+async function handleLatestReplayAnalyze(req, res, url){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+  if(req.method !== "GET"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use GET.");
+    return;
+  }
+  const latest = await newestRecentReplay(latestReplayMaxAgeFromUrl(url));
+  if(!latest.ok || !latest.replay){
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify(latest));
+    return;
+  }
+  const replayBytes = await fs.readFile(latest.replay.path);
+  const parsed = await parseReplayBuffer(replayBytes, "recent-replay");
+  const analysis = buildReplayAnalysisPackage(parsed, {replayFile:latest.replay});
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify({...latest, analysis}));
 }
 
 async function handleClientHeartbeat(req, res){
@@ -2918,7 +3131,9 @@ function handleServerInfo(req, res){
     pid:process.pid,
     activeClients:activeClients.size,
     livePacketRateEndpoint:true,
-    windowControlEndpoint:true
+    windowControlEndpoint:true,
+    replayFolderEndpoint:true,
+    recentReplayAnalyzeEndpoint:true
   }));
 }
 
@@ -3440,6 +3655,22 @@ server = http.createServer(async (req,res)=>{
     }
     if(url.pathname === "/api/overlay-config"){
       await handleOverlayConfig(req, res);
+      return;
+    }
+    if(url.pathname === "/api/replay-folder"){
+      await handleReplayFolder(req, res);
+      return;
+    }
+    if(url.pathname === "/api/replay-folder/pick"){
+      await handleReplayFolderPick(req, res);
+      return;
+    }
+    if(url.pathname === "/api/latest-replay"){
+      await handleLatestReplay(req, res, url);
+      return;
+    }
+    if(url.pathname === "/api/latest-replay/analyze"){
+      await handleLatestReplayAnalyze(req, res, url);
       return;
     }
     if(url.pathname === "/api/overlay-asset"){

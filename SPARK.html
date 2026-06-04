@@ -1367,6 +1367,47 @@ canvas{width:100%!important;height:100%!important}
   font-size:12px;
   text-transform:none;
 }
+.overlayReplayFolderTools{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:10px;
+  align-items:center;
+}
+.overlayReplayFolderStatus{
+  min-height:38px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:8px;
+  background:rgba(255,255,255,.035);
+  color:var(--muted);
+  font-size:12px;
+  font-weight:800;
+  text-transform:none;
+}
+.overlayReplayFolderStatus::before{
+  content:"";
+  width:8px;
+  height:8px;
+  flex:0 0 auto;
+  border-radius:50%;
+  background:#73777f;
+  box-shadow:0 0 10px rgba(115,119,127,.35);
+}
+.overlayReplayFolderStatus.ready{
+  color:#f3f4f6;
+  border-color:rgba(255,208,0,.38);
+}
+.overlayReplayFolderStatus.ready::before{
+  background:var(--spark-yellow);
+  box-shadow:0 0 12px rgba(255,208,0,.56);
+}
+.overlayReplayFolderStatus.error::before{
+  background:#ef4444;
+  box-shadow:0 0 12px rgba(239,68,68,.48);
+}
 .overlayMaskLegend{
   display:flex;
   flex-wrap:wrap;
@@ -4325,6 +4366,8 @@ let overlayConfigSyncTimer = null;
 let overlayPreviewPushTimer = null;
 let overlayConfigStorageTimer = null;
 let overlayTournamentEditorSelected = false;
+let replayFolderStatus = {ok:false, status:"checking", message:"Checking replay folder...", path:""};
+let replayFolderStatusLoaded = false;
 let obsFinalScreenVisible = false;
 let obsStingerTimer = null;
 let obsStingerFallbackTimer = null;
@@ -6546,6 +6589,80 @@ function restoreOverlayDetailsState(panel=$("overlayControlPanel")){
   });
 }
 
+function replayFolderEndpoint(pathname="/api/replay-folder"){
+  return location.protocol.startsWith("http")
+    ? `${location.origin}${pathname}`
+    : `http://127.0.0.1:8765${pathname}`;
+}
+
+function replayFolderStatusClass(){
+  if(replayFolderStatus.ok) return "ready";
+  if(["invalid","folder-unavailable"].includes(replayFolderStatus.status)) return "error";
+  return "";
+}
+
+function replayFolderStatusText(){
+  if(!replayFolderStatusLoaded && replayFolderStatus.status === "checking") return "Checking replay folder...";
+  return replayFolderStatus.message || "Replay folder not set";
+}
+
+function applyReplayFolderStatus(){
+  const el = $("overlayReplayFolderStatus");
+  if(!el) return;
+  el.textContent = replayFolderStatusText();
+  el.title = replayFolderStatus.path || replayFolderStatus.message || "";
+  el.className = `overlayReplayFolderStatus ${replayFolderStatusClass()}`.trim();
+}
+
+async function refreshReplayFolderStatus({renderControl=false}={}){
+  try{
+    const response = await fetch(replayFolderEndpoint(), {cache:"no-store"});
+    const json = await response.json().catch(()=>({}));
+    replayFolderStatus = json && typeof json === "object" ? json : {ok:false, status:"missing", message:"Replay folder not set", path:""};
+  }catch{
+    replayFolderStatus = {ok:false, status:"offline", message:"Start SPARK to link a replay folder.", path:""};
+  }
+  replayFolderStatusLoaded = true;
+  if(renderControl && (activeView === "overlay" || selected === "overlayControl")) renderOverlayControl();
+  else applyReplayFolderStatus();
+}
+
+async function chooseReplayFolder(){
+  markOverlayControlInteraction(5000);
+  replayFolderStatus = {ok:false, status:"checking", message:"Opening folder picker...", path:replayFolderStatus.path || ""};
+  applyReplayFolderStatus();
+  let result = null;
+  try{
+    const response = await fetch(replayFolderEndpoint("/api/replay-folder/pick"), {method:"POST", cache:"no-store"});
+    result = await response.json().catch(()=>null);
+    if(!response.ok && result?.message) throw new Error(result.message);
+  }catch(error){
+    const manualPath = prompt(`${error?.message || "Could not open the folder picker."}\nPaste the replay folder path:`);
+    if(!manualPath){
+      replayFolderStatus = {ok:false, status:"cancelled", message:"Replay folder not changed", path:replayFolderStatus.path || ""};
+      applyReplayFolderStatus();
+      return;
+    }
+    try{
+      const response = await fetch(replayFolderEndpoint(), {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({path:manualPath}),
+        cache:"no-store"
+      });
+      result = await response.json().catch(()=>null);
+      if(!response.ok && result?.message) throw new Error(result.message);
+    }catch(setError){
+      replayFolderStatus = {ok:false, status:"invalid", message:setError?.message || "Replay folder could not be set", path:manualPath};
+      applyReplayFolderStatus();
+      return;
+    }
+  }
+  replayFolderStatus = result && typeof result === "object" ? result : {ok:false, status:"missing", message:"Replay folder not set", path:""};
+  replayFolderStatusLoaded = true;
+  renderOverlayControl();
+}
+
 function renderOverlayFontSelect(id, value){
   return `<select class="overlaySelect" id="${id}">
     ${overlayFontOptions().map(option=>`<option value="${escapeHtml(option.value)}" ${value===option.value?"selected":""}>${escapeHtml(option.label)}</option>`).join("")}
@@ -6669,6 +6786,16 @@ function renderOverlayControl(){
           <div class="overlayPreviewSeries">${escapeHtml(overlaySeriesLabel())}</div>
           <div class="overlayPreviewTeam right"><span>${escapeHtml(orangeName)}</span>${orangeLogo ? `<img src="${escapeHtml(orangeLogo)}" alt="">` : ""}</div>
         </div>
+
+        <details class="overlayCategory" open>
+          <summary>Replay Folder</summary>
+          <div class="overlayCategoryBody">
+            <div class="overlayReplayFolderTools">
+              <button type="button" id="overlayReplayFolderButton">Link Replay Folder</button>
+              <div class="overlayReplayFolderStatus ${replayFolderStatusClass()}" id="overlayReplayFolderStatus" title="${escapeHtml(replayFolderStatus.path || "")}">${escapeHtml(replayFolderStatusText())}</div>
+            </div>
+          </div>
+        </details>
 
         <details class="overlayCategory" open>
           <summary>Series Controls</summary>
@@ -6897,6 +7024,8 @@ function renderOverlayControl(){
   bind("overlayOrangeLogoInput","orangeLogoUrl");
   bind("overlayBestOfInput","seriesBestOf","change");
   bind("overlaySeriesTitleInput","seriesTitle","input");
+  const replayFolderButton = $("overlayReplayFolderButton");
+  if(replayFolderButton) replayFolderButton.addEventListener("click", chooseReplayFolder);
   bindColor("overlayTextColorInput","overlayTextColor");
   bindColor("overlayAccentColorInput","overlayAccentColor");
   bindColor("overlayBlueBoostColorInput","overlayBlueBoostColor");
@@ -13675,6 +13804,9 @@ document.addEventListener("touchmove", event=>{
 window.addEventListener("resize", ()=>updateSparkScrollThumb(sparkScrollTarget, false));
 window.addEventListener("resize", ()=>scheduleTileLayoutSettle(4));
 requestAnimationFrame(()=>updateSparkScrollThumb(window, false));
+if(!isObsOverlayMode){
+  refreshReplayFolderStatus();
+}
 if(!isObsOverlayMode && location.protocol.startsWith("http")){
   setInterval(()=>{
     if(activeView !== "overlay" && selected !== "overlayControl") return;
