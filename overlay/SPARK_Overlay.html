@@ -2298,7 +2298,8 @@ function finalHeatmapGridStyle(count){
   const safeCount = Math.max(1, Math.min(4, Number(count) || 1));
   if(safeCount === 1) return `--heatmap-count:1;grid-template-columns:minmax(0,520px)`;
   if(safeCount === 2) return `--heatmap-count:2;grid-template-columns:repeat(2,minmax(0,420px))`;
-  return `--heatmap-count:${safeCount};grid-template-columns:repeat(${safeCount},minmax(0,1fr))`;
+  if(safeCount === 3) return `--heatmap-count:3;grid-template-columns:repeat(3,minmax(0,390px))`;
+  return `--heatmap-count:${safeCount};grid-template-columns:repeat(${safeCount},minmax(0,320px))`;
 }
 
 function renderHeatmapTeam(players, team, label){
