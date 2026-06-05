@@ -980,6 +980,12 @@ html,body{
   border-radius:10px;
   box-shadow:0 22px 48px rgba(0,0,0,.50), inset 0 0 48px rgba(255,208,0,.08);
 }
+.finalHeatmapReport.sideBySide{
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:1fr;
+  gap:18px;
+  padding:17px 22px 19px;
+}
 .finalHeatmapTeam{
   display:grid;
   grid-template-rows:auto 1fr;
@@ -1010,6 +1016,14 @@ html,body{
 .finalHeatmapTeam.orange .finalHeatmapTeamTitle::after{
   background:linear-gradient(270deg,var(--team),transparent);
 }
+.finalHeatmapReport.sideBySide .finalHeatmapTeam{
+  padding:0 8px;
+  border-radius:8px;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--team) 10%,transparent),transparent 46%);
+}
+.finalHeatmapReport.sideBySide .finalHeatmapTeam.orange{
+  background:linear-gradient(270deg,color-mix(in srgb,var(--team) 10%,transparent),transparent 46%);
+}
 .finalHeatmapGrid{
   display:grid;
   grid-template-columns:repeat(var(--heatmap-count,3),minmax(0,1fr));
@@ -1019,6 +1033,13 @@ html,body{
   min-height:0;
   overflow:hidden;
 }
+.finalHeatmapReport.sideBySide .finalHeatmapGrid{
+  grid-template-columns:minmax(0,1fr) !important;
+  grid-template-rows:repeat(var(--heatmap-count,1),minmax(0,1fr));
+  align-items:stretch;
+  justify-items:center;
+  gap:14px;
+}
 .finalHeatmapGrid .finalHeatmapEmpty{grid-column:1 / -1}
 .finalHeatmapCard{
   min-width:0;
@@ -1027,6 +1048,14 @@ html,body{
   grid-template-rows:auto 1fr;
   gap:7px;
   overflow:hidden;
+}
+.finalHeatmapReport.sideBySide .finalHeatmapCard{
+  width:min(100%,430px);
+  grid-template-rows:24px minmax(0,1fr);
+  gap:8px;
+}
+.finalHeatmapReport.sideBySide .finalHeatmapGrid.heatmapCount1 .finalHeatmapCard{
+  width:min(100%,720px);
 }
 .finalHeatmapName{
   min-width:0;
@@ -1054,6 +1083,9 @@ html,body{
     rgba(4,7,10,.94);
   box-shadow:inset 0 0 22px color-mix(in srgb,var(--team) 10%,transparent),0 8px 18px rgba(0,0,0,.22);
   overflow:hidden;
+}
+.finalHeatmapReport.sideBySide .finalHeatmapField{
+  max-height:100%;
 }
 .finalHeatmapField::before{
   content:"";
@@ -2229,8 +2261,8 @@ function renderPlayerHeatmapCanvas(player, index){
 
 function finalHeatmapGridStyle(count){
   const safeCount = Math.max(1, Math.min(4, Number(count) || 1));
-  if(safeCount === 1) return `--heatmap-count:1;grid-template-columns:minmax(0,420px)`;
-  if(safeCount === 2) return `--heatmap-count:2;grid-template-columns:repeat(2,minmax(0,350px))`;
+  if(safeCount === 1) return `--heatmap-count:1;grid-template-columns:minmax(0,520px)`;
+  if(safeCount === 2) return `--heatmap-count:2;grid-template-columns:repeat(2,minmax(0,420px))`;
   return `--heatmap-count:${safeCount};grid-template-columns:repeat(${safeCount},minmax(0,1fr))`;
 }
 
@@ -2245,7 +2277,7 @@ function renderHeatmapTeam(players, team, label){
     : `<div class="finalHeatmapEmpty">No ${escapeHtml(label)} position samples found in this replay.</div>`;
   return `<div class="finalHeatmapTeam ${team.toLowerCase()}">
     <div class="finalHeatmapTeamTitle"><span>${escapeHtml(label)}</span></div>
-    <div class="finalHeatmapGrid" style="${finalHeatmapGridStyle(count)}">${cards}</div>
+    <div class="finalHeatmapGrid heatmapCount${count}" style="${finalHeatmapGridStyle(count)}">${cards}</div>
   </div>`;
 }
 
@@ -2254,7 +2286,10 @@ function renderFinalHeatmapReport(config){
   if(!heatmap?.players?.length) return `<div class="finalHeatmapEmpty">No replay heatmap data found for this match.</div>`;
   const blueName = config.blueTeamName || state.teams.Blue.name || "Blue";
   const orangeName = config.orangeTeamName || state.teams.Orange.name || "Orange";
-  return `<div class="finalHeatmapReport">
+  const blueCount = heatmap.players.filter(player=>player.team === "Blue").length;
+  const orangeCount = heatmap.players.filter(player=>player.team === "Orange").length;
+  const sideBySide = Math.max(blueCount, orangeCount) <= 2;
+  return `<div class="finalHeatmapReport ${sideBySide ? "sideBySide" : ""}">
     ${renderHeatmapTeam(heatmap.players, "Blue", blueName)}
     ${renderHeatmapTeam(heatmap.players, "Orange", orangeName)}
   </div>`;
