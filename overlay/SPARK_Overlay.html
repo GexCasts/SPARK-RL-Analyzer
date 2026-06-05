@@ -1013,18 +1013,47 @@ html,body{
   width:100%;
   min-height:0;
   aspect-ratio:1748 / 1147;
-  border:1px solid color-mix(in srgb,var(--team) 46%,rgba(248,243,222,.18));
+  border:1px solid color-mix(in srgb,var(--team) 38%,rgba(248,243,222,.15));
   border-radius:6px;
-  background:#05080c url("../assets/Field%20background.png") center / 100% 100% no-repeat;
-  box-shadow:inset 0 0 24px color-mix(in srgb,var(--team) 13%,transparent);
+  background:
+    radial-gradient(circle at 50% 50%,rgba(248,243,222,.08),transparent 18%),
+    linear-gradient(90deg,rgba(27,140,255,.10),rgba(248,243,222,.028) 49%,rgba(248,243,222,.035) 51%,rgba(255,132,0,.10)),
+    rgba(4,7,10,.94);
+  box-shadow:inset 0 0 22px color-mix(in srgb,var(--team) 10%,transparent),0 8px 18px rgba(0,0,0,.22);
   overflow:hidden;
+}
+.finalHeatmapField::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:0;
+  background:
+    radial-gradient(circle at 50% 50%,transparent 0 11%,rgba(248,243,222,.18) 11.3% 11.8%,transparent 12.1%),
+    linear-gradient(90deg,transparent 49.72%,rgba(248,243,222,.23) 49.85% 50.15%,transparent 50.28%),
+    linear-gradient(0deg,transparent 8.8%,rgba(248,243,222,.11) 9% 9.35%,transparent 9.55% 90.45%,rgba(248,243,222,.11) 90.65% 91%,transparent 91.2%),
+    linear-gradient(90deg,rgba(27,140,255,.50),rgba(27,140,255,.13) 22%,rgba(248,243,222,.055) 48%,rgba(248,243,222,.055) 52%,rgba(255,132,0,.13) 78%,rgba(255,132,0,.50)),
+    rgba(6,9,12,.98);
+  opacity:.96;
+  transform:scale(1.035);
+  transform-origin:center;
+  -webkit-mask-image:url("../assets/Field-mask.png");
+  mask-image:url("../assets/Field-mask.png");
+  -webkit-mask-size:100% 100%;
+  mask-size:100% 100%;
+  -webkit-mask-repeat:no-repeat;
+  mask-repeat:no-repeat;
+  -webkit-mask-position:center;
+  mask-position:center;
 }
 .finalHeatmapField::after{
   content:"";
   position:absolute;
   inset:0;
+  z-index:1;
   pointer-events:none;
-  background:linear-gradient(90deg,rgba(27,140,255,.12),transparent 46% 54%,rgba(255,132,0,.12));
+  background:
+    radial-gradient(circle at 50% 50%,rgba(255,208,0,.13),transparent 18%),
+    linear-gradient(90deg,rgba(27,140,255,.16),transparent 44% 56%,rgba(255,132,0,.16));
   mix-blend-mode:screen;
 }
 .finalHeatmapCanvas{
@@ -1033,6 +1062,8 @@ html,body{
   z-index:2;
   width:100%;
   height:100%;
+  transform:scale(.944);
+  transform-origin:center;
   pointer-events:none;
   -webkit-mask-image:url("../assets/Field-mask.png");
   mask-image:url("../assets/Field-mask.png");
@@ -1188,7 +1219,8 @@ const state = {
   teams:{Blue:{name:"Blue",score:0},Orange:{name:"Orange",score:0}},
   players:new Map(),
   focusedPlayerName:null,
-  liveStatsUnlocked:false
+  liveStatsUnlocked:false,
+  finalExitTransitioning:false
 };
 let serverConfig = null;
 let stingerTimer = null;
@@ -1870,7 +1902,8 @@ function payloadHasKickoffCountdown(payload){
   const countdown = toNumber(value, NaN);
   return Number.isFinite(countdown) && countdown > 0 && countdown <= 10;
 }
-function resetForNextMatch(){
+function resetForNextMatch(options={}){
+  const preserveActiveTransition = !!options.preserveActiveTransition;
   resetAllMaskTickers();
   state.replay = false;
   state.matchEnded = false;
@@ -1888,21 +1921,24 @@ function resetForNextMatch(){
   state.players.clear();
   state.focusedPlayerName = null;
   state.liveStatsUnlocked = false;
+  state.finalExitTransitioning = false;
   if(finalTransitionQueueTimer){
     clearTimeout(finalTransitionQueueTimer);
     finalTransitionQueueTimer = null;
   }
-  if(finalTransitionTimer){
-    clearTimeout(finalTransitionTimer);
-    finalTransitionTimer = null;
-  }
-  if(stingerTimer){
-    clearTimeout(stingerTimer);
-    stingerTimer = null;
-  }
-  if(stingerFallbackTimer){
-    clearTimeout(stingerFallbackTimer);
-    stingerFallbackTimer = null;
+  if(!preserveActiveTransition){
+    if(finalTransitionTimer){
+      clearTimeout(finalTransitionTimer);
+      finalTransitionTimer = null;
+    }
+    if(stingerTimer){
+      clearTimeout(stingerTimer);
+      stingerTimer = null;
+    }
+    if(stingerFallbackTimer){
+      clearTimeout(stingerFallbackTimer);
+      stingerFallbackTimer = null;
+    }
   }
   if(replayHeatmapLookupTimer){
     clearTimeout(replayHeatmapLookupTimer);
@@ -1912,11 +1948,13 @@ function resetForNextMatch(){
     clearTimeout(replayHeatmapRevealTimer);
     replayHeatmapRevealTimer = null;
   }
-  finalTransitionRunId += 1;
+  if(!preserveActiveTransition) finalTransitionRunId += 1;
   replayHeatmapRunId += 1;
   const stinger = $("stingerTransition");
-  stinger?.classList.remove("active");
-  try{ stinger?.pause(); }catch{}
+  if(!preserveActiveTransition){
+    stinger?.classList.remove("active");
+    try{ stinger?.pause(); }catch{}
+  }
   $("finalScreen")?.classList.remove("heatmapActive");
 }
 function normalizeMessage(raw){
@@ -2501,6 +2539,20 @@ function unlockLiveStatsIfFocused(focusName){
   if(hasPlayer) state.liveStatsUnlocked = true;
 }
 
+function beginNextMatchResetTransition(){
+  if(state.finalExitTransitioning) return true;
+  if(!state.finalVisible || personalOverlayMode){
+    resetForNextMatch();
+    return false;
+  }
+  state.finalExitTransitioning = true;
+  playFinalTransition(readConfig(), ()=>{
+    resetForNextMatch({preserveActiveTransition:true});
+    render();
+  });
+  return true;
+}
+
 function playFinalTransition(config, onCut=revealFinalScreen){
   const stage = $("stage");
   const stinger = $("stingerTransition");
@@ -2677,7 +2729,7 @@ function handleMessage(raw){
   const incomingClockState = gameClockState(msg.payload);
   const incomingClock = incomingClockState.clock;
   const messageEndsMatch = matchEndedFlag(msg.payload, msg.event);
-  if(nextMatchLooksReady(msg.payload, eventName, incomingClock, messageEndsMatch)) resetForNextMatch();
+  if(nextMatchLooksReady(msg.payload, eventName, incomingClock, messageEndsMatch) && beginNextMatchResetTransition()) return;
   const firstMatchEnd = messageEndsMatch && !state.matchEnded;
   if(messageEndsMatch){
     state.replay = false;
@@ -2692,7 +2744,7 @@ function handleMessage(raw){
     unlockLiveStatsIfFocused(focusName);
   }
   if(state.matchEnded && !messageEndsMatch && nextMatchStartEvent(eventName)){
-    resetForNextMatch();
+    if(beginNextMatchResetTransition()) return;
   }
   if(eventName.includes("ballhit")){
     const hitPlayer = playerNameFromValue(firstDefined(valueByKey(msg.payload,["Player","player","playerName","PlayerName","lastTouchPlayer","LastTouchPlayer"]), msg.payload?.BallLastTouch?.Player, msg.payload?.ballLastTouch?.player));
