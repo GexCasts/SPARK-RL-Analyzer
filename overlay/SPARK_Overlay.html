@@ -110,11 +110,25 @@ html,body{
   transform:translateY(-.045em);
 }
 .maskSlot.clock{
+  isolation:isolate;
   font-family:var(--mask-timer-font,var(--overlay-font));
   font-size:calc(var(--slot-font,44px) * var(--mask-timer-scale,1));
   color:var(--mask-timer-color,#fffdf3);
   letter-spacing:.02em;
 }
+.maskSlot.clock::before{
+  content:"";
+  position:absolute;
+  inset:-8px;
+  z-index:-1;
+  border-radius:999px;
+  background:rgba(80,0,0,.95);
+  box-shadow:0 0 18px rgba(128,0,0,.62), inset 0 0 18px rgba(255,72,48,.16);
+  opacity:0;
+  filter:blur(2px);
+  transition:opacity .18s cubic-bezier(.22,1,.36,1);
+}
+.stage.overtime .maskSlot.clock::before{opacity:1}
 .maskSlot.teamName{
   padding:0 12px;
   font-family:var(--mask-team-font,var(--overlay-font));
@@ -251,12 +265,27 @@ html,body{
 }
 .clock{
   grid-column:2;
+  position:relative;
+  isolation:isolate;
   font-family:var(--mask-timer-font,var(--overlay-font));
   font-size:calc(36px * var(--mask-timer-scale,1));
   font-weight:950;
   line-height:1;
   color:var(--mask-timer-color,#fffdf3);
 }
+.clock::before{
+  content:"";
+  position:absolute;
+  inset:-11px -18px;
+  z-index:-1;
+  border-radius:999px;
+  background:rgba(80,0,0,.95);
+  box-shadow:0 0 20px rgba(128,0,0,.68), inset 0 0 18px rgba(255,72,48,.18);
+  opacity:0;
+  filter:blur(2px);
+  transition:opacity .18s cubic-bezier(.22,1,.36,1);
+}
+.stage.overtime .clock::before{opacity:1}
 .match{
   grid-column:1/4;
   grid-row:2;
@@ -1152,6 +1181,10 @@ const state = {
   heatmapVisible:false,
   replayHeatmap:null,
   clock:300,
+  overtime:false,
+  overtimeSeconds:0,
+  overtimeStartedAt:null,
+  overtimeUpdatedAt:null,
   teams:{Blue:{name:"Blue",score:0},Orange:{name:"Orange",score:0}},
   players:new Map(),
   focusedPlayerName:null,
@@ -1263,6 +1296,16 @@ function formatClock(seconds){
   const m = Math.floor(rounded / 60);
   const s = rounded % 60;
   return `${m}:${String(s).padStart(2,"0")}`;
+}
+function currentOvertimeSeconds(){
+  if(!state.overtime) return 0;
+  const base = Math.max(0, Number(state.overtimeSeconds) || 0);
+  const updatedAt = Number(state.overtimeUpdatedAt);
+  if(!Number.isFinite(updatedAt) || updatedAt <= 0) return base;
+  return base + Math.max(0, (Date.now() - updatedAt) / 1000);
+}
+function overlayClockText(){
+  return state.overtime ? `+${formatClock(currentOvertimeSeconds())}` : formatClock(state.clock);
 }
 function overlayGameLabel(config){
   const bestOf = Number(config.seriesBestOf) || 5;
@@ -1589,7 +1632,7 @@ function renderCustomScoreboard(config){
   const title = String(config.seriesTitle || overlayGameLabel(config)).trim();
   setMaskSlot("maskBlueScore", scoreRegions[0], {fontScale:.82, maxFont:86, text:scoreText(state.teams.Blue.score)});
   setMaskSlot("maskOrangeScore", scoreRegions[scoreRegions.length - 1], {fontScale:.82, maxFont:86, text:scoreText(state.teams.Orange.score)});
-  setMaskSlot("maskClock", clockRegion, {fontScale:.7, charScale:.52, maxFont:72, text:formatClock(state.clock)});
+  setMaskSlot("maskClock", clockRegion, {fontScale:.7, charScale:.52, maxFont:72, text:overlayClockText()});
   setMaskSlot("maskBlueName", nameRegions[0], {pad:8, fontScale:.72, charScale:.6, maxFont:58, text:blueName});
   setMaskSlot("maskOrangeName", nameRegions[nameRegions.length - 1], {pad:8, fontScale:.72, charScale:.6, maxFont:58, text:orangeName});
   setMaskSlot("maskBlueSeries", seriesRegions[0], {pad:6});
@@ -1750,6 +1793,43 @@ function gameClock(payload){
   );
   return direct !== undefined ? toNumber(direct, null) : null;
 }
+function gameClockState(payload){
+  const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
+  const direct = firstDefined(
+    valueByKey(payload,["gameSecondsRemaining","GameSecondsRemaining","secondsRemaining","SecondsRemaining","timeRemaining","TimeRemaining"]),
+    valueByKey(payload,["TimeSeconds","timeSeconds"]),
+    valueByKey(game,["gameSecondsRemaining","GameSecondsRemaining","TimeSeconds","timeSeconds","secondsRemaining","timeRemaining"])
+  );
+  const clock = direct !== undefined ? toNumber(direct, null) : null;
+  const overtimeFlag = firstDefined(
+    valueByKey(payload,["bOvertime","Overtime","overtime","isOvertime","IsOvertime","bIsOvertime"]),
+    valueByKey(game,["bOvertime","Overtime","overtime","isOvertime","IsOvertime","bIsOvertime"])
+  );
+  const overtimeSecondsValue = firstDefined(
+    valueByKey(payload,["overtimeSeconds","OvertimeSeconds","otSeconds","OTSeconds"]),
+    valueByKey(game,["overtimeSeconds","OvertimeSeconds","otSeconds","OTSeconds"])
+  );
+  const elapsedValue = firstDefined(
+    valueByKey(payload,["elapsedSeconds","ElapsedSeconds","gameElapsedSeconds","GameElapsedSeconds"]),
+    valueByKey(game,["elapsedSeconds","ElapsedSeconds","gameElapsedSeconds","GameElapsedSeconds"])
+  );
+  const overtimeSeconds = toNumber(overtimeSecondsValue, NaN);
+  const elapsed = toNumber(elapsedValue, NaN);
+  const explicitOvertime = overtimeFlag !== undefined && toBoolean(overtimeFlag);
+  const overtimeSecondsKnown = Number.isFinite(overtimeSeconds) ||
+    (Number.isFinite(clock) && clock < 0) ||
+    (Number.isFinite(clock) && clock > 300) ||
+    (Number.isFinite(elapsed) && elapsed > 300);
+  const inferredOvertime = overtimeSecondsKnown;
+  const overtime = explicitOvertime || inferredOvertime;
+  let otSeconds = 0;
+  if(Number.isFinite(overtimeSeconds)) otSeconds = overtimeSeconds;
+  else if(Number.isFinite(clock) && clock < 0) otSeconds = Math.abs(clock);
+  else if(Number.isFinite(clock) && clock > 300) otSeconds = clock - 300;
+  else if(Number.isFinite(elapsed) && elapsed > 300) otSeconds = elapsed - 300;
+  else if(overtime && Number.isFinite(clock) && clock > 0 && clock < 900) otSeconds = clock;
+  return {clock, overtime, overtimeSeconds:Math.max(0, otSeconds), overtimeSecondsKnown};
+}
 function replayFlag(payload){
   const direct = firstDefined(
     valueByKey(payload,["bReplay","replay","Replay","goalReplay","GoalReplay","bGoalReplay"]),
@@ -1799,6 +1879,10 @@ function resetForNextMatch(){
   state.heatmapVisible = false;
   state.replayHeatmap = null;
   state.clock = 300;
+  state.overtime = false;
+  state.overtimeSeconds = 0;
+  state.overtimeStartedAt = null;
+  state.overtimeUpdatedAt = null;
   state.teams.Blue.score = 0;
   state.teams.Orange.score = 0;
   state.players.clear();
@@ -2552,6 +2636,7 @@ function render(){
   stage.classList.toggle("replayActive", !!state.replay);
   stage.classList.toggle("finalActive", !!state.finalVisible && !personalOverlayMode);
   stage.classList.toggle("liveStatsUnlocked", !!state.liveStatsUnlocked);
+  stage.classList.toggle("overtime", !!state.overtime);
   const tournamentLogo = $("tournamentLogo");
   const hasTournamentLogo = !!String(config.tournamentLogoUrl || "").trim();
   stage.classList.toggle("hasTournamentLogo", hasTournamentLogo);
@@ -2571,7 +2656,7 @@ function render(){
   $("orangeLogo").src = orangeLogo || "";
   $("blueScore").textContent = scoreText(state.teams.Blue.score);
   $("orangeScore").textContent = scoreText(state.teams.Orange.score);
-  $("clock").textContent = formatClock(state.clock);
+  $("clock").textContent = overlayClockText();
   $("matchTag").textContent = state.updates ? `${overlayGameLabel(config)}     Best of ${Number(config.seriesBestOf) || 5}` : "Waiting for feed";
   $("blueSeries").innerHTML = renderDots("Blue", config);
   $("orangeSeries").innerHTML = renderDots("Orange", config);
@@ -2589,7 +2674,8 @@ function handleMessage(raw){
   state.connected = true;
   state.updates++;
   const eventName = compactEventName(msg.event);
-  const incomingClock = gameClock(msg.payload);
+  const incomingClockState = gameClockState(msg.payload);
+  const incomingClock = incomingClockState.clock;
   const messageEndsMatch = matchEndedFlag(msg.payload, msg.event);
   if(nextMatchLooksReady(msg.payload, eventName, incomingClock, messageEndsMatch)) resetForNextMatch();
   const firstMatchEnd = messageEndsMatch && !state.matchEnded;
@@ -2630,7 +2716,24 @@ function handleMessage(raw){
     }
   }
   const clock = incomingClock;
-  if(clock !== null) state.clock = clock;
+  if(clock !== null){
+    state.clock = clock;
+  }
+  if(clock !== null || incomingClockState.overtime){
+    const wasOvertime = !!state.overtime;
+    state.overtime = !!incomingClockState.overtime;
+    if(state.overtime){
+      if(!wasOvertime) state.overtimeStartedAt = Date.now();
+      if(incomingClockState.overtimeSecondsKnown || !wasOvertime){
+        state.overtimeSeconds = Number(incomingClockState.overtimeSeconds) || 0;
+        state.overtimeUpdatedAt = Date.now();
+      }
+    }else{
+      state.overtimeSeconds = 0;
+      state.overtimeStartedAt = null;
+      state.overtimeUpdatedAt = null;
+    }
+  }
   const replay = replayFlag(msg.payload);
   if(replay !== null) state.replay = replay;
   if(eventName.includes("goalreplay")) state.replay = !(eventName.includes("ended") || eventName.endsWith("end") || eventName.includes("willend"));
