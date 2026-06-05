@@ -390,7 +390,7 @@ html,body{
   right:0;
   bottom:0;
   height:86px;
-  padding:22px 440px 0;
+  padding:14px 470px 0;
   background:
     linear-gradient(90deg,transparent 0 28%,rgba(255,208,0,.92) 28% 72%,transparent 72% 100%),
     linear-gradient(180deg,transparent,rgba(5,6,9,.82) 42%,rgba(5,6,9,.96));
@@ -406,38 +406,57 @@ html,body{
 }
 .replayContent{
   min-width:0;
-  display:flex;
-  flex-wrap:wrap;
-  justify-content:center;
+  display:grid;
+  grid-template-rows:28px 23px;
   align-items:center;
-  gap:24px;
+  justify-items:center;
+  gap:2px;
+}
+.replayContent.soloTitle{
+  grid-template-rows:52px;
 }
 .replayTitle{
-  color:#050609;
-  font-size:22px;
+  color:#201707;
+  font-size:21px;
   font-weight:1000;
-  letter-spacing:.18em;
+  letter-spacing:.2em;
+  text-shadow:0 1px rgba(255,255,255,.22),0 2px 8px rgba(255,208,0,.22);
+}
+.replayDetails{
+  width:min(100%,560px);
+  min-width:0;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  align-items:center;
+  gap:28px;
+}
+.replayDetails.solo{
+  grid-template-columns:minmax(0,1fr);
+  width:min(100%,340px);
 }
 .replayMeta{
   min-width:0;
   display:flex;
   align-items:baseline;
+  justify-content:center;
   gap:8px;
-  color:#050609;
-  font-size:16px;
-  letter-spacing:.04em;
+  color:#241903;
+  font-size:15px;
+  letter-spacing:.035em;
+  text-shadow:0 1px rgba(255,255,255,.18),0 2px 7px rgba(255,208,0,.18);
 }
 .replayMeta b{
-  color:#050609;
-  font-size:13px;
+  color:#463109;
+  font-size:12px;
   letter-spacing:.09em;
-  opacity:.68;
+  opacity:.76;
 }
 .replayMeta span{
-  max-width:260px;
+  max-width:190px;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
+  font-weight:1000;
 }
 .stage.replayActive .replay{display:block}
 .stage.replayActive .boosts,
@@ -2095,13 +2114,15 @@ function renderReplayBanner(){
   const scorer = cleanName(state.goalReplay?.scorer);
   const assist = cleanName(state.goalReplay?.assist);
   if(!scorer){
-    banner.innerHTML = `<div class="replayContent"><div class="replayTitle">Replay</div></div>`;
+    banner.innerHTML = `<div class="replayContent soloTitle"><div class="replayTitle">Replay</div></div>`;
     return;
   }
   banner.innerHTML = `<div class="replayContent">
-    <div class="replayTitle">Goal Replay</div>
-    <div class="replayMeta"><b>Scored By:</b><span>${escapeHtml(scorer)}</span></div>
-    ${assist ? `<div class="replayMeta"><b>Assist:</b><span>${escapeHtml(assist)}</span></div>` : ""}
+    <div class="replayTitle">Replay</div>
+    <div class="replayDetails ${assist ? "" : "solo"}">
+      <div class="replayMeta"><b>Scored By:</b><span>${escapeHtml(scorer)}</span></div>
+      ${assist ? `<div class="replayMeta"><b>Assist:</b><span>${escapeHtml(assist)}</span></div>` : ""}
+    </div>
   </div>`;
 }
 function allPlayersForCard(){
