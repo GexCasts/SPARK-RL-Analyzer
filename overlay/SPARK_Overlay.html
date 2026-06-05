@@ -953,6 +953,7 @@ html,body{
   display:grid;
   grid-template-rows:auto 1fr;
   gap:7px;
+  overflow:hidden;
 }
 .finalHeatmapName{
   min-width:0;
@@ -2007,8 +2008,8 @@ function renderPlayerHeatmapCanvas(player, index){
 
 function finalHeatmapGridStyle(count){
   const safeCount = Math.max(1, Math.min(4, Number(count) || 1));
-  if(safeCount === 1) return `--heatmap-count:1;grid-template-columns:minmax(0,34%)`;
-  if(safeCount === 2) return `--heatmap-count:2;grid-template-columns:repeat(2,minmax(0,34%))`;
+  if(safeCount === 1) return `--heatmap-count:1;grid-template-columns:minmax(0,420px)`;
+  if(safeCount === 2) return `--heatmap-count:2;grid-template-columns:repeat(2,minmax(0,350px))`;
   return `--heatmap-count:${safeCount};grid-template-columns:repeat(${safeCount},minmax(0,1fr))`;
 }
 
@@ -2366,9 +2367,10 @@ function scheduleRecentReplayHeatmap(){
   const runId = ++replayHeatmapRunId;
   let report = null;
   let lookupComplete = false;
+  let revealWindowOpen = false;
   const revealIfReady = ()=>{
     if(runId !== replayHeatmapRunId || !state.matchEnded || !state.finalVisible) return;
-    if(!lookupComplete || !report?.players?.length) return;
+    if(!revealWindowOpen || !lookupComplete || !report?.players?.length) return;
     state.replayHeatmap = report;
     state.heatmapVisible = true;
     render();
@@ -2390,7 +2392,7 @@ function scheduleRecentReplayHeatmap(){
   }, 9000);
   replayHeatmapRevealTimer = setTimeout(()=>{
     replayHeatmapRevealTimer = null;
-    lookupComplete = true;
+    revealWindowOpen = true;
     revealIfReady();
   }, 12000);
 }
