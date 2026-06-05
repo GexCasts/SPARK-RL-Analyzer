@@ -700,7 +700,7 @@ html,body{
 }
 .finalHeader{
   display:grid;
-  grid-template-columns:1fr auto;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
   align-items:center;
   gap:24px;
 }
@@ -714,10 +714,32 @@ html,body{
   text-shadow:0 0 24px rgba(255,208,0,.34);
 }
 .finalSeries{
+  justify-self:end;
   color:rgba(248,243,222,.78);
   font-size:19px;
   font-weight:900;
   text-transform:uppercase;
+}
+.finalTournamentMark{
+  display:none;
+  align-items:center;
+  justify-content:center;
+  width:150px;
+  height:54px;
+  padding:7px 14px;
+  border:1px solid rgba(255,208,0,.32);
+  border-radius:8px;
+  background:
+    linear-gradient(180deg,rgba(248,243,222,.075),rgba(8,9,10,.64)),
+    radial-gradient(circle at 50% 50%,rgba(255,208,0,.12),transparent 72%);
+  box-shadow:0 12px 28px rgba(0,0,0,.32), inset 0 0 18px rgba(255,208,0,.08);
+}
+.finalTournamentMark.active{display:flex}
+.finalTournamentMark img{
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+  filter:drop-shadow(0 3px 7px rgba(0,0,0,.52));
 }
 .finalScore{
   display:grid;
@@ -1094,13 +1116,13 @@ html,body{
   width:100%;
   min-height:0;
   aspect-ratio:1748 / 1147;
-  border:1px solid color-mix(in srgb,var(--team) 38%,rgba(248,243,222,.15));
-  border-radius:6px;
+  border:1px solid color-mix(in srgb,var(--team) 42%,rgba(248,243,222,.18));
+  border-radius:5px;
   background:
-    radial-gradient(circle at 50% 50%,rgba(248,243,222,.08),transparent 18%),
-    linear-gradient(90deg,rgba(27,140,255,.10),rgba(248,243,222,.028) 49%,rgba(248,243,222,.035) 51%,rgba(255,132,0,.10)),
+    linear-gradient(180deg,rgba(248,243,222,.035),rgba(8,9,10,.05)),
+    url("../assets/Field background.png") center / 100% 100% no-repeat,
     rgba(4,7,10,.94);
-  box-shadow:inset 0 0 22px color-mix(in srgb,var(--team) 10%,transparent),0 8px 18px rgba(0,0,0,.22);
+  box-shadow:inset 0 0 18px rgba(8,9,10,.42),0 8px 18px rgba(0,0,0,.22);
   overflow:hidden;
 }
 .finalHeatmapReport.sideBySide .finalHeatmapField{
@@ -1111,15 +1133,8 @@ html,body{
   position:absolute;
   inset:0;
   z-index:0;
-  background:
-    radial-gradient(circle at 50% 50%,transparent 0 11%,rgba(248,243,222,.18) 11.3% 11.8%,transparent 12.1%),
-    linear-gradient(90deg,transparent 49.72%,rgba(248,243,222,.23) 49.85% 50.15%,transparent 50.28%),
-    linear-gradient(0deg,transparent 8.8%,rgba(248,243,222,.11) 9% 9.35%,transparent 9.55% 90.45%,rgba(248,243,222,.11) 90.65% 91%,transparent 91.2%),
-    linear-gradient(90deg,rgba(27,140,255,.50),rgba(27,140,255,.13) 22%,rgba(248,243,222,.055) 48%,rgba(248,243,222,.055) 52%,rgba(255,132,0,.13) 78%,rgba(255,132,0,.50)),
-    rgba(6,9,12,.98);
-  opacity:.96;
-  transform:scale(1.035);
-  transform-origin:center;
+  background:linear-gradient(90deg,rgba(27,140,255,.10),transparent 38% 62%,rgba(255,132,0,.10));
+  opacity:.88;
   -webkit-mask-image:url("../assets/Field-mask.png");
   mask-image:url("../assets/Field-mask.png");
   -webkit-mask-size:100% 100%;
@@ -1136,8 +1151,8 @@ html,body{
   z-index:1;
   pointer-events:none;
   background:
-    radial-gradient(circle at 50% 50%,rgba(255,208,0,.13),transparent 18%),
-    linear-gradient(90deg,rgba(27,140,255,.16),transparent 44% 56%,rgba(255,132,0,.16));
+    radial-gradient(circle at 50% 50%,rgba(255,208,0,.11),transparent 18%),
+    linear-gradient(90deg,rgba(27,140,255,.08),transparent 44% 56%,rgba(255,132,0,.08));
   mix-blend-mode:screen;
 }
 .finalHeatmapCanvas{
@@ -1146,8 +1161,6 @@ html,body{
   z-index:2;
   width:100%;
   height:100%;
-  transform:scale(.944);
-  transform-origin:center;
   pointer-events:none;
   -webkit-mask-image:url("../assets/Field-mask.png");
   mask-image:url("../assets/Field-mask.png");
@@ -1227,6 +1240,7 @@ html,body{
         <div>
           <div class="finalKicker">Post Game Report</div>
         </div>
+        <div class="finalTournamentMark" id="finalTournamentMark"><img alt=""></div>
         <div class="finalSeries" id="finalSeries">Best of 5</div>
       </div>
       <div class="finalScore" id="finalScore"></div>
@@ -2246,8 +2260,8 @@ const finalHeatmapFieldMap = {
   height:1147,
   centerX:873.109,
   centerY:572.95,
-  scaleX:.167288,
-  scaleY:.108987
+  scaleX:.134457,
+  scaleY:.135245
 };
 const FINAL_HEAT_BASE_SCALE = 2.85;
 const FINAL_HEAT_SCALE_MAX = 8.8;
@@ -2501,6 +2515,18 @@ function renderFinalScreen(config){
   const orangeName = config.orangeTeamName || state.teams.Orange.name || "Orange";
   const blueLogo = teamLogoFor("Blue", config);
   const orangeLogo = teamLogoFor("Orange", config);
+  const finalTournamentMark = $("finalTournamentMark");
+  const finalTournamentImage = finalTournamentMark?.querySelector("img");
+  const finalTournamentLogo = String(config.tournamentLogoUrl || "").trim();
+  if(finalTournamentMark){
+    finalTournamentMark.classList.toggle("active", !!finalTournamentLogo);
+    if(finalTournamentImage && finalTournamentLogo && finalTournamentImage.src !== finalTournamentLogo){
+      finalTournamentImage.src = finalTournamentLogo;
+    }
+    if(finalTournamentImage && !finalTournamentLogo){
+      finalTournamentImage.removeAttribute("src");
+    }
+  }
   screen.classList.toggle("heatmapActive", !!state.heatmapVisible && !!state.replayHeatmap);
   $("finalSeries").textContent = `Best of ${Number(config.seriesBestOf) || 5}`;
   $("finalScore").innerHTML = `
