@@ -382,6 +382,9 @@ html,body{
 .stage.replayActive .liveStatCard{
   display:none;
 }
+.stage:not(.personalOverlay):not(.liveStatsUnlocked) .liveStatCard{
+  display:none;
+}
 .status{
   position:absolute;
   left:50%;
@@ -1139,7 +1142,8 @@ const state = {
   clock:300,
   teams:{Blue:{name:"Blue",score:0},Orange:{name:"Orange",score:0}},
   players:new Map(),
-  focusedPlayerName:null
+  focusedPlayerName:null,
+  liveStatsUnlocked:false
 };
 let serverConfig = null;
 let stingerTimer = null;
@@ -1787,6 +1791,7 @@ function resetForNextMatch(){
   state.teams.Orange.score = 0;
   state.players.clear();
   state.focusedPlayerName = null;
+  state.liveStatsUnlocked = false;
   if(finalTransitionQueueTimer){
     clearTimeout(finalTransitionQueueTimer);
     finalTransitionQueueTimer = null;
@@ -2325,6 +2330,7 @@ function revealFinalScreen(){
   if(personalOverlayMode) return;
   if(state.finalVisible) return;
   state.finalVisible = true;
+  scheduleRecentReplayHeatmap();
   render();
 }
 
@@ -2358,28 +2364,42 @@ function scheduleRecentReplayHeatmap(){
   state.heatmapVisible = false;
   state.replayHeatmap = null;
   const runId = ++replayHeatmapRunId;
+  let report = null;
+  let lookupComplete = false;
+  const revealIfReady = ()=>{
+    if(runId !== replayHeatmapRunId || !state.matchEnded || !state.finalVisible) return;
+    if(!lookupComplete || !report?.players?.length) return;
+    state.replayHeatmap = report;
+    state.heatmapVisible = true;
+    render();
+  };
   replayHeatmapLookupTimer = setTimeout(async()=>{
     replayHeatmapLookupTimer = null;
-    if(runId !== replayHeatmapRunId || !state.matchEnded) return;
-    let report = null;
+    if(runId !== replayHeatmapRunId || !state.matchEnded || !state.finalVisible) return;
     try{
       const response = await fetch(`${location.origin}/api/latest-replay/analyze?maxAgeMs=120000&t=${Date.now()}`, {cache:"no-store"});
       const json = await response.json().catch(()=>null);
       if(!response.ok || !json?.ok || !json?.analysis) return;
       report = buildReplayHeatmapFromAnalysis({...json.analysis, replayFile:json.replay});
-      if(!report.players.length) return;
     }catch(error){
       console.warn("Could not load recent replay heatmap:", error);
-      return;
+    }finally{
+      lookupComplete = true;
+      revealIfReady();
     }
-    replayHeatmapRevealTimer = setTimeout(()=>{
-      replayHeatmapRevealTimer = null;
-      if(runId !== replayHeatmapRunId || !state.matchEnded || !state.finalVisible) return;
-      state.replayHeatmap = report;
-      state.heatmapVisible = true;
-      render();
-    }, 8000);
-  }, 10000);
+  }, 9000);
+  replayHeatmapRevealTimer = setTimeout(()=>{
+    replayHeatmapRevealTimer = null;
+    lookupComplete = true;
+    revealIfReady();
+  }, 12000);
+}
+
+function unlockLiveStatsIfFocused(focusName){
+  const clean = cleanName(focusName);
+  if(!clean) return;
+  const hasPlayer = Array.from(state.players.keys()).some(name=>cleanName(name).toLowerCase() === clean.toLowerCase());
+  if(hasPlayer) state.liveStatsUnlocked = true;
 }
 
 function playFinalTransition(config, onCut=revealFinalScreen){
@@ -2516,6 +2536,7 @@ function render(){
   stage.classList.toggle("personalOverlay", personalOverlayMode);
   stage.classList.toggle("replayActive", !!state.replay);
   stage.classList.toggle("finalActive", !!state.finalVisible && !personalOverlayMode);
+  stage.classList.toggle("liveStatsUnlocked", !!state.liveStatsUnlocked);
   const tournamentLogo = $("tournamentLogo");
   const hasTournamentLogo = !!String(config.tournamentLogoUrl || "").trim();
   stage.classList.toggle("hasTournamentLogo", hasTournamentLogo);
@@ -2561,12 +2582,14 @@ function handleMessage(raw){
     state.replay = false;
     if(firstMatchEnd) state.matchEndedAt = Date.now();
     state.matchEnded = true;
-    if(firstMatchEnd) scheduleRecentReplayHeatmap();
   }
   updateTeams(msg.payload);
   updatePlayers(msg.payload);
   const focusName = focusNameFromPayload(msg.payload);
-  if(focusName) state.focusedPlayerName = focusName;
+  if(focusName){
+    state.focusedPlayerName = focusName;
+    unlockLiveStatsIfFocused(focusName);
+  }
   if(state.matchEnded && !messageEndsMatch && nextMatchStartEvent(eventName)){
     resetForNextMatch();
   }
