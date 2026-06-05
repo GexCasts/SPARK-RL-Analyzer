@@ -828,11 +828,22 @@ html,body{
   white-space:nowrap;
   text-align:center;
 }
-.finalPlayerRail .mvp::after{
-  content:"*";
+.finalPlayerRail .mvp{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+}
+.finalMvpStar{
+  flex:0 0 auto;
+  width:1em;
+  height:1em;
+  display:inline-grid;
+  place-items:center;
   color:var(--spark-gold);
-  margin-left:6px;
-  text-shadow:0 0 12px rgba(255,208,0,.74);
+  font-size:.94em;
+  line-height:1;
+  filter:drop-shadow(0 0 7px rgba(255,208,0,.86));
 }
 .finalPlayerRail.blue span{color:color-mix(in srgb,var(--blue) 78%,#f8f3de)}
 .finalPlayerRail.orange span{color:color-mix(in srgb,var(--orange) 78%,#f8f3de)}
@@ -1908,8 +1919,10 @@ function finalPlayerStat(player, stat){
 }
 function finalNameRow(players, mvpName){
   return players.map(player=>{
-    const mvpClass = player.name === mvpName ? " class=\"mvp\"" : "";
-    return `<span${mvpClass}>${escapeHtml(player.name)}</span>`;
+    const isMvp = player.name === mvpName;
+    const mvpClass = isMvp ? " class=\"mvp\"" : "";
+    const star = isMvp ? `<i class="finalMvpStar" aria-label="MVP">★</i>` : "";
+    return `<span${mvpClass}>${escapeHtml(player.name)}${star}</span>`;
   }).join("");
 }
 function finalNumberRow(players, stat, statMax){
