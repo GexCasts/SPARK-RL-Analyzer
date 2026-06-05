@@ -390,21 +390,54 @@ html,body{
   right:0;
   bottom:0;
   height:86px;
-  padding-top:27px;
+  padding:22px 440px 0;
   background:
     linear-gradient(90deg,transparent 0 28%,rgba(255,208,0,.92) 28% 72%,transparent 72% 100%),
     linear-gradient(180deg,transparent,rgba(5,6,9,.82) 42%,rgba(5,6,9,.96));
   color:#fffdf3;
-  font-size:24px;
   font-weight:950;
   text-transform:uppercase;
-  letter-spacing:.24em;
   text-align:center;
   text-shadow:0 3px 8px rgba(0,0,0,.75);
   display:none;
   clip-path:polygon(0 40%,34% 40%,39% 0,61% 0,66% 40%,100% 40%,100% 100%,0 100%);
   filter:drop-shadow(0 -7px 18px rgba(0,0,0,.55));
   z-index:6;
+}
+.replayContent{
+  min-width:0;
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  align-items:center;
+  gap:24px;
+}
+.replayTitle{
+  color:#050609;
+  font-size:22px;
+  font-weight:1000;
+  letter-spacing:.18em;
+}
+.replayMeta{
+  min-width:0;
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  color:#050609;
+  font-size:16px;
+  letter-spacing:.04em;
+}
+.replayMeta b{
+  color:#050609;
+  font-size:13px;
+  letter-spacing:.09em;
+  opacity:.68;
+}
+.replayMeta span{
+  max-width:260px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 .stage.replayActive .replay{display:block}
 .stage.replayActive .boosts,
@@ -1136,7 +1169,7 @@ html,body{
     <div class="liveStatHeader"><span>Live Stats</span><b id="liveStatFocus">No focused view</b></div>
     <div class="liveStatPlayers" id="liveStatPlayers"></div>
   </div>
-  <div class="replay">Replay</div>
+  <div class="replay" id="replayBanner">Replay</div>
   <div class="finalScreen" id="finalScreen">
     <div class="finalContent">
       <div class="finalHeader">
@@ -1216,6 +1249,7 @@ const state = {
   overtimeSeconds:0,
   overtimeStartedAt:null,
   overtimeUpdatedAt:null,
+  goalReplay:{scorer:"",assist:"",team:null},
   teams:{Blue:{name:"Blue",score:0},Orange:{name:"Orange",score:0}},
   players:new Map(),
   focusedPlayerName:null,
@@ -1741,6 +1775,42 @@ function playerNameFromValue(value){
   if(typeof value === "string") return cleanName(value);
   return cleanName(firstDefined(valueByKey(value,["Name","name","PlayerName","playerName","Player","player","Id","id","target","Target","__playerKey"]), ""));
 }
+function updateGoalReplayInfo(info={}){
+  const scorer = cleanName(info.scorer);
+  const assist = cleanName(info.assist);
+  const previousScorer = cleanName(state.goalReplay?.scorer);
+  if(info.newGoal) state.goalReplay.assist = "";
+  if(scorer && previousScorer && scorer.toLowerCase() !== previousScorer.toLowerCase()){
+    state.goalReplay.assist = "";
+  }
+  if(scorer) state.goalReplay.scorer = scorer;
+  if(assist && assist.toLowerCase() !== scorer.toLowerCase()) state.goalReplay.assist = assist;
+  if(info.team) state.goalReplay.team = info.team;
+}
+function goalReplayInfoFromPayload(payload){
+  const scorerObj = firstDefined(payload?.Scorer, payload?.scorer);
+  const assistObj = firstDefined(
+    payload?.Assister,
+    payload?.assister,
+    payload?.Assist,
+    payload?.assist,
+    payload?.Assistant,
+    payload?.assistant
+  );
+  const scorer = playerNameFromValue(firstDefined(
+    scorerObj,
+    valueByKey(payload,["player","Player","playerName","PlayerName","scorer","Scorer","goalScorer","GoalScorer"])
+  ));
+  const assist = playerNameFromValue(firstDefined(
+    assistObj,
+    valueByKey(payload,["assistPlayer","AssistPlayer","assister","Assister","assistant","Assistant","assistName","AssistName"])
+  ));
+  const team = normalizeTeam(firstDefined(
+    valueByKey(scorerObj,["TeamNum","teamNum","team","Team"]),
+    valueByKey(payload,["team","Team","TeamNum","teamNum"])
+  ));
+  return {scorer, assist, team};
+}
 function focusNameFromPayload(payload){
   const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
   const direct = firstDefined(
@@ -1916,6 +1986,7 @@ function resetForNextMatch(options={}){
   state.overtimeSeconds = 0;
   state.overtimeStartedAt = null;
   state.overtimeUpdatedAt = null;
+  state.goalReplay = {scorer:"",assist:"",team:null};
   state.teams.Blue.score = 0;
   state.teams.Orange.score = 0;
   state.players.clear();
@@ -1985,6 +2056,21 @@ function renderBoostRows(team){
         <span class="bar" style="--boost:${boost}%"></span>
       </div>`;
     }).join("");
+}
+function renderReplayBanner(){
+  const banner = $("replayBanner");
+  if(!banner) return;
+  const scorer = cleanName(state.goalReplay?.scorer);
+  const assist = cleanName(state.goalReplay?.assist);
+  if(!scorer){
+    banner.innerHTML = `<div class="replayContent"><div class="replayTitle">Replay</div></div>`;
+    return;
+  }
+  banner.innerHTML = `<div class="replayContent">
+    <div class="replayTitle">Goal Replay</div>
+    <div class="replayMeta"><b>Scored By:</b><span>${escapeHtml(scorer)}</span></div>
+    ${assist ? `<div class="replayMeta"><b>Assist:</b><span>${escapeHtml(assist)}</span></div>` : ""}
+  </div>`;
 }
 function allPlayersForCard(){
   return Array.from(state.players.values())
@@ -2714,6 +2800,7 @@ function render(){
   $("orangeSeries").innerHTML = renderDots("Orange", config);
   $("blueBoosts").innerHTML = renderBoostRows("Blue");
   $("orangeBoosts").innerHTML = renderBoostRows("Orange");
+  renderReplayBanner();
   renderCustomScoreboard(config);
   renderLiveStatCard();
   const finalScreen = $("finalScreen");
@@ -2746,6 +2833,9 @@ function handleMessage(raw){
   if(state.matchEnded && !messageEndsMatch && nextMatchStartEvent(eventName)){
     if(beginNextMatchResetTransition()) return;
   }
+  if(eventName.includes("goalscored")){
+    updateGoalReplayInfo({...goalReplayInfoFromPayload(msg.payload), newGoal:true});
+  }
   if(eventName.includes("ballhit")){
     const hitPlayer = playerNameFromValue(firstDefined(valueByKey(msg.payload,["Player","player","playerName","PlayerName","lastTouchPlayer","LastTouchPlayer"]), msg.payload?.BallLastTouch?.Player, msg.payload?.ballLastTouch?.player));
     const team = normalizeTeam(valueByKey(msg.payload,["team","Team"]));
@@ -2760,9 +2850,15 @@ function handleMessage(raw){
     const team = normalizeTeam(valueByKey(msg.payload,["team","Team"]));
     const p = ensurePlayer(statPlayer, team);
     if(p){
-      if(statType.includes("goal")) p.stats.goals = (p.stats.goals || 0) + 1;
+      if(statType.includes("goal")){
+        p.stats.goals = (p.stats.goals || 0) + 1;
+        updateGoalReplayInfo({scorer:statPlayer, team});
+      }
       if(statType.includes("shot")) p.stats.shots = (p.stats.shots || 0) + 1;
-      if(statType.includes("assist")) p.stats.assists = (p.stats.assists || 0) + 1;
+      if(statType.includes("assist")){
+        p.stats.assists = (p.stats.assists || 0) + 1;
+        updateGoalReplayInfo({assist:statPlayer, team});
+      }
       if(statType.includes("save")) p.stats.saves = (p.stats.saves || 0) + 1;
       if(statType.includes("demo")) p.stats.demos = (p.stats.demos || 0) + 1;
     }
