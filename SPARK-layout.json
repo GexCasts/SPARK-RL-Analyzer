@@ -1,0 +1,220 @@
+{
+  "app": "SPARK",
+  "type": "spark-tile-layouts",
+  "version": 3,
+  "savedAt": "2026-06-05T10:18:44.951Z",
+  "layouts": {
+    "overview": {},
+    "player": {
+      "order": [
+        "positioning",
+        "boostMap",
+        "kickoffs",
+        "shootingMap",
+        "shotQuality",
+        "physical",
+        "boostManagement",
+        "comparison",
+        "teamRadar",
+        "playerTable",
+        "distance",
+        "impact",
+        "keyEvents"
+      ],
+      "hidden": [
+        "comparison",
+        "teamRadar",
+        "playerTable"
+      ],
+      "sizes": {
+        "boostManagement": {
+          "span": 8,
+          "chartHeight": 264
+        },
+        "kickoffs": {
+          "span": 4,
+          "chartHeight": 656
+        },
+        "keyEvents": {
+          "span": 12,
+          "chartHeight": 432
+        },
+        "shootingMap": {
+          "span": 12,
+          "chartHeight": 440
+        },
+        "distance": {
+          "span": 12,
+          "chartHeight": 256
+        },
+        "impact": {
+          "span": 12,
+          "chartHeight": 264
+        },
+        "physical": {
+          "span": 4,
+          "chartHeight": 376
+        },
+        "shotQuality": {
+          "span": 8,
+          "chartHeight": 376
+        },
+        "positioning": {
+          "span": 10,
+          "chartHeight": 256
+        },
+        "boostMap": {
+          "span": 10,
+          "chartHeight": 328
+        }
+      },
+      "positions": {
+        "boostManagement": {
+          "col": 5,
+          "row": 96
+        },
+        "positioning": {
+          "col": 1,
+          "row": 1
+        },
+        "boostMap": {
+          "col": 11,
+          "row": 1
+        },
+        "shootingMap": {
+          "col": 1,
+          "row": 37
+        },
+        "distance": {
+          "col": 13,
+          "row": 37
+        },
+        "kickoffs": {
+          "col": 21,
+          "row": 1
+        },
+        "keyEvents": {
+          "col": 13,
+          "row": 73
+        },
+        "impact": {
+          "col": 13,
+          "row": 55
+        },
+        "shotQuality": {
+          "col": 1,
+          "row": 73
+        },
+        "physical": {
+          "col": 9,
+          "row": 73
+        }
+      }
+    },
+    "team": {
+      "order": [
+        "keyEvents",
+        "kickoffs",
+        "boostManagement",
+        "positioning",
+        "distance",
+        "playerTable",
+        "impact",
+        "boostMap",
+        "shootingMap",
+        "shotQuality",
+        "physical",
+        "comparison",
+        "teamRadar"
+      ],
+      "sizes": {
+        "shootingMap": {
+          "span": 12,
+          "chartHeight": 900
+        },
+        "boostMap": {
+          "span": 12,
+          "chartHeight": 168
+        },
+        "kickoffs": {
+          "span": 4,
+          "chartHeight": 304
+        },
+        "boostManagement": {
+          "span": 4,
+          "chartHeight": 160
+        },
+        "shotQuality": {
+          "span": 6,
+          "chartHeight": 312
+        },
+        "physical": {
+          "span": 6,
+          "chartHeight": 336
+        },
+        "playerTable": {
+          "span": 12,
+          "chartHeight": 328
+        },
+        "teamRadar": {
+          "span": 6,
+          "chartHeight": 248
+        },
+        "keyEvents": {
+          "span": 12,
+          "chartHeight": 344
+        },
+        "comparison": {
+          "span": 12,
+          "chartHeight": 256
+        }
+      },
+      "positions": {
+        "boostManagement": {
+          "col": 21,
+          "row": 20
+        },
+        "impact": {
+          "col": 1,
+          "row": 20
+        },
+        "kickoffs": {
+          "col": 17,
+          "row": 20
+        },
+        "boostMap": {
+          "col": 1,
+          "row": 42
+        },
+        "shootingMap": {
+          "col": 13,
+          "row": 42
+        },
+        "comparison": {
+          "col": 1,
+          "row": 83
+        },
+        "shotQuality": {
+          "col": 19,
+          "row": 78
+        },
+        "physical": {
+          "col": 13,
+          "row": 78
+        },
+        "teamRadar": {
+          "col": 10,
+          "row": 99
+        },
+        "playerTable": {
+          "col": 1,
+          "row": 1
+        },
+        "keyEvents": {
+          "col": 13,
+          "row": 1
+        }
+      }
+    }
+  }
+}
