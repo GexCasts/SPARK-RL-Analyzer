@@ -423,12 +423,15 @@ html,body{
   text-shadow:0 1px rgba(255,255,255,.22),0 2px 8px rgba(255,208,0,.22);
 }
 .replayDetails{
-  width:min(100%,560px);
+  width:min(100%,760px);
   min-width:0;
   display:grid;
   grid-template-columns:1fr 1fr;
   align-items:center;
-  gap:28px;
+  gap:24px;
+}
+.replayDetails.triple{
+  grid-template-columns:repeat(3,minmax(0,1fr));
 }
 .replayDetails.solo{
   grid-template-columns:minmax(0,1fr);
@@ -1324,7 +1327,7 @@ const state = {
   overtimeSeconds:0,
   overtimeStartedAt:null,
   overtimeUpdatedAt:null,
-  goalReplay:{scorer:"",assist:"",team:null},
+  goalReplay:{scorer:"",assist:"",speed:null,team:null},
   teams:{Blue:{name:"Blue",score:0},Orange:{name:"Orange",score:0}},
   players:new Map(),
   focusedPlayerName:null,
@@ -1853,13 +1856,19 @@ function playerNameFromValue(value){
 function updateGoalReplayInfo(info={}){
   const scorer = cleanName(info.scorer);
   const assist = cleanName(info.assist);
+  const speed = toNumber(info.speed, null);
   const previousScorer = cleanName(state.goalReplay?.scorer);
-  if(info.newGoal) state.goalReplay.assist = "";
+  if(info.newGoal){
+    state.goalReplay.assist = "";
+    state.goalReplay.speed = null;
+  }
   if(scorer && previousScorer && scorer.toLowerCase() !== previousScorer.toLowerCase()){
     state.goalReplay.assist = "";
+    state.goalReplay.speed = null;
   }
   if(scorer) state.goalReplay.scorer = scorer;
   if(assist && assist.toLowerCase() !== scorer.toLowerCase()) state.goalReplay.assist = assist;
+  if(Number.isFinite(speed) && speed > 0) state.goalReplay.speed = speed;
   if(info.team) state.goalReplay.team = info.team;
 }
 function goalReplayInfoFromPayload(payload){
@@ -1884,7 +1893,12 @@ function goalReplayInfoFromPayload(payload){
     valueByKey(scorerObj,["TeamNum","teamNum","team","Team"]),
     valueByKey(payload,["team","Team","TeamNum","teamNum"])
   ));
-  return {scorer, assist, team};
+  const speed = toNumber(firstDefined(
+    valueByKey(payload,["GoalSpeed","goalSpeed","goal_speed","BallSpeed","ballSpeed"]),
+    valueByKey(payload?.Goal,["GoalSpeed","goalSpeed","goal_speed","BallSpeed","ballSpeed"]),
+    valueByKey(payload?.goal,["GoalSpeed","goalSpeed","goal_speed","BallSpeed","ballSpeed"])
+  ), null);
+  return {scorer, assist, speed, team};
 }
 function focusNameFromPayload(payload){
   const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
@@ -2061,7 +2075,7 @@ function resetForNextMatch(options={}){
   state.overtimeSeconds = 0;
   state.overtimeStartedAt = null;
   state.overtimeUpdatedAt = null;
-  state.goalReplay = {scorer:"",assist:"",team:null};
+  state.goalReplay = {scorer:"",assist:"",speed:null,team:null};
   state.teams.Blue.score = 0;
   state.teams.Orange.score = 0;
   state.players.clear();
@@ -2132,19 +2146,29 @@ function renderBoostRows(team){
       </div>`;
     }).join("");
 }
+function formatGoalSpeed(value){
+  const speed = toNumber(value, null);
+  if(!Number.isFinite(speed) || speed <= 0) return "";
+  const kmh = speed > 500 ? speed * .036 : speed;
+  return `${Math.round(kmh)} km/h`;
+}
 function renderReplayBanner(){
   const banner = $("replayBanner");
   if(!banner) return;
   const scorer = cleanName(state.goalReplay?.scorer);
   const assist = cleanName(state.goalReplay?.assist);
+  const speed = formatGoalSpeed(state.goalReplay?.speed);
   if(!scorer){
     banner.innerHTML = `<div class="replayContent soloTitle"><div class="replayTitle">Replay</div></div>`;
     return;
   }
+  const detailCount = 1 + (speed ? 1 : 0) + (assist ? 1 : 0);
+  const detailClass = detailCount >= 3 ? "triple" : detailCount === 1 ? "solo" : "double";
   banner.innerHTML = `<div class="replayContent">
     <div class="replayTitle">Replay</div>
-    <div class="replayDetails ${assist ? "" : "solo"}">
+    <div class="replayDetails ${detailClass}">
       <div class="replayMeta"><b>Scored By:</b><span>${escapeHtml(scorer)}</span></div>
+      ${speed ? `<div class="replayMeta"><b>Goal Speed:</b><span>${escapeHtml(speed)}</span></div>` : ""}
       ${assist ? `<div class="replayMeta"><b>Assist:</b><span>${escapeHtml(assist)}</span></div>` : ""}
     </div>
   </div>`;
