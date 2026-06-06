@@ -2878,7 +2878,8 @@ body.obsOverlayMode #obsOverlayRoot{
     linear-gradient(180deg,rgba(255,255,255,.28),transparent);
   opacity:.78;
   box-shadow:0 0 16px color-mix(in srgb,var(--boostTeam) 72%,transparent);
-  transition:width .18s cubic-bezier(.22,1,.36,1);
+  transition:width .22s cubic-bezier(.22,1,.36,1);
+  will-change:width;
 }
 .obsBoostColumn.left .obsBoostFill{--boostEnd:#80eeff}
 .obsBoostColumn.right .obsBoostFill{left:auto;right:0}
@@ -11852,10 +11853,49 @@ function liveApiPayloadHasKickoffCountdown(payload){
   return Number.isFinite(countdown) && countdown > 0 && countdown <= 10;
 }
 
+function liveApiPayloadWinnerCleared(payload){
+  const game = livePayloadGame(payload);
+  const winnerState = firstDefined(
+    valueByKey(payload,["bHasWinner","hasWinner","HasWinner"]),
+    valueByKey(game,["bHasWinner","hasWinner","HasWinner"]),
+    valueByKey(payload,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"]),
+    valueByKey(game,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"])
+  );
+  return winnerState !== undefined && !toBoolean(winnerState);
+}
+
+function liveApiPayloadHasSpectatorTarget(payload){
+  const game = livePayloadGame(payload);
+  const hasTarget = firstDefined(
+    valueByKey(payload,["bHasTarget","hasTarget","HasTarget","bSpectatorHasTarget","spectatorHasTarget","SpectatorHasTarget"]),
+    valueByKey(game,["bHasTarget","hasTarget","HasTarget","bSpectatorHasTarget","spectatorHasTarget","SpectatorHasTarget"])
+  );
+  const target = firstDefined(
+    valueByKey(payload,["Target","target","CameraTarget","cameraTarget","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"]),
+    valueByKey(game,["Target","target","CameraTarget","cameraTarget","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"])
+  );
+  if(toBoolean(hasTarget) || liveApiPlayerName(target)) return true;
+  return extractLivePlayers(payload).some(player=>{
+    if(!player || typeof player !== "object") return false;
+    const hasCar = firstDefined(valueByKey(player,["bHasCar","hasCar","HasCar"]), valueByKey(player?.State,["bHasCar","hasCar","HasCar"]));
+    return toBoolean(hasCar) && liveBoostValueFromPlayer(player) !== null;
+  });
+}
+
+function liveApiPayloadHasNextMatchSpectatorTarget(payload, eventName=""){
+  if(!liveApiPayloadHasSpectatorTarget(payload)) return false;
+  const nextMatchGuid = liveApiMatchGuid(payload);
+  const newMatchGuid = !!(nextMatchGuid && liveApiState?.matchGuid && nextMatchGuid !== liveApiState.matchGuid);
+  const compact = String(eventName || "").toLowerCase().replace(/[^a-z]/g, "");
+  const eventLooksRelevant = compact.includes("spectator") || compact.includes("target");
+  return newMatchGuid || liveApiPayloadWinnerCleared(payload) || eventLooksRelevant;
+}
+
 function clearLivePostGameIfNextFieldState(payload, eventName=""){
   if(!liveApiState?.matchEnded) return;
   const shouldReset = liveApiNextMatchStartEvent(eventName)
-    || liveApiPayloadHasKickoffCountdown(payload);
+    || liveApiPayloadHasKickoffCountdown(payload)
+    || liveApiPayloadHasNextMatchSpectatorTarget(payload, eventName);
   if(shouldReset){
     resetLiveApiForNewMatch(liveApiMatchGuid(payload) || liveApiState.pendingMatchGuid || liveApiState.matchGuid || "");
   }
@@ -12548,15 +12588,42 @@ function currentOverlayPlayer(){
     || null;
 }
 
-function overlayBoostRows(players, side){
-  return players.slice(0,4).map(p=>{
+function overlayBoostPlayers(players){
+  return players.slice(0,4);
+}
+
+function overlayBoostRowMarkup(p, side){
     const boost = Math.round(Math.max(0, Math.min(100, p.currentBoost ?? 0)));
     const name = escapeHtml(p.name);
     const fill = `<div class="obsBoostFill" style="--boost:${boost}%"></div>`;
     const nameCell = `<div class="obsBoostName">${fill}<span>${name}</span></div>`;
     const valueCell = `<div class="obsBoostValue">${boost}</div>`;
     return `<div class="obsBoostRow">${side === "right" ? valueCell + nameCell : nameCell + valueCell}</div>`;
-  }).join("");
+}
+
+function overlayBoostRows(players, side){
+  return overlayBoostPlayers(players).map(p=>overlayBoostRowMarkup(p, side)).join("");
+}
+
+function renderOverlayBoostRowsInto(containerId, players, side){
+  const container = $(containerId);
+  if(!container) return;
+  const visiblePlayers = overlayBoostPlayers(players);
+  const signature = visiblePlayers.map(p=>p.name).join("|");
+  if(container.dataset.signature !== signature){
+    container.innerHTML = visiblePlayers.map(p=>overlayBoostRowMarkup(p, side)).join("");
+    container.dataset.signature = signature;
+    return;
+  }
+  visiblePlayers.forEach((player, index)=>{
+    const row = container.children[index];
+    if(!row) return;
+    const boost = Math.round(Math.max(0, Math.min(100, player.currentBoost ?? 0)));
+    const fill = row.querySelector(".obsBoostFill");
+    const value = row.querySelector(".obsBoostValue");
+    if(fill) fill.style.setProperty("--boost", `${boost}%`);
+    if(value) value.textContent = String(boost);
+  });
 }
 
 function renderObsSeriesDots(side){
@@ -12935,8 +13002,8 @@ function renderObsOverlay(){
   if($("obsOrangeSeriesDots")) $("obsOrangeSeriesDots").innerHTML = renderObsSeriesDots("Orange");
   if($("obsClock")) $("obsClock").textContent = liveOverlayClockText();
   if($("obsMatchTag")) $("obsMatchTag").textContent = liveApiState.updateCount ? `${overlayGameLabel()}     ${overlaySeriesLabel()}` : "Waiting for feed";
-  if($("obsBlueBoosts")) $("obsBlueBoosts").innerHTML = overlayBoostRows(livePlayersByTeam("Blue"), "left");
-  if($("obsOrangeBoosts")) $("obsOrangeBoosts").innerHTML = overlayBoostRows(livePlayersByTeam("Orange"), "right");
+  renderOverlayBoostRowsInto("obsBlueBoosts", livePlayersByTeam("Blue"), "left");
+  renderOverlayBoostRowsInto("obsOrangeBoosts", livePlayersByTeam("Orange"), "right");
 
   const focus = currentOverlayPlayer();
   const boost = focus ? Math.round(Math.max(0, Math.min(100, focus.currentBoost ?? 0))) : 0;

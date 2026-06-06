@@ -377,7 +377,8 @@ html,body{
   opacity:.78;
   box-shadow:0 0 16px color-mix(in srgb,var(--boostTeam) 72%,transparent);
   transform-origin:left;
-  transition:width .18s cubic-bezier(.22,1,.36,1);
+  transition:width .22s cubic-bezier(.22,1,.36,1);
+  will-change:width;
 }
 .boosts.right .bar{
   inset:0 0 0 auto;
@@ -2128,7 +2129,44 @@ function nextMatchStartEvent(eventName){
 }
 function nextMatchLooksReady(payload, eventName, incomingClock, messageEndsMatch){
   if(!state.matchEnded || messageEndsMatch) return false;
-  return nextMatchStartEvent(eventName) || payloadHasKickoffCountdown(payload);
+  return nextMatchStartEvent(eventName)
+    || payloadHasKickoffCountdown(payload)
+    || payloadHasNextMatchSpectatorTarget(payload, eventName);
+}
+function payloadWinnerCleared(payload){
+  const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
+  const winnerState = firstDefined(
+    valueByKey(payload,["bHasWinner","hasWinner","HasWinner"]),
+    valueByKey(game,["bHasWinner","hasWinner","HasWinner"]),
+    valueByKey(payload,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"]),
+    valueByKey(game,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"])
+  );
+  return winnerState !== undefined && !toBoolean(winnerState);
+}
+function payloadHasSpectatorTarget(payload){
+  const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
+  const hasTarget = firstDefined(
+    valueByKey(payload,["bHasTarget","hasTarget","HasTarget","bSpectatorHasTarget","spectatorHasTarget","SpectatorHasTarget"]),
+    valueByKey(game,["bHasTarget","hasTarget","HasTarget","bSpectatorHasTarget","spectatorHasTarget","SpectatorHasTarget"])
+  );
+  const target = firstDefined(
+    valueByKey(payload,["Target","target","CameraTarget","cameraTarget","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"]),
+    valueByKey(game,["Target","target","CameraTarget","cameraTarget","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"])
+  );
+  if(toBoolean(hasTarget) || playerNameFromValue(target)) return true;
+  return extractPlayers(payload).some(player=>{
+    if(!player || typeof player !== "object") return false;
+    const hasCar = firstDefined(valueByKey(player,["bHasCar","hasCar","HasCar"]), valueByKey(player?.State,["bHasCar","hasCar","HasCar"]));
+    return toBoolean(hasCar) && boostValueFromPlayer(player) !== null;
+  });
+}
+function payloadHasNextMatchSpectatorTarget(payload, eventName=""){
+  if(!payloadHasSpectatorTarget(payload)) return false;
+  const nextMatchGuid = matchGuidFromPayload(payload);
+  const newMatchGuid = !!(nextMatchGuid && state.matchGuid && nextMatchGuid !== state.matchGuid);
+  const eventLooksRelevant = compactEventName(eventName).includes("spectator")
+    || compactEventName(eventName).includes("target");
+  return newMatchGuid || payloadWinnerCleared(payload) || eventLooksRelevant;
 }
 function payloadHasKickoffCountdown(payload){
   const value = firstDefined(
@@ -2212,18 +2250,43 @@ function compactEventName(event){
   return String(event || "").toLowerCase().replace(/[^a-z]/g, "");
 }
 function renderBoostRows(team){
+  return boostPlayersForTeam(team)
+    .map(player=>boostRowMarkup(player))
+    .join("");
+}
+function boostPlayersForTeam(team){
   return Array.from(state.players.values())
     .filter(player=>player.team === team)
     .sort((a,b)=>a.name.localeCompare(b.name))
-    .slice(0, 4)
-    .map(player=>{
-      const boost = player.boostKnown ? Math.max(0, Math.min(100, Math.round(player.boost))) : 0;
-      const name = escapeHtml(player.name);
-      return `<div class="boostRow">
-        <span class="name">${name}</span>
-        <span class="bar" style="--boost:${boost}%"></span>
-      </div>`;
-    }).join("");
+    .slice(0, 4);
+}
+function playerBoostPercent(player){
+  return player?.boostKnown ? Math.max(0, Math.min(100, Math.round(player.boost))) : 0;
+}
+function boostRowMarkup(player){
+  const boost = playerBoostPercent(player);
+  return `<div class="boostRow" data-player="${escapeHtml(player.name)}">
+    <span class="name">${escapeHtml(player.name)}</span>
+    <span class="bar" style="--boost:${boost}%"></span>
+  </div>`;
+}
+function renderBoostRowsInto(containerId, team){
+  const container = $(containerId);
+  if(!container) return;
+  const players = boostPlayersForTeam(team);
+  const signature = players.map(player=>player.name).join("|");
+  if(container.dataset.signature !== signature){
+    container.innerHTML = players.map(player=>boostRowMarkup(player)).join("");
+    container.dataset.signature = signature;
+    return;
+  }
+  players.forEach((player, index)=>{
+    const row = container.children[index];
+    if(!row) return;
+    const boost = playerBoostPercent(player);
+    const bar = row.querySelector(".bar");
+    if(bar) bar.style.setProperty("--boost", `${boost}%`);
+  });
 }
 function formatGoalSpeed(value){
   const speed = toNumber(value, null);
@@ -2994,8 +3057,8 @@ function render(){
   $("matchTag").textContent = state.updates ? `${overlayGameLabel(config)}     Best of ${Number(config.seriesBestOf) || 5}` : "Waiting for feed";
   $("blueSeries").innerHTML = renderDots("Blue", config);
   $("orangeSeries").innerHTML = renderDots("Orange", config);
-  $("blueBoosts").innerHTML = renderBoostRows("Blue");
-  $("orangeBoosts").innerHTML = renderBoostRows("Orange");
+  renderBoostRowsInto("blueBoosts", "Blue");
+  renderBoostRowsInto("orangeBoosts", "Orange");
   renderReplayBanner();
   renderCustomScoreboard(config);
   renderLiveStatCard();
