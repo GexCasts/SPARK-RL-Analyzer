@@ -11717,7 +11717,8 @@ function makeEmptyLiveApiState(){
     durationSeconds: 0,
     lastBallSpeed: 0,
     lastKnownClock: null,
-    overtimeStartedAt: null,
+    isOvertime: false,
+    overtimeSeconds: 0,
     matchEnded: false,
     pendingMatchGuid: null,
     endedAt: null,
@@ -11736,7 +11737,7 @@ function liveApiChartDurationSeconds(){
   if(liveApiState.matchEnded && Number.isFinite(endedElapsed) && endedElapsed > 0){
     return Math.max(30, Math.ceil(endedElapsed));
   }
-  if(elapsed > 300 || Number(liveApiState.lastKnownClock) < 0){
+  if(liveApiState.isOvertime || Number(liveApiState.lastKnownClock) < 0){
     return Math.max(301, Math.ceil(elapsed));
   }
   return 300;
@@ -12859,7 +12860,7 @@ function renderObsOverlay(){
   if($("obsOrangeScore")) $("obsOrangeScore").textContent = orangeTeam.score ?? 0;
   if($("obsBlueSeriesDots")) $("obsBlueSeriesDots").innerHTML = renderObsSeriesDots("Blue");
   if($("obsOrangeSeriesDots")) $("obsOrangeSeriesDots").innerHTML = renderObsSeriesDots("Orange");
-  if($("obsClock")) $("obsClock").textContent = formatGameClock(liveApiState.lastKnownClock ?? 300);
+  if($("obsClock")) $("obsClock").textContent = liveOverlayClockText();
   if($("obsMatchTag")) $("obsMatchTag").textContent = liveApiState.updateCount ? `${overlayGameLabel()}     ${overlaySeriesLabel()}` : "Waiting for feed";
   if($("obsBlueBoosts")) $("obsBlueBoosts").innerHTML = overlayBoostRows(livePlayersByTeam("Blue"), "left");
   if($("obsOrangeBoosts")) $("obsOrangeBoosts").innerHTML = overlayBoostRows(livePlayersByTeam("Orange"), "right");
@@ -12913,6 +12914,44 @@ function liveGameClockSeconds(payload){
   return direct !== undefined ? toNumber(direct, null) : null;
 }
 
+function liveGameClockState(payload){
+  const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
+  const clock = liveGameClockSeconds(payload);
+  const overtimeFlag = firstDefined(
+    valueByKey(payload,["bOvertime","Overtime","overtime","isOvertime","IsOvertime","bIsOvertime"]),
+    valueByKey(game,["bOvertime","Overtime","overtime","isOvertime","IsOvertime","bIsOvertime"])
+  );
+  const overtimeSecondsValue = firstDefined(
+    valueByKey(payload,["overtimeSeconds","OvertimeSeconds","otSeconds","OTSeconds"]),
+    valueByKey(game,["overtimeSeconds","OvertimeSeconds","otSeconds","OTSeconds"])
+  );
+  const overtimeSeconds = toNumber(overtimeSecondsValue, NaN);
+  const explicitOvertime = overtimeFlag !== undefined && toBoolean(overtimeFlag);
+  const overtimeSecondsKnown = Number.isFinite(overtimeSeconds) || (Number.isFinite(clock) && clock < 0);
+  const overtime = explicitOvertime || overtimeSecondsKnown;
+  let otSeconds = 0;
+  if(Number.isFinite(overtimeSeconds)) otSeconds = overtimeSeconds;
+  else if(Number.isFinite(clock) && clock < 0) otSeconds = Math.abs(clock);
+  else if(overtime && Number.isFinite(clock) && clock > 300) otSeconds = clock - 300;
+  else if(overtime && Number.isFinite(clock) && clock >= 0 && clock < 900) otSeconds = clock;
+  return {clock, overtime, overtimeSeconds:Math.max(0, otSeconds), overtimeSecondsKnown};
+}
+
+function updateLiveGameClock(payload){
+  const clockState = liveGameClockState(payload);
+  if(clockState.clock !== null) liveApiState.lastKnownClock = clockState.clock;
+  if(clockState.clock !== null || clockState.overtime){
+    liveApiState.isOvertime = !!clockState.overtime;
+    liveApiState.overtimeSeconds = liveApiState.isOvertime ? Number(clockState.overtimeSeconds) || 0 : 0;
+  }
+  return clockState;
+}
+
+function liveOverlayClockText(){
+  if(liveApiState?.isOvertime) return `+${formatGameClock(liveApiState.overtimeSeconds || 0)}`;
+  return formatGameClock(liveApiState?.lastKnownClock ?? 300);
+}
+
 function handleLiveUpdateState(payload){
   syncLiveApiMatchBoundary(payload);
   const updateEndsMatch = liveApiGameEnded(payload, "updatestate");
@@ -12922,13 +12961,8 @@ function handleLiveUpdateState(payload){
   updateLiveTeamsFromPayload(payload);
   const replayFlag = liveApiReplayFlag(payload);
   if(replayFlag !== null) setLiveReplayActive(replayFlag);
-  const clock = liveGameClockSeconds(payload);
-  if(clock !== null){
-    liveApiState.lastKnownClock = clock;
-    if(!liveApiState.matchEnded){
-      if(clock === 0) liveApiState.overtimeStartedAt = liveApiState.overtimeStartedAt || Date.now();
-      else liveApiState.overtimeStartedAt = null;
-    }
+  const clockState = updateLiveGameClock(payload);
+  if(clockState.clock !== null){
     liveApiState.durationSeconds = Math.max(liveApiState.durationSeconds, Math.round(liveElapsedSeconds()));
   }
   const ball = firstDefined(valueByKey(payload,["ball","Ball"]), valueByKey(payload?.Game,["Ball","ball"]));
@@ -13012,8 +13046,8 @@ function lastLiveHitForPlayer(name){
 }
 
 function liveElapsedSeconds(){
-  if(liveApiState?.overtimeStartedAt && !liveApiState.matchEnded){
-    return 300 + Math.max(0, (Date.now() - liveApiState.overtimeStartedAt) / 1000);
+  if(liveApiState?.isOvertime){
+    return 300 + Math.max(0, Number(liveApiState.overtimeSeconds) || 0);
   }
   if(Number.isFinite(liveApiState.lastKnownClock)) return Math.max(0, 300 - liveApiState.lastKnownClock);
   return Math.max(0, (Date.now() - liveApiState.startedAt) / 1000);
@@ -13265,13 +13299,8 @@ function handleLiveApiMessage(raw){
   if(messageEndsMatch) markLiveMatchEnded();
   if(msg.event.includes("updatestate")) handleLiveUpdateState(msg.payload);
   else if(msg.event.includes("clockupdatedseconds")){
-    const clock = liveGameClockSeconds(msg.payload);
-    if(clock !== null){
-      liveApiState.lastKnownClock = clock;
-      if(!liveApiState.matchEnded){
-        if(clock === 0) liveApiState.overtimeStartedAt = liveApiState.overtimeStartedAt || Date.now();
-        else liveApiState.overtimeStartedAt = null;
-      }
+    const clockState = updateLiveGameClock(msg.payload);
+    if(clockState.clock !== null){
       liveApiState.durationSeconds = Math.max(liveApiState.durationSeconds, Math.round(liveElapsedSeconds()));
     }
   }

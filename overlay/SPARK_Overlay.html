@@ -1325,7 +1325,6 @@ const state = {
   clock:300,
   overtime:false,
   overtimeSeconds:0,
-  overtimeStartedAt:null,
   overtimeUpdatedAt:null,
   goalReplay:{scorer:"",assist:"",speed:null,team:null},
   teams:{Blue:{name:"Blue",score:0},Orange:{name:"Orange",score:0}},
@@ -1443,10 +1442,7 @@ function formatClock(seconds){
 }
 function currentOvertimeSeconds(){
   if(!state.overtime) return 0;
-  const base = Math.max(0, Number(state.overtimeSeconds) || 0);
-  const updatedAt = Number(state.overtimeUpdatedAt);
-  if(!Number.isFinite(updatedAt) || updatedAt <= 0) return base;
-  return base + Math.max(0, (Date.now() - updatedAt) / 1000);
+  return Math.max(0, Number(state.overtimeSeconds) || 0);
 }
 function overlayClockText(){
   return state.overtime ? `+${formatClock(currentOvertimeSeconds())}` : formatClock(state.clock);
@@ -2000,25 +1996,15 @@ function gameClockState(payload){
     valueByKey(payload,["overtimeSeconds","OvertimeSeconds","otSeconds","OTSeconds"]),
     valueByKey(game,["overtimeSeconds","OvertimeSeconds","otSeconds","OTSeconds"])
   );
-  const elapsedValue = firstDefined(
-    valueByKey(payload,["elapsedSeconds","ElapsedSeconds","gameElapsedSeconds","GameElapsedSeconds"]),
-    valueByKey(game,["elapsedSeconds","ElapsedSeconds","gameElapsedSeconds","GameElapsedSeconds"])
-  );
   const overtimeSeconds = toNumber(overtimeSecondsValue, NaN);
-  const elapsed = toNumber(elapsedValue, NaN);
   const explicitOvertime = overtimeFlag !== undefined && toBoolean(overtimeFlag);
-  const overtimeSecondsKnown = Number.isFinite(overtimeSeconds) ||
-    (Number.isFinite(clock) && clock < 0) ||
-    (Number.isFinite(clock) && clock > 300) ||
-    (Number.isFinite(elapsed) && elapsed > 300);
-  const inferredOvertime = overtimeSecondsKnown;
-  const overtime = explicitOvertime || inferredOvertime;
+  const overtimeSecondsKnown = Number.isFinite(overtimeSeconds) || (Number.isFinite(clock) && clock < 0);
+  const overtime = explicitOvertime || overtimeSecondsKnown;
   let otSeconds = 0;
   if(Number.isFinite(overtimeSeconds)) otSeconds = overtimeSeconds;
   else if(Number.isFinite(clock) && clock < 0) otSeconds = Math.abs(clock);
-  else if(Number.isFinite(clock) && clock > 300) otSeconds = clock - 300;
-  else if(Number.isFinite(elapsed) && elapsed > 300) otSeconds = elapsed - 300;
-  else if(overtime && Number.isFinite(clock) && clock > 0 && clock < 900) otSeconds = clock;
+  else if(overtime && Number.isFinite(clock) && clock > 300) otSeconds = clock - 300;
+  else if(overtime && Number.isFinite(clock) && clock >= 0 && clock < 900) otSeconds = clock;
   return {clock, overtime, overtimeSeconds:Math.max(0, otSeconds), overtimeSecondsKnown};
 }
 function replayFlag(payload){
@@ -2073,7 +2059,6 @@ function resetForNextMatch(options={}){
   state.clock = 300;
   state.overtime = false;
   state.overtimeSeconds = 0;
-  state.overtimeStartedAt = null;
   state.overtimeUpdatedAt = null;
   state.goalReplay = {scorer:"",assist:"",speed:null,team:null};
   state.teams.Blue.score = 0;
@@ -2988,14 +2973,12 @@ function handleMessage(raw){
     const wasOvertime = !!state.overtime;
     state.overtime = !!incomingClockState.overtime;
     if(state.overtime){
-      if(!wasOvertime) state.overtimeStartedAt = Date.now();
-      if(incomingClockState.overtimeSecondsKnown || !wasOvertime){
+      if(incomingClockState.overtimeSecondsKnown || incomingClockState.clock !== null || !wasOvertime){
         state.overtimeSeconds = Number(incomingClockState.overtimeSeconds) || 0;
         state.overtimeUpdatedAt = Date.now();
       }
     }else{
       state.overtimeSeconds = 0;
-      state.overtimeStartedAt = null;
       state.overtimeUpdatedAt = null;
     }
   }
