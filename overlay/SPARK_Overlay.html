@@ -417,11 +417,26 @@ html,body{
   grid-template-rows:52px;
 }
 .replayTitle{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:11px;
   color:#201707;
   font-size:21px;
   font-weight:1000;
   letter-spacing:.2em;
   text-shadow:0 1px rgba(255,255,255,.22),0 2px 8px rgba(255,208,0,.22);
+}
+.replayTitle::before{
+  content:"";
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:#ff2b2b;
+  box-shadow:
+    0 0 8px rgba(255,43,43,.95),
+    0 0 18px rgba(255,43,43,.72),
+    0 0 30px rgba(255,132,0,.34);
 }
 .replayDetails{
   width:min(100%,760px);
@@ -430,6 +445,7 @@ html,body{
   grid-template-columns:1fr 1fr;
   align-items:center;
   gap:24px;
+  transform:translateY(5px);
 }
 .replayDetails.triple{
   grid-template-columns:repeat(3,minmax(0,1fr));

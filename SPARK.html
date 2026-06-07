@@ -3029,8 +3029,10 @@ body.obsOverlayMode #obsOverlayRoot{
 }
 .obsReplayTag{
   height:42px;
-  display:grid;
-  place-items:center;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
   background:#050607;
   border-top:2px solid var(--spark-yellow);
   border-bottom:2px solid var(--spark-yellow);
@@ -3038,6 +3040,17 @@ body.obsOverlayMode #obsOverlayRoot{
   font-size:18px;
   font-weight:1000;
   letter-spacing:2px;
+}
+.obsReplayTag::before{
+  content:"";
+  width:9px;
+  height:9px;
+  border-radius:50%;
+  background:#ff2b2b;
+  box-shadow:
+    0 0 8px rgba(255,43,43,.95),
+    0 0 18px rgba(255,43,43,.7),
+    0 0 28px rgba(255,132,0,.34);
 }
 .obsReplayCard{
   position:absolute;
@@ -3073,7 +3086,7 @@ body.obsOverlayMode #obsOverlayRoot{
   text-overflow:ellipsis;
 }
 .obsReplayMeta{
-  margin-top:8px;
+  margin-top:12px;
   color:#d7d7d7;
   font-size:13px;
   font-weight:900;
