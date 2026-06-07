@@ -12356,6 +12356,9 @@ function saveOverlayConfig(nextConfig, options={}){
     ...normalizeOverlayTheme(nextConfig),
     testFinalStatsPreview:nextConfig.testFinalStatsPreview === true
   };
+  delete overlayConfig.lastAutoSeriesMatchId;
+  delete overlayConfig.lastAutoSeriesWinner;
+  delete overlayConfig.lastAutoSeriesAppliedAt;
   overlayServerConfig = {...overlayServerConfig, ...overlayConfig};
   if(options.deferStorage) scheduleOverlayConfigStorage(overlayConfig, options.storageDelay ?? options.previewDelay ?? 120);
   else{
@@ -12385,6 +12388,9 @@ function saveOverlayConfig(nextConfig, options={}){
 function overlayConfigForServer(config){
   const copy = {...(config || {})};
   delete copy.testFinalStatsPreview;
+  delete copy.lastAutoSeriesMatchId;
+  delete copy.lastAutoSeriesWinner;
+  delete copy.lastAutoSeriesAppliedAt;
   return copy;
 }
 
@@ -12424,6 +12430,17 @@ function flushOverlayConfigSync(send=true){
 
 function updateOverlayConfigField(key, value, options={}){
   saveOverlayConfig({...overlayConfig, [key]:value}, options);
+}
+
+function applyOverlayConfigBroadcast(payload){
+  const config = firstDefined(valueByKey(payload,["config","Config"]), payload?.payload?.config);
+  if(!config || typeof config !== "object" || Array.isArray(config)) return false;
+  overlayServerConfig = config;
+  overlayConfig = readOverlayConfig();
+  try{ localStorage.setItem(overlayConfigKey, JSON.stringify(overlayConfig)); }catch{}
+  renderObsOverlay();
+  if(activeView === "overlay" || selected === "overlayControl") renderOverlayControl();
+  return true;
 }
 
 function overlayLogoFor(side){
@@ -12503,44 +12520,17 @@ function liveApiGameEnded(payload, event=""){
   return false;
 }
 
+function liveApiMatchEndedEvent(event=""){
+  return String(event || "").toLowerCase().replace(/[^a-z]/g, "").includes("matchended");
+}
+
 function liveApiWinnerTeam(payload){
   const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
   const directWinnerTeam = firstDefined(
-    valueByKey(payload,["WinnerTeamNum","winnerTeamNum","WinnerTeam","winnerTeam","WinningTeamNum","winningTeamNum","WinningTeam","winningTeam"]),
-    valueByKey(game,["WinnerTeamNum","winnerTeamNum","WinnerTeam","winnerTeam","WinningTeamNum","winningTeamNum","WinningTeam","winningTeam"])
+    valueByKey(payload,["WinnerTeamNum","winnerTeamNum"]),
+    valueByKey(game,["WinnerTeamNum","winnerTeamNum"])
   );
-  const directTeam = normalizeLiveTeam(directWinnerTeam);
-  if(directTeam) return directTeam;
-  const winner = firstDefined(
-    valueByKey(payload,["Winner","winner","GameWinner","gameWinner","MatchWinner","matchWinner"]),
-    valueByKey(game,["Winner","winner","GameWinner","gameWinner","MatchWinner","matchWinner"])
-  );
-  if(winner && typeof winner === "object"){
-    const objectTeam = normalizeLiveTeam(firstDefined(
-      valueByKey(winner,["TeamNum","teamNum","Team","team","Index","index"]),
-      winner
-    ));
-    if(objectTeam) return objectTeam;
-    const winnerName = String(firstDefined(valueByKey(winner,["Name","name","TeamName","teamName"]), "") || "").replace(/\|/g,"").trim();
-    if(winnerName){
-      if(winnerName === liveApiState?.teams?.Blue?.name) return "Blue";
-      if(winnerName === liveApiState?.teams?.Orange?.name) return "Orange";
-    }
-  }
-  const winnerTeam = normalizeLiveTeam(winner);
-  if(winnerTeam) return winnerTeam;
-  const explicitWinner = firstDefined(
-    valueByKey(payload,["bHasWinner","hasWinner","HasWinner"]),
-    valueByKey(game,["bHasWinner","hasWinner","HasWinner"])
-  );
-  if(toBoolean(explicitWinner)){
-    const blueScore = Number(liveApiState?.teams?.Blue?.score);
-    const orangeScore = Number(liveApiState?.teams?.Orange?.score);
-    if(Number.isFinite(blueScore) && Number.isFinite(orangeScore) && blueScore !== orangeScore){
-      return blueScore > orangeScore ? "Blue" : "Orange";
-    }
-  }
-  return null;
+  return normalizeLiveTeam(directWinnerTeam);
 }
 
 function liveSeriesMatchId(payload, event=""){
@@ -12549,23 +12539,15 @@ function liveSeriesMatchId(payload, event=""){
     || `${String(event || "matchended").toLowerCase()}-${Math.round(liveApiState?.startedAt || Date.now())}`;
 }
 
-function liveSeriesAutoAllowed(payload, event=""){
-  const compact = String(event || "").toLowerCase().replace(/[^a-z]/g, "");
-  if(liveApiNextMatchStartEvent(compact)) return false;
-  if(liveApiPayloadHasKickoffCountdown(payload)) return false;
-  if(liveApiPayloadHasNextMatchSpectatorTarget(payload, event)) return false;
-  return true;
-}
-
 function applyLiveSeriesWinner(payload, event=""){
   if(!liveApiState) return false;
-  if(!liveSeriesAutoAllowed(payload, event)) return false;
+  if(!liveApiMatchEndedEvent(event)) return false;
   const winnerTeam = liveApiWinnerTeam(payload);
   if(!winnerTeam) return false;
   const matchId = liveSeriesMatchId(payload, event);
   if(liveApiState.seriesWinAppliedMatchId === matchId) return false;
   const currentConfig = readOverlayConfig();
-  if(currentConfig.lastAutoSeriesMatchId === matchId) {
+  if(currentConfig.seriesLastWinnerMatchId === matchId) {
     liveApiState.seriesWinAppliedMatchId = matchId;
     return false;
   }
@@ -12573,17 +12555,15 @@ function applyLiveSeriesWinner(payload, event=""){
   const maxWins = Math.ceil(bestOf / 2);
   const key = winnerTeam === "Blue" ? "blueSeriesScore" : "orangeSeriesScore";
   const currentScore = Math.max(0, Math.min(maxWins, Number(currentConfig[key]) || 0));
-  const lastAutoAt = Number(currentConfig.lastAutoSeriesAppliedAt) || 0;
   const now = Date.now();
   liveApiState.seriesWinAppliedMatchId = matchId;
-  if(lastAutoAt > 0 && now - lastAutoAt < 30000) return false;
   if(currentScore >= maxWins) return false;
   saveOverlayConfig({
     ...currentConfig,
     [key]:Math.min(maxWins, currentScore + 1),
-    lastAutoSeriesMatchId:matchId,
-    lastAutoSeriesWinner:winnerTeam,
-    lastAutoSeriesAppliedAt:now
+    seriesLastWinnerMatchId:matchId,
+    seriesLastWinnerTeam:winnerTeam,
+    seriesLastWinnerAt:now
   }, {renderControl:activeView === "overlay" || selected === "overlayControl"});
   return true;
 }
@@ -13131,7 +13111,6 @@ function handleLiveUpdateState(payload){
   if(clockState.clock !== null){
     liveApiState.durationSeconds = Math.max(liveApiState.durationSeconds, Math.round(liveElapsedSeconds()));
   }
-  if(updateEndsMatch) applyLiveSeriesWinner(payload, "updatestate");
   const ball = firstDefined(valueByKey(payload,["ball","Ball"]), valueByKey(payload?.Game,["Ball","ball"]));
   if(ball) liveApiState.lastBallSpeed = toNumber(valueByKey(ball,["speed","Speed"]), liveApiState.lastBallSpeed);
   extractLivePlayers(payload).forEach(updateLivePlayerFromApi);
@@ -13460,6 +13439,10 @@ function handleLiveApiMessage(raw){
   let msg;
   try{ msg = normalizeLiveApiMessage(raw); }
   catch(err){ console.warn("Bad Live API message:", err); return; }
+  if(msg.event.includes("sparkoverlayconfig")){
+    applyOverlayConfigBroadcast(msg.payload);
+    return;
+  }
   syncLiveApiMatchBoundary(msg.payload);
   const messageEndsMatch = liveApiGameEnded(msg.payload, msg.event);
   if(!messageEndsMatch) clearLivePostGameIfNextFieldState(msg.payload, msg.event);

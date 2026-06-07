@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.06.07.0448",
-    "generatedUtc":  "2026-06-07T04:48:52.4694237Z",
+    "appVersion":  "2026.06.07.0517",
+    "generatedUtc":  "2026-06-07T05:17:06.4448752Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -89,10 +89,10 @@
                   },
                   {
                       "path":  "overlay/SPARK_Overlay.html",
-                      "version":  "fcc865281144",
-                      "sha256":  "fcc86528114419014f6fd222a5347d74e9341ae53ed95675a00570aa121c96ed",
-                      "size":  119291,
-                      "modifiedUtc":  "2026-06-07T04:47:23.5206360Z"
+                      "version":  "78f5c15de381",
+                      "sha256":  "78f5c15de3815d40c60eb4b817cffd37cc28a9f94bfb4b4f3e543507008a9d59",
+                      "size":  115388,
+                      "modifiedUtc":  "2026-06-07T05:09:04.9466945Z"
                   },
                   {
                       "path":  "parser/README.md",
@@ -159,10 +159,10 @@
                   },
                   {
                       "path":  "SPARK.html",
-                      "version":  "17332d662069",
-                      "sha256":  "17332d66206922f3523ef90e66302089babe39cd3a8df688607cdb956b9769ca",
-                      "size":  3639348,
-                      "modifiedUtc":  "2026-06-07T04:47:23.5322045Z"
+                      "version":  "01f9a66485b1",
+                      "sha256":  "01f9a66485b1979d74140e5204ca54375fad1d0695bf6e74cb2bc177758555e7",
+                      "size":  3638200,
+                      "modifiedUtc":  "2026-06-07T05:14:44.1970972Z"
                   },
                   {
                       "path":  "SPARK-Launcher.cs",
@@ -194,10 +194,10 @@
                   },
                   {
                       "path":  "static-download-server.mjs",
-                      "version":  "88ffb637b7c3",
-                      "sha256":  "88ffb637b7c32a42fb883a2b569aa9bf786b5eec6cf5eb7002104e2b00fcbe78",
-                      "size":  152293,
-                      "modifiedUtc":  "2026-06-04T12:36:24.8233434Z"
+                      "version":  "be6af4e74093",
+                      "sha256":  "be6af4e740935e715bb60b56947bcf38a3569cea7c4ac2b959956bf1ccd32a60",
+                      "size":  147752,
+                      "modifiedUtc":  "2026-06-07T05:03:48.3784767Z"
                   },
                   {
                       "path":  "tools/New-SparkManifest.ps1",

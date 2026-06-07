@@ -1339,8 +1339,6 @@ const state = {
   finalVisible:false,
   heatmapVisible:false,
   replayHeatmap:null,
-  seriesScoreOverride:null,
-  seriesScoreOverrideAppliedAt:0,
   clock:300,
   overtime:false,
   overtimeSeconds:0,
@@ -1351,7 +1349,6 @@ const state = {
   focusedPlayerName:null,
   liveStatsUnlocked:false,
   matchGuid:null,
-  seriesWinAppliedMatchId:null,
   finalExitTransitioning:false
 };
 let serverConfig = null;
@@ -1401,7 +1398,7 @@ function readConfig(){
   let localConfig = {};
   try{ localConfig = JSON.parse(localStorage.getItem(overlayConfigKey) || "{}"); }
   catch{ localConfig = {}; }
-  return {...defaultConfig, ...localConfig, ...(serverConfig || {}), ...(state.seriesScoreOverride || {})};
+  return {...defaultConfig, ...localConfig, ...(serverConfig || {})};
 }
 function applyOverlayTheme(config){
   const root = document.documentElement;
@@ -1447,13 +1444,6 @@ async function refreshServerConfig(){
     const json = await response.json();
     if(json?.config && typeof json.config === "object"){
       serverConfig = json.config;
-      if(state.seriesScoreOverride && (
-        serverConfig.lastAutoSeriesMatchId === state.seriesScoreOverride.lastAutoSeriesMatchId ||
-        (Number(serverConfig.blueSeriesScore) === Number(state.seriesScoreOverride.blueSeriesScore) &&
-          Number(serverConfig.orangeSeriesScore) === Number(state.seriesScoreOverride.orangeSeriesScore))
-      )){
-        state.seriesScoreOverride = null;
-      }
       try{ localStorage.setItem(overlayConfigKey, JSON.stringify({...defaultConfig, ...serverConfig})); }
       catch{}
       render();
@@ -2064,90 +2054,6 @@ function matchGuidFromPayload(payload){
   );
   return guid === undefined ? "" : String(guid).trim();
 }
-function winningTeamFromPayload(payload){
-  const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
-  const directWinnerTeam = firstDefined(
-    valueByKey(payload,["WinnerTeamNum","winnerTeamNum","WinnerTeam","winnerTeam","WinningTeamNum","winningTeamNum","WinningTeam","winningTeam"]),
-    valueByKey(game,["WinnerTeamNum","winnerTeamNum","WinnerTeam","winnerTeam","WinningTeamNum","winningTeamNum","WinningTeam","winningTeam"])
-  );
-  const directTeam = normalizeTeam(directWinnerTeam);
-  if(directTeam) return directTeam;
-  const winner = firstDefined(
-    valueByKey(payload,["Winner","winner","GameWinner","gameWinner","MatchWinner","matchWinner"]),
-    valueByKey(game,["Winner","winner","GameWinner","gameWinner","MatchWinner","matchWinner"])
-  );
-  if(winner && typeof winner === "object"){
-    const objectTeam = normalizeTeam(firstDefined(
-      valueByKey(winner,["TeamNum","teamNum","Team","team","Index","index"]),
-      winner
-    ));
-    if(objectTeam) return objectTeam;
-    const winnerName = cleanName(firstDefined(valueByKey(winner,["Name","name","TeamName","teamName"]), ""));
-    if(winnerName){
-      if(winnerName === state.teams.Blue.name) return "Blue";
-      if(winnerName === state.teams.Orange.name) return "Orange";
-    }
-  }
-  const winnerTeam = normalizeTeam(winner);
-  if(winnerTeam) return winnerTeam;
-  const explicitWinner = firstDefined(
-    valueByKey(payload,["bHasWinner","hasWinner","HasWinner"]),
-    valueByKey(game,["bHasWinner","hasWinner","HasWinner"])
-  );
-  if(toBoolean(explicitWinner)){
-    const blueScore = Number(state.teams.Blue.score);
-    const orangeScore = Number(state.teams.Orange.score);
-    if(Number.isFinite(blueScore) && Number.isFinite(orangeScore) && blueScore !== orangeScore){
-      return blueScore > orangeScore ? "Blue" : "Orange";
-    }
-  }
-  return null;
-}
-function seriesMatchIdFromPayload(payload, event=""){
-  const guid = matchGuidFromPayload(payload);
-  if(guid){
-    state.matchGuid = guid;
-    return guid;
-  }
-  return state.matchGuid || `${String(event || "matchended").toLowerCase()}-${Math.round(state.matchEndedAt || Date.now())}`;
-}
-function localSeriesAutoAllowed(payload, event=""){
-  if(nextMatchStartEvent(event)) return false;
-  if(payloadHasKickoffCountdown(payload)) return false;
-  if(payloadHasNextMatchSpectatorTarget(payload, event)) return false;
-  return true;
-}
-function applyLocalSeriesWinner(payload, event=""){
-  if(!localSeriesAutoAllowed(payload, event)) return false;
-  const winnerTeam = winningTeamFromPayload(payload);
-  if(!winnerTeam) return false;
-  const matchId = seriesMatchIdFromPayload(payload, event);
-  if(state.seriesWinAppliedMatchId === matchId) return false;
-  const config = readConfig();
-  if(config.lastAutoSeriesMatchId === matchId){
-    state.seriesWinAppliedMatchId = matchId;
-    return false;
-  }
-  const bestOf = [3,5,7].includes(Number(config.seriesBestOf)) ? Number(config.seriesBestOf) : 5;
-  const maxWins = Math.ceil(bestOf / 2);
-  const key = winnerTeam === "Blue" ? "blueSeriesScore" : "orangeSeriesScore";
-  const currentScore = Math.max(0, Math.min(maxWins, Number(config[key]) || 0));
-  const lastAutoAt = Number(config.lastAutoSeriesAppliedAt) || 0;
-  const now = Date.now();
-  state.seriesWinAppliedMatchId = matchId;
-  if(lastAutoAt > 0 && now - lastAutoAt < 30000) return false;
-  if(currentScore >= maxWins) return false;
-  state.seriesScoreOverride = {
-    blueSeriesScore:Number(config.blueSeriesScore) || 0,
-    orangeSeriesScore:Number(config.orangeSeriesScore) || 0,
-    [key]:Math.min(maxWins, currentScore + 1),
-    lastAutoSeriesMatchId:matchId,
-    lastAutoSeriesWinner:winnerTeam,
-    lastAutoSeriesAppliedAt:now
-  };
-  state.seriesScoreOverrideAppliedAt = Date.now();
-  return true;
-}
 function nextMatchStartEvent(eventName){
   const compact = compactEventName(eventName);
   return compact.includes("countdownbegan")
@@ -2224,7 +2130,6 @@ function resetForNextMatch(options={}){
   state.focusedPlayerName = null;
   state.liveStatsUnlocked = false;
   state.matchGuid = null;
-  state.seriesWinAppliedMatchId = null;
   state.finalExitTransitioning = false;
   if(finalTransitionQueueTimer){
     clearTimeout(finalTransitionQueueTimer);
@@ -2275,6 +2180,15 @@ function normalizeMessage(raw){
 }
 function compactEventName(event){
   return String(event || "").toLowerCase().replace(/[^a-z]/g, "");
+}
+function applyConfigBroadcast(payload){
+  const config = firstDefined(valueByKey(payload,["config","Config"]), payload?.payload?.config);
+  if(!config || typeof config !== "object" || Array.isArray(config)) return false;
+  serverConfig = config;
+  try{ localStorage.setItem(overlayConfigKey, JSON.stringify({...defaultConfig, ...serverConfig})); }
+  catch{}
+  render();
+  return true;
 }
 function renderBoostRows(team){
   return boostPlayersForTeam(team)
@@ -3096,6 +3010,10 @@ function render(){
 function handleMessage(raw){
   let msg;
   try{msg = normalizeMessage(raw);}catch{return;}
+  if(compactEventName(msg.event).includes("sparkoverlayconfig")){
+    applyConfigBroadcast(msg.payload);
+    return;
+  }
   state.connected = true;
   state.updates++;
   const eventName = compactEventName(msg.event);
@@ -3112,7 +3030,6 @@ function handleMessage(raw){
     state.matchEnded = true;
   }
   updateTeams(msg.payload);
-  if(messageEndsMatch) applyLocalSeriesWinner(msg.payload, msg.event);
   updatePlayers(msg.payload);
   const focusName = focusNameFromPayload(msg.payload);
   if(focusName){

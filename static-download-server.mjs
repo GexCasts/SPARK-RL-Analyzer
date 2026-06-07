@@ -84,8 +84,6 @@ let liveApiLatestStateMessage = null;
 let liveApiStateBroadcastTimer = null;
 const liveApiSampleLimit = 160;
 const liveApiSamples = [];
-let liveSeriesAwardedMatchKey = "";
-const liveSeriesPendingAwards = new Set();
 
 function findWingetFfmpegCandidates(){
   const base = process.env.LOCALAPPDATA
@@ -194,6 +192,11 @@ function broadcastLiveApiMessage(text){
   for(const client of liveApiClients) sendLiveApiWebSocketText(client, text);
 }
 
+function broadcastOverlayConfigUpdate(config){
+  const text = JSON.stringify({event:"SparkOverlayConfig", data:{config}, payload:{config}});
+  for(const client of liveApiClients) sendLiveApiWebSocketText(client, text);
+}
+
 function rememberLiveApiSample(text){
   let eventName = "";
   let preview = null;
@@ -217,7 +220,6 @@ function liveApiMessageEventName(text){
 
 function broadcastLiveApiFeedMessage(text){
   rememberLiveApiSample(text);
-  updateOverlaySeriesFromLiveApi(text).catch(error=>console.warn("Could not update overlay series score:", error));
   const eventName = liveApiMessageEventName(text);
   const compactEventName = eventName.replace(/[^a-z]/g, "");
   if(compactEventName.includes("updatestate")){
@@ -234,113 +236,6 @@ function broadcastLiveApiFeedMessage(text){
     return;
   }
   broadcastLiveApiMessage(text);
-}
-
-function parseLiveApiMessage(text){
-  const msg = typeof text === "string" ? JSON.parse(text) : text;
-  const event = String(msg?.Event ?? msg?.event ?? msg?.Type ?? msg?.type ?? msg?.Name ?? msg?.name ?? "");
-  let data = msg?.Data ?? msg?.data ?? msg?.Payload ?? msg?.payload ?? msg;
-  if(typeof data === "string"){
-    const trimmed = data.trim();
-    if(trimmed.startsWith("{") || trimmed.startsWith("[")) data = JSON.parse(trimmed);
-  }
-  return {event, data};
-}
-
-function liveApiValueByKey(obj, names){
-  if(!obj || typeof obj !== "object") return undefined;
-  for(const name of names) if(obj[name] !== undefined) return obj[name];
-  const wanted = names.map(name=>String(name).toLowerCase());
-  const found = Object.entries(obj).find(([key])=>wanted.includes(key.toLowerCase()));
-  return found ? found[1] : undefined;
-}
-
-function liveApiMatchGuid(data){
-  return String(liveApiValueByKey(data, ["MatchGuid", "matchGuid"]) ?? liveApiValueByKey(data?.Game, ["MatchGuid", "matchGuid"]) ?? "").trim();
-}
-
-function liveApiTeamSide(value){
-  if(value && typeof value === "object") value = liveApiValueByKey(value, ["TeamNum", "teamNum", "Team", "team"]);
-  if(value === 0 || value === "0") return "Blue";
-  if(value === 1 || value === "1") return "Orange";
-  const text = String(value || "").toLowerCase();
-  if(text.includes("blue")) return "Blue";
-  if(text.includes("orange")) return "Orange";
-  return "";
-}
-
-function liveApiWinnerSide(data){
-  const game = liveApiValueByKey(data, ["Game", "game"]) || data;
-  const winnerTeamNum = liveApiValueByKey(data, ["WinnerTeamNum", "winnerTeamNum"]);
-  const directSide = liveApiTeamSide(winnerTeamNum);
-  if(directSide) return directSide;
-  const winnerName = String(liveApiValueByKey(game, ["Winner", "winner"]) || "").trim().toLowerCase();
-  if(!winnerName) return "";
-  const teams = liveApiValueByKey(game, ["Teams", "teams"]);
-  const teamList = Array.isArray(teams) ? teams : teams && typeof teams === "object" ? Object.values(teams) : [];
-  const match = teamList.find(team=>String(liveApiValueByKey(team, ["Name", "name", "TeamName", "teamName"]) || "").trim().toLowerCase() === winnerName);
-  return liveApiTeamSide(liveApiValueByKey(match, ["TeamNum", "teamNum"]));
-}
-
-function liveApiHasWinner(data, event){
-  const compactEvent = String(event || "").toLowerCase().replace(/[^a-z]/g, "");
-  if(compactEvent.includes("matchended")) return true;
-  const game = liveApiValueByKey(data, ["Game", "game"]) || data;
-  const hasWinner = liveApiValueByKey(game, ["bHasWinner", "hasWinner", "Winner"]);
-  return hasWinner === true || hasWinner === 1 || hasWinner === "1" || String(hasWinner).toLowerCase() === "true";
-}
-
-async function updateOverlaySeriesFromLiveApi(text){
-  let msg;
-  try{
-    msg = parseLiveApiMessage(text);
-  }catch{
-    return;
-  }
-  const eventCompact = msg.event.toLowerCase().replace(/[^a-z]/g, "");
-  const guid = liveApiMatchGuid(msg.data);
-  if(!guid && (eventCompact.includes("matchcreated") || eventCompact.includes("matchinitialized"))){
-    liveSeriesAwardedMatchKey = "";
-    liveSeriesPendingAwards.clear();
-    return;
-  }
-  if(guid && (eventCompact.includes("matchcreated") || eventCompact.includes("matchinitialized"))){
-    if(liveSeriesAwardedMatchKey && liveSeriesAwardedMatchKey !== guid){
-      liveSeriesAwardedMatchKey = "";
-      liveSeriesPendingAwards.clear();
-    }
-    return;
-  }
-  if(!liveApiHasWinner(msg.data, msg.event)) return;
-  const winnerSide = liveApiWinnerSide(msg.data);
-  if(!winnerSide) return;
-  const awardKey = guid || `noguid-${winnerSide}`;
-  if(liveSeriesAwardedMatchKey === awardKey) return;
-  if(liveSeriesPendingAwards.has(awardKey)) return;
-  liveSeriesPendingAwards.add(awardKey);
-  try{
-    let config = {};
-    try{
-      config = JSON.parse(await fs.readFile(overlayConfigPath, "utf8") || "{}");
-    }catch{
-      config = {};
-    }
-    const bestOf = [3, 5, 7].includes(Number(config.seriesBestOf)) ? Number(config.seriesBestOf) : 5;
-    const maxWins = Math.ceil(bestOf / 2);
-    const key = winnerSide === "Blue" ? "blueSeriesScore" : "orangeSeriesScore";
-    const current = Math.max(0, Math.min(maxWins, Number(config[key]) || 0));
-    if(current >= maxWins){
-      liveSeriesAwardedMatchKey = awardKey;
-      return;
-    }
-    const nextConfig = {...config, seriesBestOf:bestOf, [key]:current + 1};
-    await fs.mkdir(overlayAssetDir, {recursive:true});
-    await fs.writeFile(overlayConfigPath, JSON.stringify(nextConfig, null, 2), "utf8");
-    liveSeriesAwardedMatchKey = awardKey;
-  }catch(error){
-    liveSeriesPendingAwards.delete(awardKey);
-    throw error;
-  }
 }
 
 function extractLiveApiJsonObjects(chunk){
@@ -3331,6 +3226,7 @@ async function handleOverlayConfig(req, res){
     : {};
   await fs.mkdir(overlayAssetDir, {recursive:true});
   await fs.writeFile(overlayConfigPath, JSON.stringify(config, null, 2), "utf8");
+  broadcastOverlayConfigUpdate(config);
   res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
   res.end(JSON.stringify({ok:true}));
 }
