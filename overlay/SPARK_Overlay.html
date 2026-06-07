@@ -2304,14 +2304,14 @@ function replaySpeedPhase(startedAt){
     clearTimeout(replaySpeedSwapTimer);
     replaySpeedSwapTimer = null;
   }
-  const nextAt = elapsed < 5000 ? 5000 : elapsed < 5400 ? 5400 : null;
+  const nextAt = elapsed < 9000 ? 9000 : elapsed < 9400 ? 9400 : null;
   if(nextAt !== null){
     replaySpeedSwapTimer = setTimeout(()=>{
       replaySpeedSwapTimer = null;
       render();
     }, Math.max(16, nextAt - elapsed));
   }
-  return elapsed >= 5400 ? "showMph" : elapsed >= 5000 ? "swapping" : "";
+  return elapsed >= 9400 ? "showMph" : elapsed >= 9000 ? "swapping" : "";
 }
 function renderGoalSpeedSwap(value, startedAt){
   const speed = goalSpeedValues(value);
