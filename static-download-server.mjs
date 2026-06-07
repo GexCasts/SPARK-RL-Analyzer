@@ -84,6 +84,7 @@ let liveApiLatestStateMessage = null;
 let liveApiStateBroadcastTimer = null;
 const liveApiSampleLimit = 160;
 const liveApiSamples = [];
+let liveSeriesAwardedMatchKey = "";
 
 function findWingetFfmpegCandidates(){
   const base = process.env.LOCALAPPDATA
@@ -218,8 +219,89 @@ function liveApiMessageEventName(text){
   }
 }
 
+function parseLiveApiMessage(text){
+  const msg = typeof text === "string" ? JSON.parse(text) : text;
+  const event = String(msg?.Event ?? msg?.event ?? msg?.Type ?? msg?.type ?? msg?.Name ?? msg?.name ?? "");
+  let data = msg?.Data ?? msg?.data ?? msg?.Payload ?? msg?.payload ?? msg;
+  if(typeof data === "string"){
+    const trimmed = data.trim();
+    if(trimmed.startsWith("{") || trimmed.startsWith("[")) data = JSON.parse(trimmed);
+  }
+  return {event, data};
+}
+
+function liveApiValueByKey(obj, names){
+  if(!obj || typeof obj !== "object") return undefined;
+  for(const name of names) if(obj[name] !== undefined) return obj[name];
+  const wanted = names.map(name=>String(name).toLowerCase());
+  const found = Object.entries(obj).find(([key])=>wanted.includes(key.toLowerCase()));
+  return found ? found[1] : undefined;
+}
+
+function liveApiMatchGuid(data){
+  return String(liveApiValueByKey(data, ["MatchGuid", "matchGuid"]) ?? liveApiValueByKey(data?.Game, ["MatchGuid", "matchGuid"]) ?? "").trim();
+}
+
+function liveApiWinnerSideFromMatchEnded(data){
+  const winnerTeamNum = liveApiValueByKey(data, ["WinnerTeamNum", "winnerTeamNum"])
+    ?? liveApiValueByKey(data?.Game, ["WinnerTeamNum", "winnerTeamNum"]);
+  const teamNumber = normalizeTeamNumber(winnerTeamNum);
+  if(teamNumber === 0) return "Blue";
+  if(teamNumber === 1) return "Orange";
+  return "";
+}
+
+async function updateOverlaySeriesFromLiveApi(text){
+  let msg;
+  try{
+    msg = parseLiveApiMessage(text);
+  }catch{
+    return;
+  }
+  const eventCompact = msg.event.toLowerCase().replace(/[^a-z]/g, "");
+  const guid = liveApiMatchGuid(msg.data);
+  if(eventCompact.includes("matchcreated") || eventCompact.includes("matchinitialized")){
+    if(!guid || liveSeriesAwardedMatchKey !== guid) liveSeriesAwardedMatchKey = "";
+    return;
+  }
+  if(!eventCompact.includes("matchended")) return;
+  const winnerSide = liveApiWinnerSideFromMatchEnded(msg.data);
+  if(!winnerSide) return;
+  const awardKey = guid || "matchended-without-guid";
+  if(liveSeriesAwardedMatchKey === awardKey) return;
+
+  let config = {};
+  try{
+    config = JSON.parse(await fs.readFile(overlayConfigPath, "utf8") || "{}");
+  }catch{
+    config = {};
+  }
+  const bestOf = [3, 5, 7].includes(Number(config.seriesBestOf)) ? Number(config.seriesBestOf) : 5;
+  const maxWins = Math.ceil(bestOf / 2);
+  const key = winnerSide === "Blue" ? "blueSeriesScore" : "orangeSeriesScore";
+  const current = Math.max(0, Math.min(maxWins, Number(config[key]) || 0));
+  const now = Date.now();
+  if(current >= maxWins){
+    liveSeriesAwardedMatchKey = awardKey;
+    return;
+  }
+  const nextConfig = {
+    ...config,
+    seriesBestOf:bestOf,
+    [key]:current + 1,
+    seriesLastWinnerMatchId:awardKey,
+    seriesLastWinnerTeam:winnerSide,
+    seriesLastWinnerAt:now
+  };
+  await fs.mkdir(overlayAssetDir, {recursive:true});
+  await fs.writeFile(overlayConfigPath, JSON.stringify(nextConfig, null, 2), "utf8");
+  liveSeriesAwardedMatchKey = awardKey;
+  broadcastOverlayConfigUpdate(nextConfig);
+}
+
 function broadcastLiveApiFeedMessage(text){
   rememberLiveApiSample(text);
+  updateOverlaySeriesFromLiveApi(text).catch(error=>console.warn("Could not update overlay series score:", error));
   const eventName = liveApiMessageEventName(text);
   const compactEventName = eventName.replace(/[^a-z]/g, "");
   if(compactEventName.includes("updatestate")){
