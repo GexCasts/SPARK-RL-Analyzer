@@ -604,7 +604,7 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
   });
 }
 
-async function newestRecentReplay(maxAgeMs=120000){
+async function newestRecentReplay(maxAgeMs=120000, options={}){
   const folder = await resolveReplayFolder();
   if(!folder.ok || !folder.path) return {ok:false, folder, replay:null, status:"no-folder", message:folder.message};
   let entries = [];
@@ -614,26 +614,35 @@ async function newestRecentReplay(maxAgeMs=120000){
     return {ok:false, folder, replay:null, status:"folder-unavailable", message:"Replay folder could not be read"};
   }
   const now = Date.now();
+  const minModifiedMs = Number(options.minModifiedMs);
+  const minStableMs = Math.max(0, Number(options.minStableMs) || 0);
   const candidates = [];
+  const unstableCandidates = [];
   for(const entry of entries){
     if(!entry.isFile() || !entry.name.toLowerCase().endsWith(".replay")) continue;
     const replayPath = path.join(folder.path, entry.name);
     try{
       const stat = await fs.stat(replayPath);
       const ageMs = now - stat.mtimeMs;
-      if(ageMs >= 0 && ageMs <= maxAgeMs){
-        candidates.push({
-          name:entry.name,
-          path:replayPath,
-          size:stat.size,
-          modifiedMs:stat.mtimeMs,
-          modifiedUtc:new Date(stat.mtimeMs).toISOString(),
-          ageMs
-        });
-      }
+      if(Number.isFinite(minModifiedMs) && stat.mtimeMs < minModifiedMs) continue;
+      if(ageMs < 0 || ageMs > maxAgeMs) continue;
+      const replay = {
+        name:entry.name,
+        path:replayPath,
+        size:stat.size,
+        modifiedMs:stat.mtimeMs,
+        modifiedUtc:new Date(stat.mtimeMs).toISOString(),
+        ageMs
+      };
+      if(stat.size <= 0 || ageMs < minStableMs) unstableCandidates.push(replay);
+      else candidates.push(replay);
     }catch{}
   }
   candidates.sort((a,b)=>b.modifiedMs - a.modifiedMs);
+  unstableCandidates.sort((a,b)=>b.modifiedMs - a.modifiedMs);
+  if(!candidates.length && unstableCandidates.length){
+    return {ok:false, folder, replay:unstableCandidates[0], status:"replay-still-writing", message:"Recent replay is still being saved"};
+  }
   if(!candidates.length) return {ok:false, folder, replay:null, status:"no-recent-replay", message:"No recent replay file detected"};
   return {ok:true, folder, replay:candidates[0], status:"recent-replay", message:"Recent replay detected"};
 }
@@ -3064,6 +3073,15 @@ function latestReplayMaxAgeFromUrl(url){
   return Number.isFinite(raw) ? Math.max(1000, Math.min(10 * 60 * 1000, Math.round(raw))) : 120000;
 }
 
+function latestReplayOptionsFromUrl(url){
+  const minModifiedMs = Number(url.searchParams.get("minModifiedMs"));
+  const minStableMs = Number(url.searchParams.get("minStableMs"));
+  return {
+    minModifiedMs:Number.isFinite(minModifiedMs) ? minModifiedMs : undefined,
+    minStableMs:Number.isFinite(minStableMs) ? Math.max(0, Math.min(30000, Math.round(minStableMs))) : 0
+  };
+}
+
 async function handleLatestReplay(req, res, url){
   if(req.method === "OPTIONS"){
     res.writeHead(204, corsHeaders);
@@ -3075,7 +3093,7 @@ async function handleLatestReplay(req, res, url){
     res.end("Use GET.");
     return;
   }
-  const result = await newestRecentReplay(latestReplayMaxAgeFromUrl(url));
+  const result = await newestRecentReplay(latestReplayMaxAgeFromUrl(url), latestReplayOptionsFromUrl(url));
   res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
   res.end(JSON.stringify(result));
 }
@@ -3091,7 +3109,7 @@ async function handleLatestReplayAnalyze(req, res, url){
     res.end("Use GET.");
     return;
   }
-  const latest = await newestRecentReplay(latestReplayMaxAgeFromUrl(url));
+  const latest = await newestRecentReplay(latestReplayMaxAgeFromUrl(url), latestReplayOptionsFromUrl(url));
   if(!latest.ok || !latest.replay){
     res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
     res.end(JSON.stringify(latest));

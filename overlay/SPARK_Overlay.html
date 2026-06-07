@@ -2789,6 +2789,13 @@ function scheduleRecentReplayHeatmap(){
   let report = null;
   let lookupComplete = false;
   let revealWindowOpen = false;
+  const scheduledAt = Date.now();
+  const matchEndedAt = Number(state.matchEndedAt) || Date.now();
+  const minModifiedMs = Math.max(0, matchEndedAt - 15000);
+  const revealDelayMs = 15000;
+  const lookupStartDelayMs = 9000;
+  const lookupRetryMs = 1500;
+  const lookupDeadlineMs = scheduledAt + revealDelayMs;
   const revealIfReady = ()=>{
     if(runId !== replayHeatmapRunId || !state.matchEnded || !state.finalVisible) return;
     if(!revealWindowOpen || !lookupComplete || !report?.players?.length) return;
@@ -2796,26 +2803,47 @@ function scheduleRecentReplayHeatmap(){
     state.heatmapVisible = true;
     render();
   };
-  replayHeatmapLookupTimer = setTimeout(async()=>{
+  const scheduleLookupAttempt = delay=>{
+    if(replayHeatmapLookupTimer) clearTimeout(replayHeatmapLookupTimer);
+    replayHeatmapLookupTimer = setTimeout(loadRecentReplayHeatmap, Math.max(0, delay));
+  };
+  const loadRecentReplayHeatmap = async()=>{
     replayHeatmapLookupTimer = null;
     if(runId !== replayHeatmapRunId || !state.matchEnded || !state.finalVisible) return;
     try{
-      const response = await fetch(`${location.origin}/api/latest-replay/analyze?maxAgeMs=120000&t=${Date.now()}`, {cache:"no-store"});
+      const params = new URLSearchParams({
+        maxAgeMs:"120000",
+        minModifiedMs:String(minModifiedMs),
+        minStableMs:"1500",
+        t:String(Date.now())
+      });
+      const response = await fetch(`${location.origin}/api/latest-replay/analyze?${params}`, {cache:"no-store"});
       const json = await response.json().catch(()=>null);
-      if(!response.ok || !json?.ok || !json?.analysis) return;
+      if(!response.ok || !json?.ok || !json?.analysis){
+        if(Date.now() + lookupRetryMs <= lookupDeadlineMs){
+          scheduleLookupAttempt(lookupRetryMs);
+          return;
+        }
+        return;
+      }
       report = buildReplayHeatmapFromAnalysis({...json.analysis, replayFile:json.replay});
     }catch(error){
       console.warn("Could not load recent replay heatmap:", error);
+      if(Date.now() + lookupRetryMs <= lookupDeadlineMs){
+        scheduleLookupAttempt(lookupRetryMs);
+        return;
+      }
     }finally{
-      lookupComplete = true;
+      if(!replayHeatmapLookupTimer) lookupComplete = true;
       revealIfReady();
     }
-  }, 9000);
+  };
+  scheduleLookupAttempt(lookupStartDelayMs);
   replayHeatmapRevealTimer = setTimeout(()=>{
     replayHeatmapRevealTimer = null;
     revealWindowOpen = true;
     revealIfReady();
-  }, 15000);
+  }, revealDelayMs);
 }
 
 function unlockLiveStatsIfFocused(focusName){
