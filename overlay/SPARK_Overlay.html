@@ -598,6 +598,8 @@ html,body{
 }
 .liveStatPlayer{
   --team:var(--spark-gold);
+  --statBoostStart:var(--team);
+  --statBoostEnd:var(--spark-gold);
   display:grid;
   grid-template-columns:103px repeat(4,41px);
   grid-template-rows:24px 0fr;
@@ -612,8 +614,16 @@ html,body{
   font-weight:850;
   transition:grid-template-rows .22s cubic-bezier(.16,1,.3,1), min-height .22s cubic-bezier(.16,1,.3,1), padding .22s cubic-bezier(.16,1,.3,1), background .18s ease, border-color .18s ease, color .18s ease;
 }
-.liveStatPlayer.blue{--team:var(--blue)}
-.liveStatPlayer.orange{--team:var(--orange)}
+.liveStatPlayer.blue{
+  --team:var(--blue);
+  --statBoostStart:var(--overlay-boost-blue);
+  --statBoostEnd:var(--overlay-boost-blue-end);
+}
+.liveStatPlayer.orange{
+  --team:var(--orange);
+  --statBoostStart:var(--overlay-boost-orange);
+  --statBoostEnd:var(--overlay-accent);
+}
 .liveStatPlayer.focused{
   grid-template-rows:29px 10px;
   min-height:41px;
@@ -675,8 +685,8 @@ html,body{
   display:block;
   width:var(--boost,0%);
   height:100%;
-  background:linear-gradient(90deg,var(--team),var(--spark-gold));
-  box-shadow:0 0 14px color-mix(in srgb,var(--team) 72%,transparent);
+  background:linear-gradient(90deg,var(--statBoostStart),var(--statBoostEnd));
+  box-shadow:0 0 14px color-mix(in srgb,var(--statBoostStart) 72%,transparent);
   transition:width .22s cubic-bezier(.16,1,.3,1);
 }
 .stage.finalActive .scorebug,
