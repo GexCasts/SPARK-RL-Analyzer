@@ -12536,8 +12536,17 @@ function liveSeriesMatchId(payload, event=""){
     || `${String(event || "matchended").toLowerCase()}-${Math.round(liveApiState?.startedAt || Date.now())}`;
 }
 
+function liveSeriesAutoAllowed(payload, event=""){
+  const compact = String(event || "").toLowerCase().replace(/[^a-z]/g, "");
+  if(liveApiNextMatchStartEvent(compact)) return false;
+  if(liveApiPayloadHasKickoffCountdown(payload)) return false;
+  if(liveApiPayloadHasNextMatchSpectatorTarget(payload, event)) return false;
+  return true;
+}
+
 function applyLiveSeriesWinner(payload, event=""){
   if(!liveApiState) return false;
+  if(!liveSeriesAutoAllowed(payload, event)) return false;
   const winnerTeam = liveApiWinnerTeam(payload);
   if(!winnerTeam) return false;
   const matchId = liveSeriesMatchId(payload, event);
@@ -12551,13 +12560,17 @@ function applyLiveSeriesWinner(payload, event=""){
   const maxWins = Math.ceil(bestOf / 2);
   const key = winnerTeam === "Blue" ? "blueSeriesScore" : "orangeSeriesScore";
   const currentScore = Math.max(0, Math.min(maxWins, Number(currentConfig[key]) || 0));
+  const lastAutoAt = Number(currentConfig.lastAutoSeriesAppliedAt) || 0;
+  const now = Date.now();
   liveApiState.seriesWinAppliedMatchId = matchId;
+  if(lastAutoAt > 0 && now - lastAutoAt < 30000) return false;
   if(currentScore >= maxWins) return false;
   saveOverlayConfig({
     ...currentConfig,
     [key]:Math.min(maxWins, currentScore + 1),
     lastAutoSeriesMatchId:matchId,
-    lastAutoSeriesWinner:winnerTeam
+    lastAutoSeriesWinner:winnerTeam,
+    lastAutoSeriesAppliedAt:now
   }, {renderControl:activeView === "overlay" || selected === "overlayControl"});
   return true;
 }

@@ -2095,7 +2095,14 @@ function seriesMatchIdFromPayload(payload, event=""){
   }
   return state.matchGuid || `${String(event || "matchended").toLowerCase()}-${Math.round(state.matchEndedAt || Date.now())}`;
 }
+function localSeriesAutoAllowed(payload, event=""){
+  if(nextMatchStartEvent(event)) return false;
+  if(payloadHasKickoffCountdown(payload)) return false;
+  if(payloadHasNextMatchSpectatorTarget(payload, event)) return false;
+  return true;
+}
 function applyLocalSeriesWinner(payload, event=""){
+  if(!localSeriesAutoAllowed(payload, event)) return false;
   const winnerTeam = winningTeamFromPayload(payload);
   if(!winnerTeam) return false;
   const matchId = seriesMatchIdFromPayload(payload, event);
@@ -2109,14 +2116,18 @@ function applyLocalSeriesWinner(payload, event=""){
   const maxWins = Math.ceil(bestOf / 2);
   const key = winnerTeam === "Blue" ? "blueSeriesScore" : "orangeSeriesScore";
   const currentScore = Math.max(0, Math.min(maxWins, Number(config[key]) || 0));
+  const lastAutoAt = Number(config.lastAutoSeriesAppliedAt) || 0;
+  const now = Date.now();
   state.seriesWinAppliedMatchId = matchId;
+  if(lastAutoAt > 0 && now - lastAutoAt < 30000) return false;
   if(currentScore >= maxWins) return false;
   state.seriesScoreOverride = {
     blueSeriesScore:Number(config.blueSeriesScore) || 0,
     orangeSeriesScore:Number(config.orangeSeriesScore) || 0,
     [key]:Math.min(maxWins, currentScore + 1),
     lastAutoSeriesMatchId:matchId,
-    lastAutoSeriesWinner:winnerTeam
+    lastAutoSeriesWinner:winnerTeam,
+    lastAutoSeriesAppliedAt:now
   };
   state.seriesScoreOverrideAppliedAt = Date.now();
   return true;
