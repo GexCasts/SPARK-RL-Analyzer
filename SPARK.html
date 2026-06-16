@@ -449,13 +449,14 @@ h1{margin:0;font-size:calc(22px * var(--spark-header-scale));letter-spacing:.06e
 .replayDropPanel b{font-size:17px}
 .replayDropPanel .liveApiControls{
   display:grid;
-  grid-template-columns:1fr auto;
+  grid-template-columns:minmax(148px,.8fr) minmax(210px,1.2fr);
+  align-items:start;
+  gap:8px;
   justify-content:stretch;
   margin-top:0;
 }
 .replayDropPanel .liveApiControls button{min-height:32px}
-.replayDropPanel .liveRateControl{justify-self:end}
-.replayDropPanel .liveRemoteAccess{grid-column:1 / -1}
+.replayDropPanel .liveRateControl{justify-self:stretch}
 .replayDropPanel #fileStatus{
   font-size:11px;
   line-height:1.35;
@@ -654,11 +655,12 @@ button.unitSwitch{
 .liveRateControl{
   position:relative;
   z-index:4;
-  display:inline-flex;
+  display:grid;
+  grid-template-columns:auto minmax(52px,1fr) 30px minmax(34px,auto);
   align-items:center;
-  gap:5px;
+  gap:6px;
   min-height:32px;
-  padding:4px 6px;
+  padding:5px 6px;
   border:1px solid rgba(255,208,0,.35);
   border-radius:8px;
   background:rgba(7,9,12,.72);
@@ -668,7 +670,8 @@ button.unitSwitch{
   display:inline-block;
   position:relative;
   z-index:5;
-  width:58px;
+  width:100%;
+  min-width:52px;
   padding:4px 6px;
   border:1px solid rgba(255,255,255,.20);
   border-radius:6px;
@@ -697,15 +700,16 @@ button.unitSwitch{
   position:relative;
   z-index:4;
   display:grid;
+  grid-column:1 / -1;
   gap:6px;
-  padding:7px 8px;
-  border:1px solid rgba(255,208,0,.24);
-  border-radius:8px;
-  background:rgba(7,9,12,.58);
+  min-width:0;
+  margin-top:2px;
+  padding-top:6px;
+  border-top:1px solid rgba(255,208,0,.18);
 }
 .liveRemoteAccess summary{
   cursor:pointer;
-  color:#f4f6fb;
+  color:var(--muted);
   font-size:11px;
   font-weight:850;
   list-style:none;
@@ -723,7 +727,8 @@ button.unitSwitch{
 }
 .liveRemoteAccess[open] summary::after{transform:translateY(1px) rotate(225deg)}
 .liveRemoteRow{
-  display:flex;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
   gap:6px;
   align-items:center;
 }
@@ -750,12 +755,10 @@ button.unitSwitch{
   color:var(--muted);
 }
 .liveRemoteAccess.success{
-  border-color:rgba(38,230,138,.62);
-  box-shadow:0 0 0 1px rgba(38,230,138,.12),0 0 16px rgba(38,230,138,.14);
+  border-top-color:rgba(38,230,138,.62);
 }
 .liveRemoteAccess.error{
-  border-color:rgba(239,68,68,.7);
-  box-shadow:0 0 0 1px rgba(239,68,68,.12),0 0 16px rgba(239,68,68,.14);
+  border-top-color:rgba(239,68,68,.7);
 }
 .liveRemoteStatus.success{color:#26e68a}
 .liveRemoteStatus.error{color:#ef4444}
@@ -4143,16 +4146,16 @@ body.obsOverlayMode #obsOverlayRoot{
             </datalist>
             <button id="liveStatsConfigPickBtn" class="liveConfigSearchBtn" type="button" title="Find DefaultStatsAPI.ini" aria-label="Find DefaultStatsAPI.ini">&#128269;</button>
             <span class="liveRateStatus" id="livePacketRateStatus"></span>
+            <details class="liveRemoteAccess" id="liveRemoteAccessPanel">
+              <summary>Remote access</summary>
+              <div class="liveRemoteRow">
+                <input id="liveApiRemoteAddress" type="text" inputmode="url" placeholder="127.0.0.1:49123" aria-label="Rocket League API network address">
+                <button id="liveApiRemoteApplyBtn" type="button">Connect</button>
+              </div>
+              <div class="liveRemoteStatus" id="liveApiRemoteStatus">Use this when Rocket League runs on another PC.</div>
+            </details>
           </span>
           <button id="obsOverlayBtn" class="obs" type="button">Open OBS Overlay</button>
-          <details class="liveRemoteAccess" id="liveRemoteAccessPanel">
-            <summary>Remote access</summary>
-            <div class="liveRemoteRow">
-              <input id="liveApiRemoteAddress" type="text" inputmode="url" placeholder="127.0.0.1:49123" aria-label="Rocket League API network address">
-              <button id="liveApiRemoteApplyBtn" type="button">Connect</button>
-            </div>
-            <div class="liveRemoteStatus" id="liveApiRemoteStatus">Use this when Rocket League runs on another PC.</div>
-          </details>
         </div>
         <div id="fileStatus" class="note">Showing sample 3v3 match data.</div>
       </div>
