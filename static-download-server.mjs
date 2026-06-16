@@ -796,14 +796,14 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
   });
 }
 
-async function newestRecentReplay(maxAgeMs=120000, options={}){
+async function recentReplayCandidates(maxAgeMs=120000, options={}){
   const folder = await resolveReplayFolder();
-  if(!folder.ok || !folder.path) return {ok:false, folder, replay:null, status:"no-folder", message:folder.message};
+  if(!folder.ok || !folder.path) return {ok:false, folder, candidates:[], unstableCandidates:[], status:"no-folder", message:folder.message};
   let entries = [];
   try{
     entries = await fs.readdir(folder.path, {withFileTypes:true});
   }catch{
-    return {ok:false, folder, replay:null, status:"folder-unavailable", message:"Replay folder could not be read"};
+    return {ok:false, folder, candidates:[], unstableCandidates:[], status:"folder-unavailable", message:"Replay folder could not be read"};
   }
   const now = Date.now();
   const minModifiedMs = Number(options.minModifiedMs);
@@ -832,6 +832,13 @@ async function newestRecentReplay(maxAgeMs=120000, options={}){
   }
   candidates.sort((a,b)=>b.modifiedMs - a.modifiedMs);
   unstableCandidates.sort((a,b)=>b.modifiedMs - a.modifiedMs);
+  return {ok:true, folder, candidates, unstableCandidates, status:"candidate-list", message:"Recent replay candidates collected"};
+}
+
+async function newestRecentReplay(maxAgeMs=120000, options={}){
+  const result = await recentReplayCandidates(maxAgeMs, options);
+  if(!result.ok) return {ok:false, folder:result.folder, replay:null, status:result.status, message:result.message};
+  const {folder, candidates, unstableCandidates} = result;
   if(!candidates.length && unstableCandidates.length){
     return {ok:false, folder, replay:unstableCandidates[0], status:"replay-still-writing", message:"Recent replay is still being saved"};
   }
@@ -3301,17 +3308,44 @@ async function handleLatestReplayAnalyze(req, res, url){
     res.end("Use GET.");
     return;
   }
-  const latest = await newestRecentReplay(latestReplayMaxAgeFromUrl(url), latestReplayOptionsFromUrl(url));
-  if(!latest.ok || !latest.replay){
+  const candidates = await recentReplayCandidates(latestReplayMaxAgeFromUrl(url), latestReplayOptionsFromUrl(url));
+  if(!candidates.ok){
     res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
-    res.end(JSON.stringify(latest));
+    res.end(JSON.stringify({ok:false, folder:candidates.folder, replay:null, status:candidates.status, message:candidates.message}));
     return;
   }
-  const replayBytes = await fs.readFile(latest.replay.path);
-  const parsed = await parseReplayBuffer(replayBytes, "recent-replay");
-  const analysis = buildReplayAnalysisPackage(parsed, {replayFile:latest.replay});
+  if(!candidates.candidates.length && candidates.unstableCandidates.length){
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify({ok:false, folder:candidates.folder, replay:candidates.unstableCandidates[0], status:"replay-still-writing", message:"Recent replay is still being saved"}));
+    return;
+  }
+  if(!candidates.candidates.length){
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify({ok:false, folder:candidates.folder, replay:null, status:"no-recent-replay", message:"No recent replay file detected"}));
+    return;
+  }
+  const parseErrors = [];
+  for(const replay of candidates.candidates.slice(0, 5)){
+    try{
+      const replayBytes = await fs.readFile(replay.path);
+      const parsed = await parseReplayBuffer(replayBytes, "recent-replay");
+      const analysis = buildReplayAnalysisPackage(parsed, {replayFile:replay});
+      res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+      res.end(JSON.stringify({ok:true, folder:candidates.folder, replay, status:"recent-replay", message:"Recent replay detected", analysis}));
+      return;
+    }catch(error){
+      parseErrors.push({name:replay.name, message:error?.message || String(error)});
+    }
+  }
   res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
-  res.end(JSON.stringify({...latest, analysis}));
+  res.end(JSON.stringify({
+    ok:false,
+    folder:candidates.folder,
+    replay:candidates.candidates[0],
+    status:"recent-replay-parse-failed",
+    message:"Recent replay files could not be analyzed",
+    parseErrors
+  }));
 }
 
 async function handleClientHeartbeat(req, res){
