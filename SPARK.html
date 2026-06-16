@@ -455,6 +455,7 @@ h1{margin:0;font-size:calc(22px * var(--spark-header-scale));letter-spacing:.06e
 }
 .replayDropPanel .liveApiControls button{min-height:32px}
 .replayDropPanel .liveRateControl{justify-self:end}
+.replayDropPanel .liveRemoteAccess{grid-column:1 / -1}
 .replayDropPanel #fileStatus{
   font-size:11px;
   line-height:1.35;
@@ -681,9 +682,83 @@ button.unitSwitch{
   border-color:var(--spark-yellow);
   box-shadow:var(--spark-focus);
 }
+.liveConfigSearchBtn{
+  width:30px;
+  min-width:30px;
+  padding:0;
+  border-radius:7px;
+  font-size:13px;
+  line-height:1;
+}
 .liveRateStatus{min-width:34px;font-size:10px;color:var(--muted);text-align:left}
 .liveRateStatus.saved{color:#26e68a}
 .liveRateStatus.error{color:#ef4444}
+.liveRemoteAccess{
+  position:relative;
+  z-index:4;
+  display:grid;
+  gap:6px;
+  padding:7px 8px;
+  border:1px solid rgba(255,208,0,.24);
+  border-radius:8px;
+  background:rgba(7,9,12,.58);
+}
+.liveRemoteAccess summary{
+  cursor:pointer;
+  color:#f4f6fb;
+  font-size:11px;
+  font-weight:850;
+  list-style:none;
+}
+.liveRemoteAccess summary::-webkit-details-marker{display:none}
+.liveRemoteAccess summary::after{
+  content:"";
+  display:inline-block;
+  width:6px;
+  height:6px;
+  margin-left:8px;
+  border-right:1px solid var(--muted);
+  border-bottom:1px solid var(--muted);
+  transform:translateY(-2px) rotate(45deg);
+}
+.liveRemoteAccess[open] summary::after{transform:translateY(1px) rotate(225deg)}
+.liveRemoteRow{
+  display:flex;
+  gap:6px;
+  align-items:center;
+}
+.liveRemoteRow input{
+  display:block;
+  flex:1 1 160px;
+  min-width:0;
+  padding:6px 8px;
+  border:1px solid rgba(255,255,255,.20);
+  border-radius:6px;
+  background:var(--spark-control-bg);
+  color:#f4f6fb;
+  font-size:12px;
+  font-weight:750;
+}
+.liveRemoteRow input:focus{
+  outline:0;
+  border-color:var(--spark-yellow);
+  box-shadow:var(--spark-focus);
+}
+.liveRemoteStatus{
+  min-height:16px;
+  font-size:10px;
+  color:var(--muted);
+}
+.liveRemoteAccess.success{
+  border-color:rgba(38,230,138,.62);
+  box-shadow:0 0 0 1px rgba(38,230,138,.12),0 0 16px rgba(38,230,138,.14);
+}
+.liveRemoteAccess.error{
+  border-color:rgba(239,68,68,.7);
+  box-shadow:0 0 0 1px rgba(239,68,68,.12),0 0 16px rgba(239,68,68,.14);
+}
+.liveRemoteStatus.success{color:#26e68a}
+.liveRemoteStatus.error{color:#ef4444}
 .liveApiBadge{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
 .liveApiDot{width:8px;height:8px;border-radius:50%;background:#6b7280;box-shadow:0 0 10px rgba(107,114,128,.45)}
 .liveApiBadge.connected .liveApiDot{background:#26e68a;box-shadow:0 0 10px rgba(38,230,138,.9)}
@@ -4066,9 +4141,18 @@ body.obsOverlayMode #obsOverlayRoot{
               <option value="100"></option>
               <option value="120"></option>
             </datalist>
+            <button id="liveStatsConfigPickBtn" class="liveConfigSearchBtn" type="button" title="Find DefaultStatsAPI.ini" aria-label="Find DefaultStatsAPI.ini">&#128269;</button>
             <span class="liveRateStatus" id="livePacketRateStatus"></span>
           </span>
           <button id="obsOverlayBtn" class="obs" type="button">Open OBS Overlay</button>
+          <details class="liveRemoteAccess" id="liveRemoteAccessPanel">
+            <summary>Remote access</summary>
+            <div class="liveRemoteRow">
+              <input id="liveApiRemoteAddress" type="text" inputmode="url" placeholder="127.0.0.1:49123" aria-label="Rocket League API network address">
+              <button id="liveApiRemoteApplyBtn" type="button">Connect</button>
+            </div>
+            <div class="liveRemoteStatus" id="liveApiRemoteStatus">Use this when Rocket League runs on another PC.</div>
+          </details>
         </div>
         <div id="fileStatus" class="note">Showing sample 3v3 match data.</div>
       </div>
@@ -4351,6 +4435,7 @@ const liveApiBridgeEndpoint = location.protocol.startsWith("http")
 const liveApiEndpoints=[
   {url:liveApiBridgeEndpoint,label:"SPARK local Live API bridge"}
 ];
+let liveApiSourceAddress = "127.0.0.1:49123";
 const isObsOverlayMode = new URLSearchParams(location.search).get("overlay") === "obs" || location.pathname.endsWith("/1NE_Overlay") || location.pathname.endsWith("/SPARK_Overlay");
 const forceObsFinalPreview = new URLSearchParams(location.search).get("finalPreview") === "1";
 const obsOverlayFileUrl = `${location.href.split("?")[0]}?overlay=obs`;
@@ -11674,12 +11759,36 @@ function livePacketRateEndpoint(){
     : "/api/live-packet-rate";
 }
 
+function liveStatsConfigEndpoint(suffix=""){
+  return location.protocol === "file:"
+    ? `http://127.0.0.1:8765/api/live-stats-config${suffix}`
+    : `/api/live-stats-config${suffix}`;
+}
+
+function liveApiSourceEndpoint(){
+  return location.protocol === "file:"
+    ? "http://127.0.0.1:8765/api/live-api-source"
+    : "/api/live-api-source";
+}
+
 function setLivePacketRateStatus(message, kind=""){
   const el = $("livePacketRateStatus");
   if(!el) return;
   el.classList.remove("saved","error");
   if(kind) el.classList.add(kind);
   el.textContent = message || "";
+}
+
+function setLiveRemoteStatus(message, kind=""){
+  const panel = $("liveRemoteAccessPanel");
+  const el = $("liveApiRemoteStatus");
+  if(panel) panel.classList.remove("success","error");
+  if(el) el.classList.remove("success","error");
+  if(kind){
+    panel?.classList.add(kind);
+    el?.classList.add(kind);
+  }
+  if(el) el.textContent = message || "";
 }
 
 function normalizePacketRateInput(value){
@@ -11695,17 +11804,46 @@ async function loadLivePacketRate(){
   if(!input) return;
   try{
     const response = await fetch(livePacketRateEndpoint(), {cache:"no-store"});
-    if(!response.ok) throw new Error((await response.text()) || response.statusText);
+    if(!response.ok){
+      let json = null;
+      try{ json = await response.json(); }catch{}
+      throw new Error(json?.message || response.statusText || "Unavailable");
+    }
     const json = await response.json();
     if(Number.isFinite(Number(json.packetSendRate))){
       input.value = String(Math.round(Number(json.packetSendRate)));
       setLivePacketRateStatus("Loaded", "saved");
       setTimeout(()=>setLivePacketRateStatus(""), 1600);
+    }else{
+      setLivePacketRateStatus("Set rate");
     }
   }catch(err){
     console.warn("Could not read Rocket League Stats API packet rate:", err);
     const message = String(err?.message || err || "");
-    setLivePacketRateStatus(message.includes("500") || message.includes("404") ? "Restart SPARK" : "Unavailable", "error");
+    setLivePacketRateStatus(message.includes("not set") ? "Pick file" : "Unavailable", "error");
+  }
+}
+
+async function pickLiveStatsConfig(){
+  setLivePacketRateStatus("Choosing...");
+  try{
+    const response = await fetch(liveStatsConfigEndpoint("/pick"), {
+      method:"POST",
+      cache:"no-store"
+    });
+    const json = await response.json();
+    if(!response.ok || json.ok === false){
+      if(json.status === "cancelled"){
+        setLivePacketRateStatus("");
+        return;
+      }
+      throw new Error(json.message || response.statusText);
+    }
+    setLivePacketRateStatus("File set", "saved");
+    await loadLivePacketRate();
+  }catch(err){
+    console.warn("Could not choose Rocket League Stats API file:", err);
+    setLivePacketRateStatus("Pick failed", "error");
   }
 }
 
@@ -11734,7 +11872,59 @@ async function applyLivePacketRate(){
     setTimeout(()=>setLivePacketRateStatus(""), 1800);
   }catch(err){
     console.warn("Could not save Rocket League Stats API packet rate:", err);
-    setLivePacketRateStatus("Save failed", "error");
+    const message = String(err?.message || "");
+    setLivePacketRateStatus(message.includes("404") || message.includes("not set") ? "Pick file" : "Save failed", "error");
+  }
+}
+
+function normalizeRemoteAddressInput(value){
+  const text = String(value || "").trim();
+  if(!text) return "127.0.0.1:49123";
+  return text;
+}
+
+async function loadLiveApiSource(){
+  const input = $("liveApiRemoteAddress");
+  if(!input) return;
+  try{
+    const response = await fetch(liveApiSourceEndpoint(), {cache:"no-store"});
+    if(!response.ok) throw new Error((await response.text()) || response.statusText);
+    const json = await response.json();
+    liveApiSourceAddress = json.address || "127.0.0.1:49123";
+    input.value = liveApiSourceAddress;
+    setLiveRemoteStatus(json.remote ? "Remote address saved." : "Using this PC.");
+  }catch(err){
+    console.warn("Could not load Rocket League API source:", err);
+    input.value = liveApiSourceAddress;
+    setLiveRemoteStatus("Remote settings unavailable.", "error");
+  }
+}
+
+async function applyLiveApiSource(){
+  const input = $("liveApiRemoteAddress");
+  if(!input) return;
+  const address = normalizeRemoteAddressInput(input.value);
+  input.value = address;
+  setLiveRemoteStatus("Checking...");
+  try{
+    const response = await fetch(liveApiSourceEndpoint(), {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({address}),
+      cache:"no-store"
+    });
+    const json = await response.json();
+    if(!response.ok) throw new Error(json.message || response.statusText);
+    liveApiSourceAddress = json.address || address;
+    input.value = liveApiSourceAddress;
+    setLiveRemoteStatus(json.ok ? `Connected to ${liveApiSourceAddress}` : `Could not reach ${liveApiSourceAddress}`, json.ok ? "success" : "error");
+    if(liveApiSocket){
+      stopLiveApiFeed();
+      startLiveApiFeed();
+    }
+  }catch(err){
+    console.warn("Could not set Rocket League API source:", err);
+    setLiveRemoteStatus("Connection failed.", "error");
   }
 }
 
@@ -13534,7 +13724,7 @@ function connectLiveApiEndpoint(endpointIndex){
     data = buildData(9001, null, liveApiState.title, 300);
     selected = "overview";
     $("fileStatus").innerHTML =
-      `Connected to Rocket League Stats API through the SPARK local bridge.<br>Bridge WebSocket: <b>${escapeHtml(endpoint.url.replace(/^ws:\/\//,""))}</b><br>Rocket League feed: <b>127.0.0.1:49123</b>`;
+      `Connected to Rocket League Stats API through the SPARK local bridge.<br>Bridge WebSocket: <b>${escapeHtml(endpoint.url.replace(/^ws:\/\//,""))}</b><br>Rocket League feed: <b>${escapeHtml(liveApiSourceAddress)}</b>`;
     render();
   };
   liveApiSocket.onmessage = event=>handleLiveApiMessage(event.data);
@@ -13574,7 +13764,7 @@ function tryNextLiveEndpoint(endpointIndex, reason){
   }
   liveApiSetStatus("error", "Connection failed");
   $("fileStatus").innerHTML =
-    `Could not connect to Rocket League Stats API at <b>127.0.0.1:49123</b> or through SPARK's local bridge.<br>` +
+    `Could not connect to Rocket League Stats API at <b>${escapeHtml(liveApiSourceAddress)}</b> through SPARK's local bridge.<br>` +
     `Open SPARK with <b>SPARK Launcher</b>, make sure Rocket League is running with the Stats API enabled, then press <b>Start Live API Feed</b> again.`;
 }
 
@@ -13832,7 +14022,7 @@ async function loadFile(file){
   selected = "overview"; render();
 }
 function shouldOpenReplayPickerFromDropClick(event){
-  return !event.target.closest(".liveApiControls,.liveApiBadge,button,input,label,datalist,a");
+  return !event.target.closest(".liveApiControls,.liveApiBadge,button,input,label,datalist,a,details,summary");
 }
 $("drop").onclick=e=>{
   if(!shouldOpenReplayPickerFromDropClick(e)) return;
@@ -13905,6 +14095,32 @@ if($("livePacketRate")){
   });
   loadLivePacketRate();
 }
+if($("liveStatsConfigPickBtn")){
+  $("liveStatsConfigPickBtn").onclick=e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    pickLiveStatsConfig();
+  };
+}
+if($("liveApiRemoteAddress")){
+  const input = $("liveApiRemoteAddress");
+  input.addEventListener("click", e=>e.stopPropagation());
+  input.addEventListener("keydown", e=>{
+    e.stopPropagation();
+    if(e.key === "Enter"){
+      e.preventDefault();
+      applyLiveApiSource();
+    }
+  });
+  loadLiveApiSource();
+}
+if($("liveApiRemoteApplyBtn")){
+  $("liveApiRemoteApplyBtn").onclick=e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    applyLiveApiSource();
+  };
+}
 if($("obsOverlayBtn")){
   $("obsOverlayBtn").onclick=e=>{
     e.preventDefault();
@@ -13912,7 +14128,7 @@ if($("obsOverlayBtn")){
     openOverlayWindow();
     $("fileStatus").innerHTML =
       `OBS overlay websource URL:<br><b>${obsOverlayUrl}</b><br>` +
-      `Use 1920x1080 with a transparent background. The overlay auto-connects to the live API bridge and reads Rocket League from <b>127.0.0.1:49123</b>.<br>` +
+      `Use 1920x1080 with a transparent background. The overlay auto-connects to the live API bridge and reads Rocket League from <b>${escapeHtml(liveApiSourceAddress)}</b>.<br>` +
       (location.protocol === "file:" ? `<span style="color:var(--muted)">Fallback file URL: ${obsOverlayFileUrl}</span>` : "");
   };
 }

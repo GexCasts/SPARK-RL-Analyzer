@@ -19,6 +19,7 @@ const tileLayoutPath = path.join(here, "SPARK-layout.json");
 const overlayAssetDir = path.join(here, ".tmp", "overlay-assets");
 const overlayConfigPath = path.join(overlayAssetDir, "overlay-config.json");
 const replayFolderConfigPath = path.join(overlayAssetDir, "replay-folder.json");
+const liveApiSettingsPath = path.join(overlayAssetDir, "live-api-settings.json");
 const legacySteamReplayFolderPath = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Rocket League\\TAGame\\Demos";
 const defaultReplayFolderPath = defaultWindowsReplayFolderPath();
 const rrrocketVersion = "0.11.1";
@@ -70,10 +71,9 @@ const shutdownGraceMs = 60000;
 let hasSeenClient = false;
 let shutdownTimer = null;
 let server = null;
-const liveApiFeedHost = "127.0.0.1";
-const liveApiFeedPort = 49123;
-const liveApiStatsConfigPath = process.env.SPARK_RL_STATS_API_CONFIG_PATH ||
-  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\rocketleague\\TAGame\\Config\\defaultstatsapi.ini";
+let liveApiFeedHost = "127.0.0.1";
+let liveApiFeedPort = 49123;
+let liveApiStatsConfigPath = process.env.SPARK_RL_STATS_API_CONFIG_PATH || "";
 const serverProtocolVersion = 2;
 const liveApiClients = new Set();
 let liveApiFeedSocket = null;
@@ -492,6 +492,198 @@ function defaultWindowsReplayFolderPath(){
     || (process.env.HOMEDRIVE && process.env.HOMEPATH ? `${process.env.HOMEDRIVE}${process.env.HOMEPATH}` : "")
     || (process.env.USERNAME ? `C:\\Users\\${process.env.USERNAME}` : "C:\\Users\\DefaultUser");
   return path.join(userHome, "Documents", "My Games", "Rocket League", "TAGame", "Demos");
+}
+
+function liveStatsConfigCandidates(){
+  const programFiles = [
+    process.env["ProgramFiles(x86)"],
+    process.env.ProgramFiles,
+    process.env.ProgramW6432
+  ].filter(Boolean);
+  const steamRoots = [
+    ...programFiles.map(rootPath=>path.join(rootPath, "Steam", "steamapps", "common")),
+    "C:\\SteamLibrary\\steamapps\\common",
+    "D:\\SteamLibrary\\steamapps\\common",
+    "E:\\SteamLibrary\\steamapps\\common",
+    "F:\\SteamLibrary\\steamapps\\common",
+    "G:\\SteamLibrary\\steamapps\\common"
+  ];
+  const epicRoots = [
+    ...programFiles.map(rootPath=>path.join(rootPath, "Epic Games")),
+    "C:\\Epic Games",
+    "D:\\Epic Games",
+    "E:\\Epic Games",
+    "F:\\Epic Games",
+    "G:\\Epic Games"
+  ];
+  const installNames = ["rocketleague", "Rocket League"];
+  return [
+    process.env.SPARK_RL_STATS_API_CONFIG_PATH,
+    ...steamRoots.flatMap(rootPath=>installNames.map(name=>path.join(rootPath, name, "TAGame", "Config", "DefaultStatsAPI.ini"))),
+    ...epicRoots.flatMap(rootPath=>installNames.map(name=>path.join(rootPath, name, "TAGame", "Config", "DefaultStatsAPI.ini")))
+  ].filter(Boolean);
+}
+
+async function pathIsFile(filePath){
+  const text = String(filePath || "").trim();
+  if(!text) return false;
+  try{
+    const stat = await fs.stat(text);
+    return stat.isFile();
+  }catch{
+    return false;
+  }
+}
+
+async function readLiveApiSettings(){
+  try{
+    const raw = JSON.parse(await fs.readFile(liveApiSettingsPath, "utf8") || "{}");
+    return raw && typeof raw === "object" ? raw : {};
+  }catch{
+    return {};
+  }
+}
+
+async function writeLiveApiSettings(settings){
+  await fs.mkdir(path.dirname(liveApiSettingsPath), {recursive:true});
+  await fs.writeFile(liveApiSettingsPath, JSON.stringify({
+    ...(settings || {}),
+    updatedAt:new Date().toISOString()
+  }, null, 2), "utf8");
+}
+
+async function resolveLiveStatsConfigPath(){
+  const settings = await readLiveApiSettings();
+  const savedPath = String(settings.statsConfigPath || "").trim();
+  if(liveApiStatsConfigPath && await pathIsFile(liveApiStatsConfigPath)){
+    return {ok:true, path:liveApiStatsConfigPath, status:"set", source:process.env.SPARK_RL_STATS_API_CONFIG_PATH ? "environment" : "manual"};
+  }
+  if(savedPath && await pathIsFile(savedPath)){
+    liveApiStatsConfigPath = savedPath;
+    return {ok:true, path:savedPath, status:"set", source:"manual"};
+  }
+  for(const candidate of liveStatsConfigCandidates()){
+    if(await pathIsFile(candidate)){
+      liveApiStatsConfigPath = candidate;
+      await writeLiveApiSettings({...settings, statsConfigPath:candidate, statsConfigSource:"auto"});
+      return {ok:true, path:candidate, status:"auto-detected", source:"auto"};
+    }
+  }
+  return {ok:false, path:"", status:"missing", message:"Stats API file not set"};
+}
+
+async function setLiveStatsConfigPath(filePath){
+  const normalized = String(filePath || "").trim();
+  if(!normalized) return {ok:false, path:"", status:"missing", message:"Stats API file not set"};
+  if(path.basename(normalized).toLowerCase() !== "defaultstatsapi.ini"){
+    return {ok:false, path:normalized, status:"invalid", message:"Select DefaultStatsAPI.ini"};
+  }
+  if(!await pathIsFile(normalized)){
+    return {ok:false, path:normalized, status:"invalid", message:"Selected file was not found"};
+  }
+  const settings = await readLiveApiSettings();
+  liveApiStatsConfigPath = normalized;
+  await writeLiveApiSettings({...settings, statsConfigPath:normalized, statsConfigSource:"manual"});
+  return {ok:true, path:normalized, status:"set", source:"manual", message:"Stats API file set"};
+}
+
+function pickLiveStatsConfigWithPowerShell(){
+  return new Promise((resolve, reject)=>{
+    if(process.platform !== "win32"){
+      reject(new Error("File picker is only available on Windows."));
+      return;
+    }
+    const script = `
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$owner = New-Object System.Windows.Forms.Form
+$owner.TopMost = $true
+$owner.ShowInTaskbar = $false
+$owner.StartPosition = "CenterScreen"
+$owner.Size = New-Object System.Drawing.Size(1, 1)
+$owner.Opacity = 0
+$owner.Show()
+$owner.Activate()
+$dialog = New-Object System.Windows.Forms.OpenFileDialog
+$dialog.Title = "Select DefaultStatsAPI.ini"
+$dialog.Filter = "Rocket League Stats API (DefaultStatsAPI.ini)|DefaultStatsAPI.ini|INI files (*.ini)|*.ini|All files (*.*)|*.*"
+$dialog.CheckFileExists = $true
+$dialog.Multiselect = $false
+try {
+  $result = $dialog.ShowDialog($owner)
+} finally {
+  $owner.Close()
+  $owner.Dispose()
+}
+if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+  [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+  Write-Output $dialog.FileName
+}
+`;
+    execFile("powershell.exe", ["-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-Command", script], {windowsHide:false, maxBuffer:1024 * 1024}, (error, stdout, stderr)=>{
+      if(error){
+        reject(new Error(stderr?.trim() || error.message || "Could not open the Stats API file picker."));
+        return;
+      }
+      const selected = String(stdout || "").trim();
+      if(!selected){
+        resolve({ok:false, path:"", status:"cancelled", message:"Stats API file not changed"});
+        return;
+      }
+      setLiveStatsConfigPath(selected).then(resolve, reject);
+    });
+  });
+}
+
+function normalizeLiveApiSource(value){
+  const raw = String(value || "").trim();
+  if(!raw) return {host:"127.0.0.1", port:49123, address:"127.0.0.1:49123", remote:false};
+  const withoutProtocol = raw.replace(/^(?:ws|wss|http|https|tcp):\/\//i, "").replace(/\/.*$/, "");
+  const bracketMatch = withoutProtocol.match(/^\[([^\]]+)\](?::(\d+))?$/);
+  const hostPortMatch = bracketMatch
+    ? {host:bracketMatch[1], port:bracketMatch[2]}
+    : (() => {
+        const lastColon = withoutProtocol.lastIndexOf(":");
+        if(lastColon > -1 && withoutProtocol.indexOf(":") === lastColon){
+          return {host:withoutProtocol.slice(0, lastColon), port:withoutProtocol.slice(lastColon + 1)};
+        }
+        return {host:withoutProtocol, port:""};
+      })();
+  const host = String(hostPortMatch.host || "").trim();
+  const port = hostPortMatch.port ? Number(hostPortMatch.port) : 49123;
+  if(!host || /\s/.test(host)) throw new Error("Enter a network address");
+  if(!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Enter a valid port");
+  return {host, port, address:`${host}:${port}`, remote:host !== "127.0.0.1" && host.toLowerCase() !== "localhost"};
+}
+
+function testLiveApiSource(host, port, timeoutMs=1800){
+  return new Promise(resolve=>{
+    const socket = net.createConnection({host, port});
+    let settled = false;
+    const finish = ok=>{
+      if(settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.on("connect", ()=>finish(true));
+    socket.on("timeout", ()=>finish(false));
+    socket.on("error", ()=>finish(false));
+  });
+}
+
+async function loadLiveApiSourceSettings(){
+  const settings = await readLiveApiSettings();
+  let source;
+  try{
+    source = normalizeLiveApiSource(settings.liveApiAddress || `${liveApiFeedHost}:${liveApiFeedPort}`);
+  }catch{
+    source = normalizeLiveApiSource("127.0.0.1:49123");
+  }
+  liveApiFeedHost = source.host;
+  liveApiFeedPort = source.port;
+  return source;
 }
 
 async function pathIsDirectory(folderPath){
@@ -3166,6 +3358,8 @@ function handleServerInfo(req, res){
     pid:process.pid,
     activeClients:activeClients.size,
     livePacketRateEndpoint:true,
+    liveStatsConfigEndpoint:true,
+    liveApiSourceEndpoint:true,
     windowControlEndpoint:true,
     replayFolderEndpoint:true,
     recentReplayAnalyzeEndpoint:true
@@ -3217,11 +3411,18 @@ async function handleLivePacketRate(req, res){
     return;
   }
 
+  const configPath = await resolveLiveStatsConfigPath();
+  if(!configPath.ok){
+    res.writeHead(404, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify(configPath));
+    return;
+  }
+
   if(req.method === "GET"){
-    const text = await fs.readFile(liveApiStatsConfigPath, "utf8");
+    const text = await fs.readFile(configPath.path, "utf8");
     const rate = parseLivePacketRate(text);
     res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
-    res.end(JSON.stringify({ok:true, path:liveApiStatsConfigPath, packetSendRate:rate}));
+    res.end(JSON.stringify({...configPath, packetSendRate:rate}));
     return;
   }
 
@@ -3239,14 +3440,99 @@ async function handleLivePacketRate(req, res){
     message = {};
   }
   const rate = normalizeLivePacketRate(message.packetSendRate ?? message.rate);
-  const current = await fs.readFile(liveApiStatsConfigPath, "utf8");
+  const current = await fs.readFile(configPath.path, "utf8");
   const next = updateLivePacketRateText(current, rate);
   if(next !== current){
-    await fs.writeFile(liveApiStatsConfigPath, next, "utf8");
+    await fs.writeFile(configPath.path, next, "utf8");
   }
 
   res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
-  res.end(JSON.stringify({ok:true, path:liveApiStatsConfigPath, packetSendRate:rate, changed:next !== current}));
+  res.end(JSON.stringify({...configPath, packetSendRate:rate, changed:next !== current}));
+}
+
+async function handleLiveStatsConfig(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+  if(req.method === "GET"){
+    const result = await resolveLiveStatsConfigPath();
+    res.writeHead(result.ok ? 200 : 404, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify(result));
+    return;
+  }
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use GET or POST.");
+    return;
+  }
+  const body = await readRequestBody(req, 16 * 1024);
+  let message = {};
+  try{
+    message = JSON.parse(body.toString("utf8") || "{}");
+  }catch{
+    message = {};
+  }
+  const result = await setLiveStatsConfigPath(message.path);
+  res.writeHead(result.ok ? 200 : 400, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify(result));
+}
+
+async function handleLiveStatsConfigPick(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use POST.");
+    return;
+  }
+  const result = await pickLiveStatsConfigWithPowerShell();
+  const status = result.ok || result.status === "cancelled" ? 200 : 400;
+  res.writeHead(status, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify(result));
+}
+
+async function handleLiveApiSource(req, res){
+  if(req.method === "OPTIONS"){
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+  if(req.method === "GET"){
+    const source = await loadLiveApiSourceSettings();
+    res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+    res.end(JSON.stringify({ok:true, ...source}));
+    return;
+  }
+  if(req.method !== "POST"){
+    res.writeHead(405, {...corsHeaders, "Content-Type":"text/plain; charset=utf-8"});
+    res.end("Use GET or POST.");
+    return;
+  }
+  const body = await readRequestBody(req, 16 * 1024);
+  let message = {};
+  try{
+    message = JSON.parse(body.toString("utf8") || "{}");
+  }catch{
+    message = {};
+  }
+  const source = normalizeLiveApiSource(message.address ?? message.url ?? message.host);
+  const settings = await readLiveApiSettings();
+  liveApiFeedHost = source.host;
+  liveApiFeedPort = source.port;
+  await writeLiveApiSettings({...settings, liveApiAddress:source.address});
+  if(liveApiFeedSocket){
+    liveApiFeedSocket.destroy();
+    liveApiFeedSocket = null;
+  }
+  const connected = await testLiveApiSource(source.host, source.port);
+  if(liveApiClients.size) scheduleLiveApiReconnect();
+  res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
+  res.end(JSON.stringify({ok:connected, ...source, status:connected ? "connected" : "unreachable"}));
 }
 
 async function handleTileLayout(req, res){
@@ -3681,6 +3967,18 @@ server = http.createServer(async (req,res)=>{
       await handleLivePacketRate(req, res);
       return;
     }
+    if(url.pathname === "/api/live-stats-config"){
+      await handleLiveStatsConfig(req, res);
+      return;
+    }
+    if(url.pathname === "/api/live-stats-config/pick"){
+      await handleLiveStatsConfigPick(req, res);
+      return;
+    }
+    if(url.pathname === "/api/live-api-source"){
+      await handleLiveApiSource(req, res);
+      return;
+    }
     if(url.pathname === "/api/live-api-samples"){
       handleLiveApiSamples(req, res);
       return;
@@ -3798,5 +4096,8 @@ server.on("upgrade", (req, socket)=>{
   }
   socket.end("HTTP/1.1 404 Not Found\r\n\r\n");
 });
+
+await loadLiveApiSourceSettings();
+await resolveLiveStatsConfigPath();
 
 server.listen(8765, "127.0.0.1", ()=>console.log("http://127.0.0.1:8765"));
