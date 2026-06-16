@@ -1443,6 +1443,7 @@ let replayHeatmapLookupTimer = null;
 let replayHeatmapRevealTimer = null;
 let replayHeatmapRunId = 0;
 let replaySpeedSwapTimer = null;
+let replayBannerMarkup = "";
 const $ = id=>document.getElementById(id);
 function firstDefined(...values){
   for(const value of values) if(value !== undefined && value !== null && value !== "") return value;
@@ -2213,6 +2214,7 @@ function resetForNextMatch(options={}){
   state.overtimeSeconds = 0;
   state.overtimeUpdatedAt = null;
   state.goalReplay = {scorer:"",assist:"",speed:null,team:null,startedAt:0};
+  replayBannerMarkup = "";
   state.teams.Blue.score = 0;
   state.teams.Orange.score = 0;
   state.players.clear();
@@ -2368,24 +2370,28 @@ function renderReplayBanner(){
   const scorer = cleanName(state.goalReplay?.scorer);
   const assist = cleanName(state.goalReplay?.assist);
   const speed = renderGoalSpeedSwap(state.goalReplay?.speed, state.goalReplay?.startedAt);
+  let markup = "";
   if(!scorer){
     if(replaySpeedSwapTimer){
       clearTimeout(replaySpeedSwapTimer);
       replaySpeedSwapTimer = null;
     }
-    banner.innerHTML = `<div class="replayContent soloTitle"><div class="replayTitle">Replay</div></div>`;
-    return;
+    markup = `<div class="replayContent soloTitle"><div class="replayTitle">Replay</div></div>`;
+  }else{
+    const detailCount = 1 + (speed ? 1 : 0) + (assist ? 1 : 0);
+    const detailClass = detailCount >= 3 ? "triple" : detailCount === 1 ? "solo" : "double";
+    markup = `<div class="replayContent">
+      <div class="replayTitle">Replay</div>
+      <div class="replayDetails ${detailClass}">
+        <div class="replayMeta"><b>Scored By:</b><span>${escapeHtml(scorer)}</span></div>
+        ${speed ? `<div class="replayMeta speed"><b>Goal Speed:</b>${speed}</div>` : ""}
+        ${assist ? `<div class="replayMeta"><b>Assist:</b><span>${escapeHtml(assist)}</span></div>` : ""}
+      </div>
+    </div>`;
   }
-  const detailCount = 1 + (speed ? 1 : 0) + (assist ? 1 : 0);
-  const detailClass = detailCount >= 3 ? "triple" : detailCount === 1 ? "solo" : "double";
-  banner.innerHTML = `<div class="replayContent">
-    <div class="replayTitle">Replay</div>
-    <div class="replayDetails ${detailClass}">
-      <div class="replayMeta"><b>Scored By:</b><span>${escapeHtml(scorer)}</span></div>
-      ${speed ? `<div class="replayMeta speed"><b>Goal Speed:</b>${speed}</div>` : ""}
-      ${assist ? `<div class="replayMeta"><b>Assist:</b><span>${escapeHtml(assist)}</span></div>` : ""}
-    </div>
-  </div>`;
+  if(markup === replayBannerMarkup) return;
+  replayBannerMarkup = markup;
+  banner.innerHTML = markup;
 }
 function allPlayersForCard(){
   return Array.from(state.players.values())
