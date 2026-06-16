@@ -489,54 +489,65 @@ html,body{
   line-height:18px;
   overflow:hidden;
   text-align:left;
+  perspective:80px;
+  perspective-origin:50% 50%;
 }
 .replaySpeedValue{
   grid-area:1 / 1;
   display:block;
   font-weight:1000;
   white-space:nowrap;
+  backface-visibility:hidden;
+  transform-origin:50% 50%;
+  transform-style:preserve-3d;
   will-change:opacity,transform;
 }
 .replaySpeedValue.kph{
   opacity:1;
-  transform:translateY(0);
+  transform:rotateX(0deg);
 }
 .replaySpeedValue.mph{
   opacity:0;
-  transform:translateY(72%);
+  transform:rotateX(88deg);
 }
 .replaySpeedSwap.showMph .replaySpeedValue.kph{
   opacity:0;
-  transform:translateY(-72%);
+  transform:rotateX(-88deg);
 }
 .replaySpeedSwap.showMph .replaySpeedValue.mph{
   opacity:1;
-  transform:translateY(0);
+  transform:rotateX(0deg);
 }
 .replaySpeedSwap.swapping .replaySpeedValue.kph{
-  animation:replaySpeedKphOut .56s cubic-bezier(.16,1,.3,1) forwards;
+  animation:replaySpeedKphOut .68s cubic-bezier(.19,1,.22,1) forwards;
 }
 .replaySpeedSwap.swapping .replaySpeedValue.mph{
-  animation:replaySpeedMphIn .56s cubic-bezier(.16,1,.3,1) forwards;
+  animation:replaySpeedMphIn .68s cubic-bezier(.19,1,.22,1) forwards;
 }
 @keyframes replaySpeedKphOut{
-  from{
+  0%{
     opacity:1;
-    transform:translateY(0);
+    transform:rotateX(0deg) translateY(0);
   }
-  to{
+  45%{
+    opacity:.96;
+  }
+  100%{
     opacity:0;
-    transform:translateY(-72%);
+    transform:rotateX(-88deg) translateY(-3px);
   }
 }
 @keyframes replaySpeedMphIn{
-  from{
+  0%{
     opacity:0;
-    transform:translateY(72%);
+    transform:rotateX(88deg) translateY(3px);
   }
-  to{
+  32%{
+    opacity:0;
+  }
+  100%{
     opacity:1;
-    transform:translateY(0);
+    transform:rotateX(0deg) translateY(0);
   }
 }
 .stage.replayActive .replay{display:block}
@@ -2327,14 +2338,14 @@ function replaySpeedPhase(startedAt){
     clearTimeout(replaySpeedSwapTimer);
     replaySpeedSwapTimer = null;
   }
-  const nextAt = elapsed < 9000 ? 9000 : elapsed < 9560 ? 9560 : null;
+  const nextAt = elapsed < 9000 ? 9000 : elapsed < 9680 ? 9680 : null;
   if(nextAt !== null){
     replaySpeedSwapTimer = setTimeout(()=>{
       replaySpeedSwapTimer = null;
       render();
     }, Math.max(16, nextAt - elapsed));
   }
-  return elapsed >= 9560 ? "showMph" : elapsed >= 9000 ? "swapping" : "";
+  return elapsed >= 9680 ? "showMph" : elapsed >= 9000 ? "swapping" : "";
 }
 function renderGoalSpeedSwap(value, startedAt){
   const speed = goalSpeedValues(value);
