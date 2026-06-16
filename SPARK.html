@@ -449,7 +449,7 @@ h1{margin:0;font-size:calc(22px * var(--spark-header-scale));letter-spacing:.06e
 .replayDropPanel b{font-size:17px}
 .replayDropPanel .liveApiControls{
   display:grid;
-  grid-template-columns:minmax(148px,.8fr) minmax(210px,1.2fr);
+  grid-template-columns:minmax(148px,.78fr) minmax(210px,1.22fr);
   align-items:start;
   gap:8px;
   justify-content:stretch;
@@ -4155,7 +4155,6 @@ body.obsOverlayMode #obsOverlayRoot{
               <div class="liveRemoteStatus" id="liveApiRemoteStatus">Use this when Rocket League runs on another PC.</div>
             </details>
           </span>
-          <button id="obsOverlayBtn" class="obs" type="button">Open OBS Overlay</button>
         </div>
         <div id="fileStatus" class="note">Showing sample 3v3 match data.</div>
       </div>
@@ -14122,17 +14121,6 @@ if($("liveApiRemoteApplyBtn")){
     e.preventDefault();
     e.stopPropagation();
     applyLiveApiSource();
-  };
-}
-if($("obsOverlayBtn")){
-  $("obsOverlayBtn").onclick=e=>{
-    e.preventDefault();
-    e.stopPropagation();
-    openOverlayWindow();
-    $("fileStatus").innerHTML =
-      `OBS overlay websource URL:<br><b>${obsOverlayUrl}</b><br>` +
-      `Use 1920x1080 with a transparent background. The overlay auto-connects to the live API bridge and reads Rocket League from <b>${escapeHtml(liveApiSourceAddress)}</b>.<br>` +
-      (location.protocol === "file:" ? `<span style="color:var(--muted)">Fallback file URL: ${obsOverlayFileUrl}</span>` : "");
   };
 }
 function sendSparkWindowCommand(action){
