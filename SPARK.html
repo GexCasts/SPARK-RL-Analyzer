@@ -786,6 +786,12 @@ button.unitSwitch{
 }
 .span2{grid-column:span 16}
 .full{grid-column:1 / -1;grid-row:span var(--tile-rows,20)}
+#overlayControlView{
+  display:block;
+}
+#overlayControlCard{
+  min-height:calc(100vh - var(--spark-header-height) - 170px);
+}
 .tileAddTile{
   position:relative;
   grid-column:1 / -1;
@@ -6866,7 +6872,7 @@ function renderOverlayFontSelect(id, value){
 
 function renderOverlayAppearanceMenus(){
   return `
-    <details class="overlaySubmenu" open>
+    <details class="overlaySubmenu">
       <summary>Element Colors</summary>
       <div class="overlaySubmenuBody overlayControlGrid">
         <label class="overlayField">Global Text
@@ -6982,7 +6988,7 @@ function renderOverlayControl(){
           <div class="overlayPreviewTeam right"><span>${escapeHtml(orangeName)}</span>${orangeLogo ? `<img src="${escapeHtml(orangeLogo)}" alt="">` : ""}</div>
         </div>
 
-        <details class="overlayCategory" open>
+        <details class="overlayCategory">
           <summary>Replay Folder</summary>
           <div class="overlayCategoryBody">
             <div class="overlayReplayFolderTools">
@@ -6992,7 +6998,7 @@ function renderOverlayControl(){
           </div>
         </details>
 
-        <details class="overlayCategory" open>
+        <details class="overlayCategory">
           <summary>Series Controls</summary>
           <div class="overlayCategoryBody">
             <div class="overlayControlGrid">
@@ -7007,7 +7013,7 @@ function renderOverlayControl(){
           </div>
         </details>
 
-        <details class="overlayCategory" open>
+        <details class="overlayCategory">
           <summary>Team Settings</summary>
           <div class="overlayCategoryBody">
             <div class="overlayTeamActions">
@@ -7043,14 +7049,14 @@ function renderOverlayControl(){
           </div>
         </details>
 
-        <details class="overlayCategory" open>
+        <details class="overlayCategory">
           <summary>Appearance</summary>
           <div class="overlayCategoryBody">
             ${renderOverlayAppearanceMenus()}
           </div>
         </details>
 
-        <details class="overlayCategory" open>
+        <details class="overlayCategory">
           <summary>Scoreboard Skin</summary>
           <div class="overlayCategoryBody">
             <label class="overlayField">Scoreboard Image
@@ -7084,7 +7090,7 @@ function renderOverlayControl(){
           </div>
         </details>
 
-        <details class="overlayCategory" open>
+        <details class="overlayCategory">
           <summary>Tournament Logo</summary>
           <div class="overlayCategoryBody">
             <label class="overlayField">Logo Image
@@ -7111,7 +7117,7 @@ function renderOverlayControl(){
           </div>
         </details>
 
-        <details class="overlayCategory" open>
+        <details class="overlayCategory">
           <summary>Stats Transition</summary>
           <div class="overlayCategoryBody">
             <label class="overlayField">Stinger File
@@ -7131,7 +7137,7 @@ function renderOverlayControl(){
           </div>
         </details>
 
-        <details class="overlayCategory" open>
+        <details class="overlayCategory">
           <summary>Stats Screen Test</summary>
           <div class="overlayCategoryBody">
             <div class="overlayTestTools">
