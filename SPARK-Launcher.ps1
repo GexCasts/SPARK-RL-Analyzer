@@ -228,7 +228,7 @@ function Start-SPARK {
   Write-Status "Opening SPARK..."
   Set-LauncherProgress 96
   Open-SparkAppWindow
-  Write-Status "Ready. The local server shuts itself down after all SPARK tabs and overlay sources are closed."
+  Write-Status "Ready. Closing the main SPARK window shuts down the local server."
   Set-LauncherProgress 100
 }
 

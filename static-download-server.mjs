@@ -66,10 +66,13 @@ const overlayAssetKinds = new Map([
 ]);
 const overlayStingerMetaFile = "stinger-transition.json";
 const activeClients = new Map();
+const activePrimaryClients = new Set();
 const clientStaleMs = 120000;
 const shutdownGraceMs = 60000;
 let hasSeenClient = false;
+let hasSeenPrimaryClient = false;
 let shutdownTimer = null;
+let serverShuttingDown = false;
 let server = null;
 let liveApiFeedHost = "127.0.0.1";
 let liveApiFeedPort = 49123;
@@ -144,9 +147,44 @@ function clearShutdownTimer(){
 }
 
 function pruneInactiveClients(now=Date.now()){
-  for(const [id, lastSeen] of activeClients.entries()){
-    if(now - lastSeen > clientStaleMs) activeClients.delete(id);
+  for(const [id, client] of activeClients.entries()){
+    const lastSeen = typeof client === "number" ? client : client?.lastSeen;
+    if(now - lastSeen > clientStaleMs){
+      activeClients.delete(id);
+      activePrimaryClients.delete(id);
+    }
   }
+}
+
+function closeChildProcessesForShutdown(){
+  if(personalOverlayProcess && !personalOverlayProcess.killed && personalOverlayProcess.exitCode === null){
+    try{ personalOverlayProcess.kill(); }catch{}
+  }
+  personalOverlayProcess = null;
+  if(liveApiFeedSocket){
+    try{ liveApiFeedSocket.destroy(); }catch{}
+    liveApiFeedSocket = null;
+  }
+  if(liveApiReconnectTimer){
+    clearTimeout(liveApiReconnectTimer);
+    liveApiReconnectTimer = null;
+  }
+  for(const client of liveApiClients){
+    try{ client.destroy(); }catch{}
+  }
+  liveApiClients.clear();
+}
+
+function scheduleServerShutdown(reason, delayMs=0){
+  if(serverShuttingDown) return;
+  serverShuttingDown = true;
+  clearShutdownTimer();
+  setTimeout(()=>{
+    console.log(reason || "SPARK app closed; shutting down local server.");
+    closeChildProcessesForShutdown();
+    server?.close(()=>process.exit(0));
+    setTimeout(()=>process.exit(0), 1500).unref();
+  }, Math.max(0, delayMs)).unref();
 }
 
 function shutdownWhenIdle(){
@@ -159,9 +197,7 @@ function shutdownWhenIdle(){
   shutdownTimer = setTimeout(()=>{
     pruneInactiveClients();
     if(activeClients.size) return clearShutdownTimer();
-    console.log("SPARK app closed; shutting down local server.");
-    server?.close(()=>process.exit(0));
-    setTimeout(()=>process.exit(0), 5000).unref();
+    scheduleServerShutdown("SPARK app closed; shutting down local server.");
   }, shutdownGraceMs);
   shutdownTimer.unref();
 }
@@ -3371,15 +3407,24 @@ async function handleClientHeartbeat(req, res){
   const id = String(message.id || "").trim();
   if(id){
     hasSeenClient = true;
+    const primary = !!message.primary && !message.overlay;
+    if(primary) hasSeenPrimaryClient = true;
     if(message.closing){
       activeClients.delete(id);
+      activePrimaryClients.delete(id);
     }else{
-      activeClients.set(id, Date.now());
+      activeClients.set(id, {lastSeen:Date.now(), primary});
+      if(primary) activePrimaryClients.add(id);
+      else activePrimaryClients.delete(id);
     }
+  }
+  pruneInactiveClients();
+  if(hasSeenPrimaryClient && message.closing && !message.overlay && activePrimaryClients.size === 0){
+    scheduleServerShutdown("SPARK main window closed; shutting down local server.", 350);
   }
   shutdownWhenIdle();
   res.writeHead(200, {...corsHeaders, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"});
-  res.end(JSON.stringify({ok:true, activeClients:activeClients.size}));
+  res.end(JSON.stringify({ok:true, activeClients:activeClients.size, activePrimaryClients:activePrimaryClients.size}));
 }
 
 function handleServerInfo(req, res){
@@ -3391,6 +3436,7 @@ function handleServerInfo(req, res){
     root,
     pid:process.pid,
     activeClients:activeClients.size,
+    activePrimaryClients:activePrimaryClients.size,
     livePacketRateEndpoint:true,
     liveStatsConfigEndpoint:true,
     liveApiSourceEndpoint:true,

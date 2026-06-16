@@ -335,7 +335,7 @@ namespace SparkLauncher
             WriteStatus("Opening SPARK...");
             SetProgress(96);
             OpenSparkAppWindow();
-            WriteStatus("Ready. The local server shuts itself down after all SPARK tabs and overlay sources are closed.");
+            WriteStatus("Ready. Closing the main SPARK window shuts down the local server.");
             SetProgress(100);
         }
 

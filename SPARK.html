@@ -4531,7 +4531,7 @@ function startSparkServerHeartbeat(){
   }
 
   function postHeartbeat(closing=false){
-    const payload = JSON.stringify({id:clientId, closing, path:location.pathname, overlay:isObsOverlayMode});
+    const payload = JSON.stringify({id:clientId, closing, path:location.pathname, overlay:isObsOverlayMode, primary:!isObsOverlayMode});
     if(closing && navigator.sendBeacon){
       navigator.sendBeacon(endpoint, new Blob([payload], {type:"application/json"}));
       return;
