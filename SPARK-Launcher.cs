@@ -70,6 +70,7 @@ namespace SparkLauncher
         private Button updateButton;
         private ProgressBar progressBar;
         private TextBox statusBox;
+        private Process sparkAppProcess;
 
         public LauncherForm()
         {
@@ -250,6 +251,17 @@ namespace SparkLauncher
 
         private void WriteStatus(string message)
         {
+            if (statusBox != null && statusBox.InvokeRequired)
+            {
+                try
+                {
+                    statusBox.BeginInvoke(new Action<string>(WriteStatus), message);
+                }
+                catch
+                {
+                }
+                return;
+            }
             statusBox.AppendText("[SPARK] " + message + Environment.NewLine);
             statusBox.SelectionStart = statusBox.Text.Length;
             statusBox.ScrollToCaret();
@@ -335,12 +347,13 @@ namespace SparkLauncher
 
             WriteStatus("Opening SPARK...");
             SetProgress(96);
-            OpenSparkAppWindow();
+            Process appProcess = OpenSparkAppWindow();
+            MonitorSparkAppProcess(appProcess);
             WriteStatus("Ready. Closing the main SPARK window shuts down the local server.");
             SetProgress(100);
         }
 
-        private void OpenSparkAppWindow()
+        private Process OpenSparkAppWindow()
         {
             if (File.Exists(Program.WebView2WinFormsPath) && File.Exists(Program.WebView2CorePath) && File.Exists(Program.WebView2LoaderPath))
             {
@@ -348,9 +361,9 @@ namespace SparkLauncher
                 appInfo.FileName = Application.ExecutablePath;
                 appInfo.Arguments = "--spark-app-shell";
                 appInfo.UseShellExecute = false;
-                Process.Start(appInfo);
+                Process appProcess = Process.Start(appInfo);
                 WriteStatus("Opening SPARK in the native borderless app shell...");
-                return;
+                return appProcess;
             }
 
             string browserPath = ResolveAppModeBrowser();
@@ -360,17 +373,58 @@ namespace SparkLauncher
                 appInfo.FileName = browserPath;
                 appInfo.Arguments = "--app=" + appUrl + " --new-window";
                 appInfo.UseShellExecute = false;
-                Process.Start(appInfo);
+                Process appProcess = Process.Start(appInfo);
                 WriteStatus("Opening SPARK in browser app mode because WebView2 shell files are missing.");
                 ApplyFramelessChromeShell();
-                return;
+                return appProcess;
             }
 
             ProcessStartInfo fallback = new ProcessStartInfo();
             fallback.FileName = appUrl;
             fallback.UseShellExecute = true;
-            Process.Start(fallback);
+            Process app = Process.Start(fallback);
             WriteStatus("Opening SPARK in your default browser...");
+            return app;
+        }
+
+        private void MonitorSparkAppProcess(Process appProcess)
+        {
+            if (appProcess == null) return;
+            sparkAppProcess = appProcess;
+            try
+            {
+                appProcess.EnableRaisingEvents = true;
+                appProcess.Exited += delegate
+                {
+                    WriteStatus("SPARK app window closed. Waiting for local app processes to stop...");
+                    Task.Run(delegate
+                    {
+                        bool stopped = WaitForServerToStop(90000);
+                        if (stopped)
+                        {
+                            WriteStatus("SPARK app processes have closed.");
+                        }
+                        else
+                        {
+                            WriteStatus("SPARK app window closed, but the local server is still running. Close any remaining SPARK tabs or overlay sources to finish shutdown.");
+                        }
+                    });
+                };
+            }
+            catch
+            {
+            }
+        }
+
+        private bool WaitForServerToStop(int timeoutMs)
+        {
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            while (stopwatch.ElapsedMilliseconds < timeoutMs)
+            {
+                if (!TestServer()) return true;
+                Thread.Sleep(500);
+            }
+            return !TestServer();
         }
 
         private string ResolveAppModeBrowser()
