@@ -23,14 +23,18 @@ const liveApiSettingsPath = path.join(overlayAssetDir, "live-api-settings.json")
 const legacySteamReplayFolderPath = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Rocket League\\TAGame\\Demos";
 const defaultReplayFolderPath = defaultWindowsReplayFolderPath();
 const rrrocketVersion = "0.11.3";
-const rrrocketCandidates = [
-  process.env.SPARK_RRROCKET_PATH,
+const bundledRrrocketCandidates = [
   path.join(here, "tools", "rrrocket", `rrrocket-${rrrocketVersion}-x86_64-unknown-linux-musl`, "rrrocket"),
   path.join(here, "tools", "rrrocket", `rrrocket-${rrrocketVersion}-x86_64-apple-darwin`, "rrrocket"),
   path.join(here, "tools", "rrrocket", `rrrocket-${rrrocketVersion}-aarch64-apple-darwin`, "rrrocket"),
   path.join(here, "tools", "rrrocket", `rrrocket-${rrrocketVersion}-x86_64-pc-windows-msvc`, "rrrocket.exe")
+];
+const rrrocketCandidates = [
+  ...bundledRrrocketCandidates,
+  process.env.SPARK_RRROCKET_PATH
 ].filter(Boolean);
-const rrrocketPath = rrrocketCandidates.find(candidate=>fsSync.existsSync(candidate));
+const rrrocketPaths = [...new Set(rrrocketCandidates)].filter(candidate=>fsSync.existsSync(candidate));
+const rrrocketPath = rrrocketPaths[0] || "";
 const ffmpegCandidates = [
   process.env.SPARK_FFMPEG_PATH,
   path.join(here, "tools", "ffmpeg", "ffmpeg-8.1.1-essentials_build", "bin", "ffmpeg.exe"),
@@ -884,17 +888,28 @@ async function newestRecentReplay(maxAgeMs=120000, options={}){
 
 function runRrrocket(replayPath){
   return new Promise((resolve, reject)=>{
-    if(!rrrocketPath){
+    if(!rrrocketPaths.length){
       reject(new Error(`rrrocket parser not found. Checked: ${rrrocketCandidates.join(", ")}`));
       return;
     }
-    execFile(rrrocketPath, ["--network-parse", replayPath], {maxBuffer: 512 * 1024 * 1024}, (err, stdout, stderr)=>{
-      if(err){
-        reject(new Error(stderr?.trim() || err.message));
-        return;
-      }
-      resolve(stdout);
-    });
+
+    const errors = [];
+    const tryParser = index=>{
+      const candidate = rrrocketPaths[index];
+      execFile(candidate, ["--network-parse", replayPath], {maxBuffer: 512 * 1024 * 1024}, (err, stdout, stderr)=>{
+        if(!err){
+          resolve(stdout);
+          return;
+        }
+        errors.push(`${candidate}: ${stderr?.trim() || err.message}`);
+        if(index + 1 < rrrocketPaths.length){
+          tryParser(index + 1);
+          return;
+        }
+        reject(new Error(errors.join("\n\n")));
+      });
+    };
+    tryParser(0);
   });
 }
 
@@ -3436,6 +3451,9 @@ function handleServerInfo(req, res){
     protocolVersion:serverProtocolVersion,
     root,
     pid:process.pid,
+    rrrocketVersion,
+    rrrocketPath,
+    rrrocketCandidates:rrrocketPaths,
     activeClients:activeClients.size,
     activePrimaryClients:activePrimaryClients.size,
     livePacketRateEndpoint:true,
