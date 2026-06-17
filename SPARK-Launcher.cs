@@ -79,6 +79,7 @@ namespace SparkLauncher
 
             BuildUi();
             LoadLocalManifestStatus();
+            Shown += delegate { CheckRrrocketVersionWarning(); };
         }
 
         private string DependencyDownloadDir { get { return Path.Combine(tmpDir, "downloads"); } }
@@ -506,6 +507,80 @@ namespace SparkLauncher
             SafeDeleteFile(RrrocketZipPath);
 
             if (!File.Exists(RrrocketExePath)) throw new FileNotFoundException("rrrocket install failed. Expected " + RrrocketExePath);
+        }
+
+        private static int[] VersionParts(string version)
+        {
+            string clean = (version ?? "").Trim().TrimStart('v', 'V');
+            string[] pieces = clean.Split('.');
+            int[] parts = new int[Math.Max(1, pieces.Length)];
+            for (int i = 0; i < parts.Length; i++)
+            {
+                int parsed;
+                parts[i] = i < pieces.Length && Int32.TryParse(pieces[i], out parsed) ? parsed : 0;
+            }
+            return parts;
+        }
+
+        private static int CompareSemVer(string left, string right)
+        {
+            int[] leftParts = VersionParts(left);
+            int[] rightParts = VersionParts(right);
+            int length = Math.Max(leftParts.Length, rightParts.Length);
+            for (int i = 0; i < length; i++)
+            {
+                int l = i < leftParts.Length ? leftParts[i] : 0;
+                int r = i < rightParts.Length ? rightParts[i] : 0;
+                if (l > r) return 1;
+                if (l < r) return -1;
+            }
+            return 0;
+        }
+
+        private string GetLatestRrrocketVersion()
+        {
+            try
+            {
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create("https://api.github.com/repos/nickbabcock/rrrocket/releases/latest");
+                request.UserAgent = "SPARK Launcher";
+                request.Timeout = 4000;
+                request.ReadWriteTimeout = 4000;
+                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+                {
+                    string json = reader.ReadToEnd();
+                    JavaScriptSerializer serializer = new JavaScriptSerializer();
+                    Dictionary<string, object> release = serializer.Deserialize<Dictionary<string, object>>(json);
+                    object tag;
+                    if (release != null && release.TryGetValue("tag_name", out tag))
+                    {
+                        return (tag == null ? "" : tag.ToString()).Trim().TrimStart('v', 'V');
+                    }
+                }
+            }
+            catch
+            {
+            }
+            return null;
+        }
+
+        private void CheckRrrocketVersionWarning()
+        {
+            string latest = GetLatestRrrocketVersion();
+            if (String.IsNullOrWhiteSpace(latest))
+            {
+                WriteStatus("Could not check latest rrrocket parser version.");
+                return;
+            }
+            if (CompareSemVer(latest, rrrocketVersion) <= 0)
+            {
+                WriteStatus("rrrocket parser is current for SPARK (" + rrrocketVersion + ").");
+                return;
+            }
+
+            string message = "SPARK currently includes rrrocket " + rrrocketVersion + ", but rrrocket " + latest + " is available. SPARK will not install that parser until it is included in SPARK's GitHub release. New Rocket League replays may not process correctly until SPARK is updated.";
+            WriteStatus(message);
+            MessageBox.Show(message, "SPARK replay parser warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private void EnsureFfmpeg()

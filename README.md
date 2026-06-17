@@ -31,9 +31,11 @@ When enabled by the "Start Live API Feed" button, the launcher also provides SPA
 
 ## Replay Parser
 
-The repository includes the Windows parser at `tools/rrrocket/rrrocket-0.11.1-x86_64-pc-windows-msvc/rrrocket.exe`.
+The repository includes the Windows parser at `tools/rrrocket/rrrocket-0.11.3-x86_64-pc-windows-msvc/rrrocket.exe`.
 
-If the parser for your platform is missing, the launcher downloads the pinned parser release automatically. Linux uses `rrrocket-0.11.1-x86_64-unknown-linux-musl`.
+If the parser for your platform is missing, the launcher downloads the pinned parser release automatically. Linux uses `rrrocket-0.11.3-x86_64-unknown-linux-musl`.
+
+On launch, SPARK checks the latest upstream rrrocket release. If upstream has a newer parser than SPARK's pinned version, the launcher warns that new Rocket League replays may not process correctly until SPARK includes that parser in its own GitHub release.
 
 ## App Updates
 

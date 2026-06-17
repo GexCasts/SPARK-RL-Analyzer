@@ -113,6 +113,53 @@ function Ensure-Rrrocket {
   }
 }
 
+function ConvertTo-VersionParts($Version) {
+  return ([string]$Version).Trim().TrimStart("v","V").Split(".") | ForEach-Object {
+    $part = 0
+    if([int]::TryParse($_, [ref]$part)) { $part } else { 0 }
+  }
+}
+
+function Compare-SemVer($Left, $Right) {
+  $leftParts = @(ConvertTo-VersionParts $Left)
+  $rightParts = @(ConvertTo-VersionParts $Right)
+  $length = [Math]::Max($leftParts.Count, $rightParts.Count)
+  for($i = 0; $i -lt $length; $i++) {
+    $l = if($i -lt $leftParts.Count) { $leftParts[$i] } else { 0 }
+    $r = if($i -lt $rightParts.Count) { $rightParts[$i] } else { 0 }
+    if($l -gt $r) { return 1 }
+    if($l -lt $r) { return -1 }
+  }
+  return 0
+}
+
+function Get-LatestRrrocketVersion {
+  try {
+    $headers = @{ "User-Agent" = "SPARK Launcher" }
+    $response = Invoke-WebRequest -Uri "https://api.github.com/repos/nickbabcock/rrrocket/releases/latest" -Headers $headers -UseBasicParsing -TimeoutSec 4
+    $release = $response.Content | ConvertFrom-Json
+    return ([string]$release.tag_name).Trim().TrimStart("v","V")
+  } catch {
+    return $null
+  }
+}
+
+function Check-RrrocketVersionWarning {
+  $latest = Get-LatestRrrocketVersion
+  if([string]::IsNullOrWhiteSpace($latest)) {
+    Write-Status "Could not check latest rrrocket parser version."
+    return
+  }
+  if((Compare-SemVer $latest $RrrocketVersion) -le 0) {
+    Write-Status "rrrocket parser is current for SPARK ($RrrocketVersion)."
+    return
+  }
+
+  $message = "SPARK currently includes rrrocket $RrrocketVersion, but rrrocket $latest is available. SPARK will not install that parser until it is included in SPARK's GitHub release. New Rocket League replays may not process correctly until SPARK is updated."
+  Write-Status $message
+  [System.Windows.Forms.MessageBox]::Show($message, "SPARK replay parser warning", "OK", "Warning") | Out-Null
+}
+
 function Ensure-Ffmpeg {
   if(Test-Path $FfmpegExe) {
     return
@@ -495,6 +542,10 @@ function Show-SPARKLauncher {
   } else {
     Write-Status "No local manifest found yet."
   }
+
+  $form.Add_Shown({
+    Check-RrrocketVersionWarning
+  })
 
   $script:LaunchButton.Add_Click({
     try {

@@ -9,7 +9,7 @@ NODE_VERSION="v22.11.0"
 NODE_FOLDER="node-$NODE_VERSION-linux-x64"
 NODE_TARBALL="$TOOLS_DIR/node/$NODE_FOLDER.tar.xz"
 NODE_EXE="$TOOLS_DIR/node/$NODE_FOLDER/bin/node"
-RRROCKET_VERSION="0.11.1"
+RRROCKET_VERSION="0.11.3"
 RRROCKET_FOLDER="rrrocket-$RRROCKET_VERSION-x86_64-unknown-linux-musl"
 RRROCKET_TARBALL="$TOOLS_DIR/rrrocket/$RRROCKET_FOLDER.tar.gz"
 RRROCKET_EXE="$TOOLS_DIR/rrrocket/$RRROCKET_FOLDER/rrrocket"
@@ -82,7 +82,46 @@ ensure_rrrocket(){
   chmod +x "$RRROCKET_EXE"
 }
 
+version_gt(){
+  local left="${1#v}"
+  local right="${2#v}"
+  local IFS=.
+  local -a left_parts right_parts
+  read -ra left_parts <<< "$left"
+  read -ra right_parts <<< "$right"
+  local length="${#left_parts[@]}"
+  if [ "${#right_parts[@]}" -gt "$length" ]; then length="${#right_parts[@]}"; fi
+  for ((i=0; i<length; i++)); do
+    local l="${left_parts[$i]:-0}"
+    local r="${right_parts[$i]:-0}"
+    if ((10#$l > 10#$r)); then return 0; fi
+    if ((10#$l < 10#$r)); then return 1; fi
+  done
+  return 1
+}
+
+check_rrrocket_version_warning(){
+  local latest=""
+  if command -v curl >/dev/null 2>&1; then
+    latest="$(curl -fsS -H 'User-Agent: SPARK Launcher' https://api.github.com/repos/nickbabcock/rrrocket/releases/latest 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\{0,1\}\([^"]*\)".*/\1/p' | head -n 1 || true)"
+  elif command -v wget >/dev/null 2>&1; then
+    latest="$(wget -qO- --header='User-Agent: SPARK Launcher' https://api.github.com/repos/nickbabcock/rrrocket/releases/latest 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\{0,1\}\([^"]*\)".*/\1/p' | head -n 1 || true)"
+  fi
+
+  if [ -z "$latest" ]; then
+    status "Could not check latest rrrocket parser version."
+    return
+  fi
+
+  if version_gt "$latest" "$RRROCKET_VERSION"; then
+    status "SPARK currently includes rrrocket $RRROCKET_VERSION, but rrrocket $latest is available. SPARK will not install that parser until it is included in SPARK's GitHub release. New Rocket League replays may not process correctly until SPARK is updated."
+  else
+    status "rrrocket parser is current for SPARK ($RRROCKET_VERSION)."
+  fi
+}
+
 mkdir -p "$TOOLS_DIR/node" "$TOOLS_DIR/rrrocket" "$TMP_DIR"
+check_rrrocket_version_warning
 ensure_rrrocket
 NODE_EXE_RESOLVED="$(resolve_node)"
 

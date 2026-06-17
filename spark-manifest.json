@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.06.17.0807",
-    "generatedUtc":  "2026-06-17T08:07:50.8546368Z",
+    "appVersion":  "2026.06.17.0815",
+    "generatedUtc":  "2026-06-17T08:15:12.0347173Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -110,10 +110,10 @@
                   },
                   {
                       "path":  "README.md",
-                      "version":  "e220b207d610",
-                      "sha256":  "e220b207d610557be00218185b001f5c009afbd8dc39ba4bf42cba99031d5e3b",
-                      "size":  1945,
-                      "modifiedUtc":  "2026-05-19T13:16:06.9675675Z"
+                      "version":  "a8a2cf77a0c0",
+                      "sha256":  "a8a2cf77a0c07387c3516dff9cbcf292ec9b4b541835afed99816c2b7685e929",
+                      "size":  2204,
+                      "modifiedUtc":  "2026-06-17T08:12:15.1409807Z"
                   },
                   {
                       "path":  "shared/README.md",
@@ -145,10 +145,10 @@
                   },
                   {
                       "path":  "SPARK Launcher.exe",
-                      "version":  "ac9279b4927a",
-                      "sha256":  "ac9279b4927a34bc650d7cae8c4525653fa6470ecb44372e4e10fe72983e5b24",
-                      "size":  59904,
-                      "modifiedUtc":  "2026-06-02T10:36:12.1175227Z"
+                      "version":  "0007fbdc2078",
+                      "sha256":  "0007fbdc2078c8c7960b74fa882153ca536debca0e2658c63b2c140241a60dee",
+                      "size":  62976,
+                      "modifiedUtc":  "2026-06-17T08:13:35.2507400Z"
                   },
                   {
                       "path":  "SPARK Personal Overlay.exe",
@@ -166,24 +166,24 @@
                   },
                   {
                       "path":  "SPARK-Launcher.cs",
-                      "version":  "7ab75ef54d36",
-                      "sha256":  "7ab75ef54d364d7567b07e6516cf784659b68495cc5b044bf2fa35edbf95eb05",
-                      "size":  56101,
-                      "modifiedUtc":  "2026-06-16T15:59:30.8503059Z"
+                      "version":  "de88bdcdf2e4",
+                      "sha256":  "de88bdcdf2e4beb21d10362fe627981ca45dd38c7f69b4c23e78fe26404c9a3f",
+                      "size":  59388,
+                      "modifiedUtc":  "2026-06-17T08:11:36.4762558Z"
                   },
                   {
                       "path":  "SPARK-Launcher.ps1",
-                      "version":  "3074b4870b9b",
-                      "sha256":  "3074b4870b9bd800cfc581af0bc34168d27724bd8f9fc464b88dfb1865c125d1",
-                      "size":  19473,
-                      "modifiedUtc":  "2026-06-16T15:59:24.7583420Z"
+                      "version":  "f242b4d49b2c",
+                      "sha256":  "f242b4d49b2c244209729792756a6d24fbd95fbebbc98cfb4a307fa42e9458d8",
+                      "size":  21354,
+                      "modifiedUtc":  "2026-06-17T08:11:13.1982866Z"
                   },
                   {
                       "path":  "SPARK-Launcher.sh",
-                      "version":  "48893e5f4a99",
-                      "sha256":  "48893e5f4a994459b51e33c8f80617007966e1e298f0b918c349cda05d471880",
-                      "size":  3123,
-                      "modifiedUtc":  "2026-05-19T13:11:04.3899742Z"
+                      "version":  "04cbaad75d6f",
+                      "sha256":  "04cbaad75d6f832246c3223018691bf7c6bb01dd688169fdc75565e0e8a5b3fd",
+                      "size":  4783,
+                      "modifiedUtc":  "2026-06-17T08:14:35.5065098Z"
                   },
                   {
                       "path":  "SPARK-layout.json",
@@ -212,13 +212,6 @@
                       "sha256":  "0a1fe65e861b6080cbc9d566516730c6206cbd04d6b62bcce9a58e6c55f0bd99",
                       "size":  3275,
                       "modifiedUtc":  "2026-06-01T00:18:18.3125464Z"
-                  },
-                  {
-                      "path":  "tools/rrrocket/rrrocket-0.11.1-x86_64-pc-windows-msvc/rrrocket.exe",
-                      "version":  "f41185b62d9c",
-                      "sha256":  "f41185b62d9c956f9e704f516f70970c245e37286b673c535553ca9e71bba348",
-                      "size":  2213888,
-                      "modifiedUtc":  "2026-04-28T12:48:50.0000000Z"
                   },
                   {
                       "path":  "tools/rrrocket/rrrocket-0.11.3-x86_64-pc-windows-msvc/rrrocket.exe",
