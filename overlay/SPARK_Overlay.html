@@ -2134,7 +2134,7 @@ function matchEndedFlag(payload, event=""){
   if(ended === true || ended === 1 || ended === "1" || String(ended).toLowerCase() === "true") return true;
   const text = String(event || "").toLowerCase();
   const compact = text.replace(/[^a-z]/g, "");
-  return compact.includes("matchended") || compact.includes("gameended") || compact.includes("matchdestroyed");
+  return compact.includes("matchended") || compact.includes("gameended") || compact.includes("matchdestroyed") || compact.includes("podiumstart");
 }
 function matchGuidFromPayload(payload){
   const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
@@ -3208,17 +3208,20 @@ function handleMessage(raw){
     updateGoalReplayInfo({...goalReplayInfoFromPayload(msg.payload), newGoal:true});
   }
   if(eventName.includes("ballhit")){
-    const hitPlayer = playerNameFromValue(firstDefined(valueByKey(msg.payload,["Player","player","playerName","PlayerName","lastTouchPlayer","LastTouchPlayer"]), msg.payload?.BallLastTouch?.Player, msg.payload?.ballLastTouch?.player));
-    const team = normalizeTeam(valueByKey(msg.payload,["team","Team"]));
+    const eventPlayers = extractPlayers(msg.payload);
+    const primaryHitPlayer = eventPlayers[0] || null;
+    const hitPlayer = playerNameFromValue(firstDefined(primaryHitPlayer, valueByKey(msg.payload,["Player","player","playerName","PlayerName","lastTouchPlayer","LastTouchPlayer"]), msg.payload?.BallLastTouch?.Player, msg.payload?.ballLastTouch?.player));
+    const team = normalizeTeam(firstDefined(valueByKey(primaryHitPlayer,["TeamNum","teamNum","team","Team"]), valueByKey(msg.payload,["team","Team"])));
     const p = ensurePlayer(hitPlayer, team);
     if(p){
       p.stats.touches = (p.stats.touches || 0) + 1;
     }
   }
   if(eventName.includes("statfeed")){
-    const statPlayer = playerNameFromValue(firstDefined(msg.payload?.MainTarget, msg.payload?.mainTarget, msg.payload?.Player, msg.payload?.player));
+    const statTarget = firstDefined(msg.payload?.MainTarget, msg.payload?.mainTarget, msg.payload?.Player, msg.payload?.player);
+    const statPlayer = playerNameFromValue(statTarget);
     const statType = String(firstDefined(valueByKey(msg.payload,["Type","type","EventName","eventName"]), "")).toLowerCase();
-    const team = normalizeTeam(valueByKey(msg.payload,["team","Team"]));
+    const team = normalizeTeam(firstDefined(valueByKey(statTarget,["TeamNum","teamNum","team","Team"]), valueByKey(msg.payload,["team","Team"])));
     const p = ensurePlayer(statPlayer, team);
     if(p){
       if(statType.includes("goal")){
