@@ -1161,6 +1161,7 @@ function isCarActorObject(objectName){
 function isBallActorObject(objectName){
   return typeof objectName === "string" && (
     objectName === "TAGame.Ball_TA" ||
+    objectName.startsWith("Archetypes.Ball.") ||
     objectName.endsWith(".Ball_Default") ||
     objectName.includes(".Ball.Ball_Default")
   );
