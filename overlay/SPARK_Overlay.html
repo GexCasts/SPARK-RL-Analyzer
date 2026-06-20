@@ -1739,7 +1739,7 @@ function setMaskTicker(el, text, width){
       copies:[],
       maskWidth,
       textWidth:1,
-      gap:32,
+      gap:0,
       speed:30,
       lastTime:0
     };
@@ -1771,27 +1771,29 @@ function addMaskTickerCopy(state, x){
 
 function updateMaskTickerMetrics(state, width){
   if(!state?.el || !state.track) return;
-  const baseGap = 32;
   state.maskWidth = Math.max(1, Number(width) || state.el.getBoundingClientRect().width || 1);
   const sample = state.copies[0]?.node;
   const measuredTextWidth = Math.max(1, sample?.getBoundingClientRect().width || sample?.scrollWidth || 1);
-  const measuredGap = Math.max(baseGap, Math.min(78, Math.round(state.maskWidth * .08)));
+  const measuredGap = 0;
   const spacingChanged = Math.abs((state.textWidth || 1) - measuredTextWidth) > 2 || Math.abs((state.gap || 0) - measuredGap) > 2;
   state.textWidth = measuredTextWidth;
   state.gap = measuredGap;
   state.speed = 30;
   if(spacingChanged && state.copies.length > 1){
     const current = state.copies
-      .filter(copy=>copy.x <= state.maskWidth + 1 && copy.x + state.textWidth >= -state.gap)
+      .filter(copy=>copy.x <= state.maskWidth + state.gap && copy.x + state.textWidth >= -1)
       .sort((a,b)=>Math.abs(a.x) - Math.abs(b.x))[0] || state.copies[0];
-    const keepX = Math.max(-state.textWidth - state.gap, Math.min(state.maskWidth, current?.x || 0));
+    const keepX = Math.max(-state.textWidth, Math.min(state.maskWidth + state.gap, current?.x || 0));
     state.copies.forEach(copy=>copy.node.remove());
     state.copies = [];
     addMaskTickerCopy(state, keepX);
   }
-  const leftmost = state.copies.reduce((min, copy)=>Math.min(min, copy.x), 0);
-  if(leftmost > -state.textWidth - state.gap){
-    addMaskTickerCopy(state, leftmost - state.textWidth - state.gap);
+  const spawnDistance = Math.max(1, state.textWidth + state.gap);
+  let rightmost = state.copies.reduce((max, copy)=>Math.max(max, copy.x), -Infinity);
+  if(!Number.isFinite(rightmost)) rightmost = 0;
+  while(rightmost < state.maskWidth + state.gap){
+    const copy = addMaskTickerCopy(state, rightmost + spawnDistance);
+    rightmost = copy.x;
   }
 }
 
@@ -1816,17 +1818,17 @@ function animateMaskTickers(now){
     state.lastTime = now;
     if(!state.copies.length) addMaskTickerCopy(state, 0);
     state.copies.forEach(copy=>{
-      copy.x += state.speed * dt;
+      copy.x -= state.speed * dt;
       copy.node.style.setProperty("--ticker-x", `${copy.x.toFixed(2)}px`);
     });
     const spawnDistance = Math.max(1, state.textWidth + state.gap);
-    let leftmost = state.copies.reduce((min, copy)=>Math.min(min, copy.x), Infinity);
-    while(leftmost > -spawnDistance + 1){
-      const copy = addMaskTickerCopy(state, leftmost - spawnDistance);
-      leftmost = copy.x;
+    let rightmost = state.copies.reduce((max, copy)=>Math.max(max, copy.x), -Infinity);
+    while(rightmost < state.maskWidth + state.gap){
+      const copy = addMaskTickerCopy(state, rightmost + spawnDistance);
+      rightmost = copy.x;
     }
     state.copies = state.copies.filter(copy=>{
-      if(copy.x <= state.maskWidth + 1) return true;
+      if(copy.x + state.textWidth >= -1) return true;
       copy.node.remove();
       return false;
     });
@@ -1871,7 +1873,9 @@ function renderCustomScoreboard(config){
   setMaskSlot("maskOrangeLogo", logoRegions[logoRegions.length - 1], {pad:4});
   const blueName = config.blueTeamName || state.teams.Blue.name || "Blue";
   const orangeName = config.orangeTeamName || state.teams.Orange.name || "Orange";
-  const title = String(config.seriesTitle || overlayGameLabel(config)).trim();
+  const title = config.seriesTitle !== undefined && config.seriesTitle !== null && String(config.seriesTitle) !== ""
+    ? String(config.seriesTitle)
+    : String(overlayGameLabel(config));
   setMaskSlot("maskBlueScore", scoreRegions[0], {fontScale:.82, maxFont:86, text:scoreText(state.teams.Blue.score)});
   setMaskSlot("maskOrangeScore", scoreRegions[scoreRegions.length - 1], {fontScale:.82, maxFont:86, text:scoreText(state.teams.Orange.score)});
   setMaskSlot("maskClock", clockRegion, {fontScale:.7, charScale:.52, maxFont:72, text:overlayClockText()});
