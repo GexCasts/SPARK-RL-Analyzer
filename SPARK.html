@@ -4494,8 +4494,10 @@ const overlayDefaultConfig = {
   overlayBoostFontFamily:"Inter, Segoe UI, Arial, sans-serif",
   overlayBoostFontSize:100,
   overlayBoostTextColor:"#f7f7f7",
-  testFinalStatsPreview:false
+  testFinalStatsPreview:false,
+  forceLiveOverlayAt:0
 };
+const overlayForceLiveCommandWindowMs = 5 * 60 * 1000;
 let overlayServerConfig = {};
 let overlayConfig = readOverlayConfig();
 let overlayConfigRefreshStartedAt = 0;
@@ -4509,6 +4511,8 @@ let replayFolderStatus = {ok:false, status:"checking", message:"Checking replay 
 let replayFolderStatusLoaded = false;
 let replayFolderShellFallbackTimer = null;
 let obsFinalScreenVisible = false;
+let obsForceLiveOverlayAt = 0;
+let obsForceLiveOverlayActive = false;
 let obsStingerTimer = null;
 let obsStingerFallbackTimer = null;
 let obsStingerRunId = 0;
@@ -6405,6 +6409,13 @@ function toggleOverlayFinalStatsPreview(){
   updateOverlayConfigField("testFinalStatsPreview", !overlayConfig.testFinalStatsPreview);
 }
 
+function returnOverlayToLiveScene(){
+  const forceLiveOverlayAt = Date.now();
+  saveOverlayConfig({...overlayConfig, forceLiveOverlayAt});
+  const status = $("overlayCopyStatus");
+  if(status) status.textContent = "Overlay returned to live scene.";
+}
+
 async function copyOverlayUrl(){
   const status = $("overlayCopyStatus");
   syncOverlayConfigToServer(overlayConfig);
@@ -7178,6 +7189,7 @@ function renderOverlayControl(){
             <button type="button" onclick="openOverlayWindow()">Open Overlay</button>
             <button type="button" onclick="openPinnedOverlayWindow()">Pin Personal Overlay</button>
             <button type="button" onclick="closePinnedOverlayWindow()">Close Pin</button>
+            <button type="button" onclick="returnOverlayToLiveScene()">Return to Live Overlay</button>
           </div>
           <div class="overlayQuickTeam orange">
             <button type="button" onclick="setOverlaySeriesScore('Orange',-1)">-</button>
@@ -12028,6 +12040,8 @@ function resetLiveApiForNewMatch(matchGuid){
   liveApiState.matchGuid = matchGuid || null;
   liveApiState.dataSeed = stableLiveSeed(matchGuid || "live-api");
   liveApiState.lastMessageAt = previousMessageTime;
+  obsForceLiveOverlayAt = 0;
+  obsForceLiveOverlayActive = false;
   if(liveRenderTimer){
     clearTimeout(liveRenderTimer);
     liveRenderTimer = null;
@@ -12414,6 +12428,7 @@ function readOverlayConfig(){
       tournamentLogoRatio:Math.max(.2, Math.min(8, Number(merged.tournamentLogoRatio ?? overlayDefaultConfig.tournamentLogoRatio) || 2.2)),
       stingerTransitionCutMs:sanitizeOverlayMs(merged.stingerTransitionCutMs, overlayDefaultConfig.stingerTransitionCutMs),
       ...normalizeOverlayTheme(merged),
+      forceLiveOverlayAt:Math.max(0, Number(merged.forceLiveOverlayAt) || 0),
       testFinalStatsPreview:stored.testFinalStatsPreview === true || stored.testFinalStatsPreview === "true"
     };
   }catch(err){
@@ -12583,6 +12598,7 @@ function saveOverlayConfig(nextConfig, options={}){
     tournamentLogoRatio:Math.max(.2, Math.min(8, Number(nextConfig.tournamentLogoRatio) || 2.2)),
     stingerTransitionCutMs:sanitizeOverlayMs(nextConfig.stingerTransitionCutMs, overlayDefaultConfig.stingerTransitionCutMs),
     ...normalizeOverlayTheme(nextConfig),
+    forceLiveOverlayAt:Math.max(0, Number(nextConfig.forceLiveOverlayAt) || 0),
     testFinalStatsPreview:nextConfig.testFinalStatsPreview === true
   };
   delete overlayConfig.lastAutoSeriesMatchId;
@@ -13117,13 +13133,23 @@ function stopObsStatsTransition(){
   try{ stinger.pause(); }catch{}
 }
 
+function applyObsForceLiveOverlayCommand(config){
+  const forceLiveOverlayAt = Number(config?.forceLiveOverlayAt) || 0;
+  if(!forceLiveOverlayAt || forceLiveOverlayAt <= obsForceLiveOverlayAt) return;
+  obsForceLiveOverlayAt = forceLiveOverlayAt;
+  if(Date.now() - forceLiveOverlayAt > overlayForceLiveCommandWindowMs) return;
+  obsForceLiveOverlayActive = true;
+  stopObsStatsTransition();
+}
+
 function renderObsFinalScreen(){
   if(!isObsOverlayMode || !liveApiState) return;
   overlayConfig = readOverlayConfig();
+  applyObsForceLiveOverlayCommand(overlayConfig);
   const screen = $("obsFinalScreen");
   if(!screen) return;
   const manualPreview = !!overlayConfig.testFinalStatsPreview;
-  const showFinalScreen = !!((liveApiState.matchEnded || forceObsFinalPreview || manualPreview) && !liveApiState.replayActive);
+  const showFinalScreen = !!((liveApiState.matchEnded || forceObsFinalPreview || manualPreview) && !liveApiState.replayActive && !obsForceLiveOverlayActive);
   if(showFinalScreen !== obsFinalScreenVisible){
     if(showFinalScreen) playObsStatsTransition(true);
     else stopObsStatsTransition();

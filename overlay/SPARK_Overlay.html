@@ -1410,8 +1410,10 @@ const defaultConfig = {
   overlayTickerColor:"#050609",
   overlayBoostFontFamily:"Inter, Segoe UI, Arial, sans-serif",
   overlayBoostFontSize:100,
-  overlayBoostTextColor:"#f7f7f4"
+  overlayBoostTextColor:"#f7f7f4",
+  forceLiveOverlayAt:0
 };
+const forceLiveCommandWindowMs = 5 * 60 * 1000;
 const state = {
   connected:false,
   updates:0,
@@ -1444,6 +1446,8 @@ let replayHeatmapRevealTimer = null;
 let replayHeatmapRunId = 0;
 let replaySpeedSwapTimer = null;
 let replayBannerMarkup = "";
+let forceLiveOverlayAt = 0;
+let forceLiveOverlayActive = false;
 const $ = id=>document.getElementById(id);
 function firstDefined(...values){
   for(const value of values) if(value !== undefined && value !== null && value !== "") return value;
@@ -1482,7 +1486,9 @@ function readConfig(){
   let localConfig = {};
   try{ localConfig = JSON.parse(localStorage.getItem(overlayConfigKey) || "{}"); }
   catch{ localConfig = {}; }
-  return {...defaultConfig, ...localConfig, ...(serverConfig || {})};
+  const merged = {...defaultConfig, ...localConfig, ...(serverConfig || {})};
+  merged.forceLiveOverlayAt = Math.max(0, Number(merged.forceLiveOverlayAt) || 0);
+  return merged;
 }
 function applyOverlayTheme(config){
   const root = document.documentElement;
@@ -2237,6 +2243,8 @@ function resetForNextMatch(options={}){
   state.liveStatsUnlocked = false;
   state.matchGuid = null;
   state.finalExitTransitioning = false;
+  forceLiveOverlayAt = 0;
+  forceLiveOverlayActive = false;
   if(finalTransitionQueueTimer){
     clearTimeout(finalTransitionQueueTimer);
     finalTransitionQueueTimer = null;
@@ -2920,8 +2928,48 @@ function preloadFinalTransition(config){
   return true;
 }
 
+function cancelFinalTransition(){
+  if(finalTransitionQueueTimer){
+    clearTimeout(finalTransitionQueueTimer);
+    finalTransitionQueueTimer = null;
+  }
+  if(finalTransitionTimer){
+    clearTimeout(finalTransitionTimer);
+    finalTransitionTimer = null;
+  }
+  if(stingerTimer){
+    clearTimeout(stingerTimer);
+    stingerTimer = null;
+  }
+  if(stingerFallbackTimer){
+    clearTimeout(stingerFallbackTimer);
+    stingerFallbackTimer = null;
+  }
+  finalTransitionRunId += 1;
+  const stinger = $("stingerTransition");
+  stinger?.classList.remove("active");
+  try{ stinger?.pause(); }catch{}
+}
+
+function applyForceLiveOverlayCommand(config){
+  const commandAt = Number(config?.forceLiveOverlayAt) || 0;
+  if(!commandAt || commandAt <= forceLiveOverlayAt) return forceLiveOverlayActive;
+  forceLiveOverlayAt = commandAt;
+  if(Date.now() - commandAt > forceLiveCommandWindowMs) return forceLiveOverlayActive;
+  forceLiveOverlayActive = true;
+  state.finalVisible = false;
+  state.heatmapVisible = false;
+  state.replayHeatmap = null;
+  state.finalExitTransitioning = false;
+  replayHeatmapRunId += 1;
+  cancelFinalTransition();
+  $("finalScreen")?.classList.remove("heatmapActive");
+  return true;
+}
+
 function queueFinalTransition(config){
   if(personalOverlayMode) return;
+  if(applyForceLiveOverlayCommand(config)) return;
   if(state.finalVisible || finalTransitionQueueTimer || finalTransitionTimer) return;
   preloadFinalTransition(config);
   finalTransitionQueueTimer = setTimeout(()=>{
@@ -3147,6 +3195,7 @@ function playFinalTransition(config, onCut=revealFinalScreen){
 }
 function render(){
   const config = readConfig();
+  applyForceLiveOverlayCommand(config);
   applyOverlayTheme(config);
   const stage = $("stage");
   stage.classList.toggle("live", state.connected && state.updates > 0);
