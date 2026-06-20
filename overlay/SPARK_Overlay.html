@@ -1736,6 +1736,8 @@ function setMaskTicker(el, text, width){
       el,
       track,
       text,
+      copyText:text,
+      copyRepeatCount:1,
       copies:[],
       maskWidth,
       textWidth:1,
@@ -1761,7 +1763,7 @@ function stopMaskTicker(el){
 function addMaskTickerCopy(state, x){
   const node = document.createElement("span");
   node.className = "tickerCopy";
-  node.textContent = state.text;
+  node.textContent = state.copyText || state.text;
   node.style.setProperty("--ticker-x", `${Math.round(x)}px`);
   state.track.append(node);
   const copy = {node, x};
@@ -1773,7 +1775,16 @@ function updateMaskTickerMetrics(state, width){
   if(!state?.el || !state.track) return;
   state.maskWidth = Math.max(1, Number(width) || state.el.getBoundingClientRect().width || 1);
   const sample = state.copies[0]?.node;
-  const measuredTextWidth = Math.max(1, sample?.getBoundingClientRect().width || sample?.scrollWidth || 1);
+  const rawMeasuredWidth = Math.max(1, sample?.getBoundingClientRect().width || sample?.scrollWidth || 1);
+  const singleTextWidth = Math.max(1, rawMeasuredWidth / Math.max(1, state.copyRepeatCount || 1));
+  const repeatCount = Math.max(1, Math.min(48, Math.ceil((state.maskWidth * 2) / singleTextWidth) + 2));
+  const copyText = state.text.repeat(repeatCount);
+  if(state.copyText !== copyText){
+    state.copyText = copyText;
+    state.copyRepeatCount = repeatCount;
+    state.copies.forEach(copy=>{ copy.node.textContent = copyText; });
+  }
+  const measuredTextWidth = Math.max(1, sample?.getBoundingClientRect().width || sample?.scrollWidth || singleTextWidth);
   const measuredGap = 0;
   const spacingChanged = Math.abs((state.textWidth || 1) - measuredTextWidth) > 2 || Math.abs((state.gap || 0) - measuredGap) > 2;
   state.textWidth = measuredTextWidth;
