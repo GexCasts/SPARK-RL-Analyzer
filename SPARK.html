@@ -1414,6 +1414,7 @@ canvas{width:100%!important;height:100%!important}
   .overlayControlGrid{grid-template-columns:1fr}
   .overlayPlacementGrid{grid-template-columns:1fr}
   .overlaySeriesControls{grid-template-columns:1fr}
+  .overlayStatsUrlTools{grid-template-columns:1fr}
   .overlayTestTools{align-items:flex-start;flex-direction:column}
   .overlayTestToggle{width:100%;min-width:0}
 }
@@ -1550,6 +1551,17 @@ canvas{width:100%!important;height:100%!important}
   border-color:var(--spark-yellow);
   background:linear-gradient(90deg,var(--spark-yellow),var(--spark-amber));
   color:#050607;
+}
+.overlayStatsUrlTools{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  gap:8px;
+  align-items:center;
+  margin-top:10px;
+}
+.overlayStatsUrlTools .overlayInput{
+  font-size:12px;
+  color:#d9dde5;
 }
 .overlayFileInput{display:none!important}
 .barrow{margin:10px 0}
@@ -4450,6 +4462,9 @@ const obsOverlayFileUrl = `${location.href.split("?")[0]}?overlay=obs`;
 const obsOverlayUrl = location.protocol === "file:"
   ? "http://127.0.0.1:8765/1NE_Overlay"
   : `${location.origin}/1NE_Overlay`;
+const statsScreenOverlayUrl = location.protocol === "file:"
+  ? "http://127.0.0.1:8765/1NE_Overlay?statsScreen=1"
+  : `${location.origin}/1NE_Overlay?statsScreen=1`;
 const overlayLogoUrl = "assets/Spark%20Logo.png";
 const oneNeLogoUrl = "assets/1NE_Vector_edited.png";
 const overlayLogoRoute = "/__spark_logo.png";
@@ -6440,9 +6455,38 @@ async function copyOverlayUrl(){
   }
 }
 
+async function copyStatsScreenOverlayUrl(){
+  const status = $("overlayCopyStatus");
+  syncOverlayConfigToServer(overlayConfig);
+  try{
+    await navigator.clipboard.writeText(statsScreenOverlayUrl);
+    if(status) status.textContent = "Stats screen URL copied.";
+  }catch{
+    const helper = document.createElement("textarea");
+    helper.value = statsScreenOverlayUrl;
+    helper.style.position = "fixed";
+    helper.style.left = "-9999px";
+    document.body.appendChild(helper);
+    helper.focus();
+    helper.select();
+    try{
+      document.execCommand("copy");
+      if(status) status.textContent = "Stats screen URL copied.";
+    }catch{
+      if(status) status.textContent = statsScreenOverlayUrl;
+    }
+    helper.remove();
+  }
+}
+
 function openOverlayWindow(){
   syncOverlayConfigToServer(overlayConfig);
   window.open(obsOverlayUrl, "_blank", "noopener");
+}
+
+function openStatsScreenOverlayWindow(){
+  syncOverlayConfigToServer(overlayConfig);
+  window.open(statsScreenOverlayUrl, "_blank", "noopener");
 }
 
 function postSparkShellMessage(message){
@@ -7160,6 +7204,13 @@ function renderOverlayControl(){
                 ${overlayConfig.testFinalStatsPreview ? "Stats Test On" : "Stats Test Off"}
               </button>
             </div>
+            <label class="overlayField">Always-on Stats Screen URL
+              <div class="overlayStatsUrlTools">
+                <input class="overlayInput" readonly value="${escapeHtml(statsScreenOverlayUrl)}" onclick="this.select()">
+                <button type="button" onclick="copyStatsScreenOverlayUrl()">Copy URL</button>
+                <button type="button" onclick="openStatsScreenOverlayWindow()">Open</button>
+              </div>
+            </label>
           </div>
         </details>
 

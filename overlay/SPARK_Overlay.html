@@ -1370,6 +1370,7 @@ html,body{
 const overlayConfigKey = "oneReplayAnalyzer.overlayConfig.v1";
 const routeParams = new URLSearchParams(location.search);
 const forceFinalPreview = routeParams.get("finalPreview") === "1";
+const forceLiveStatsScreen = routeParams.get("statsScreen") === "1";
 const personalOverlayMode = routeParams.get("personal") === "1";
 const defaultConfig = {
   blueTeamName:"",
@@ -2912,7 +2913,7 @@ function revealFinalScreen(){
   if(personalOverlayMode) return;
   if(state.finalVisible) return;
   state.finalVisible = true;
-  scheduleRecentReplayHeatmap();
+  if(!forceLiveStatsScreen) scheduleRecentReplayHeatmap();
   render();
 }
 
@@ -2969,6 +2970,7 @@ function applyForceLiveOverlayCommand(config){
 
 function queueFinalTransition(config){
   if(personalOverlayMode) return;
+  if(forceLiveStatsScreen) return;
   if(applyForceLiveOverlayCommand(config)) return;
   if(state.finalVisible || finalTransitionQueueTimer || finalTransitionTimer) return;
   preloadFinalTransition(config);
@@ -3196,6 +3198,10 @@ function playFinalTransition(config, onCut=revealFinalScreen){
 function render(){
   const config = readConfig();
   applyForceLiveOverlayCommand(config);
+  if(forceLiveStatsScreen && !personalOverlayMode){
+    state.finalVisible = true;
+    state.heatmapVisible = false;
+  }
   applyOverlayTheme(config);
   const stage = $("stage");
   stage.classList.toggle("live", state.connected && state.updates > 0);
