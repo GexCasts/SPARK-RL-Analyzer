@@ -1499,14 +1499,11 @@ function applyOverlayTheme(config){
     const n = Number(value);
     return Number.isFinite(n) ? Math.max(40, Math.min(180, n)) : fallback;
   };
-  const fonts = [
-    "Inter, Segoe UI, Arial, sans-serif",
-    "Segoe UI, Inter, Arial, sans-serif",
-    "Arial, Helvetica, sans-serif",
-    "Barlow Condensed, Inter, Arial, sans-serif",
-    "Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"
-  ];
-  const font = (value, fallback=defaultConfig.overlayFontFamily)=>fonts.includes(value) ? value : fallback;
+  const font = (value, fallback=defaultConfig.overlayFontFamily)=>{
+    const text = String(value || "").trim().replace(/[\u0000-\u001f\u007f;]/g, "");
+    if(!text || /[{}<>`]/.test(text)) return fallback;
+    return text.slice(0, 180);
+  };
   root.style.setProperty("--overlay-text", color(config.overlayTextColor, defaultConfig.overlayTextColor));
   root.style.setProperty("--overlay-accent", color(config.overlayAccentColor, defaultConfig.overlayAccentColor));
   root.style.setProperty("--overlay-boost-blue", color(config.overlayBlueBoostColor, defaultConfig.overlayBlueBoostColor));

@@ -4522,6 +4522,8 @@ let overlayConfigSyncTimer = null;
 let overlayPreviewPushTimer = null;
 let overlayConfigStorageTimer = null;
 let overlayTournamentEditorSelected = false;
+let overlaySystemFontsLoaded = false;
+let overlaySystemFontOptions = null;
 let replayFolderStatus = {ok:false, status:"checking", message:"Checking replay folder...", path:""};
 let replayFolderStatusLoaded = false;
 let replayFolderShellFallbackTimer = null;
@@ -6919,10 +6921,31 @@ window.addEventListener("message", event=>{
   applyReplayFolderStatus();
 });
 
-function renderOverlayFontSelect(id, value){
-  return `<select class="overlaySelect" id="${id}">
-    ${overlayFontOptions().map(option=>`<option value="${escapeHtml(option.value)}" ${value===option.value?"selected":""}>${escapeHtml(option.label)}</option>`).join("")}
-  </select>`;
+function renderOverlayFontInput(id, value){
+  return `<input class="overlayInput overlayFontInput" id="${id}" list="overlayFontList" value="${escapeHtml(value)}" placeholder="Type an installed font name" spellcheck="false">`;
+}
+
+function refreshOverlayFontDatalist(){
+  const list = $("overlayFontList");
+  if(!list) return;
+  const options = overlayFontOptions();
+  list.innerHTML = options.map(option=>`<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("");
+}
+
+async function loadOverlaySystemFonts(){
+  if(overlaySystemFontsLoaded) return overlaySystemFontOptions || [];
+  overlaySystemFontsLoaded = true;
+  overlaySystemFontOptions = [];
+  if(typeof window.queryLocalFonts !== "function") return overlaySystemFontOptions;
+  try{
+    const fonts = await window.queryLocalFonts();
+    const names = [...new Set(fonts.map(font=>String(font.family || "").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    overlaySystemFontOptions = names.map(name=>({label:name, value:name}));
+    refreshOverlayFontDatalist();
+  }catch(err){
+    console.warn("Could not read installed fonts:", err);
+  }
+  return overlaySystemFontOptions;
 }
 
 function renderOverlayAppearanceMenus(){
@@ -6943,7 +6966,7 @@ function renderOverlayAppearanceMenus(){
           <input class="overlayColorInput" id="overlayOrangeBoostColorInput" type="color" value="${escapeHtml(overlayConfig.overlayOrangeBoostColor)}">
         </label>
         <label class="overlayField">Default Font
-          ${renderOverlayFontSelect("overlayFontInput", overlayConfig.overlayFontFamily)}
+          ${renderOverlayFontInput("overlayFontInput", overlayConfig.overlayFontFamily)}
         </label>
       </div>
     </details>
@@ -6951,7 +6974,7 @@ function renderOverlayAppearanceMenus(){
       <summary>Team Names</summary>
       <div class="overlaySubmenuBody overlayControlGrid">
         <label class="overlayField">Font
-          ${renderOverlayFontSelect("overlayTeamNameFontInput", overlayConfig.overlayTeamNameFontFamily)}
+          ${renderOverlayFontInput("overlayTeamNameFontInput", overlayConfig.overlayTeamNameFontFamily)}
         </label>
         <label class="overlayField">Size %
           <input class="overlayInput" id="overlayTeamNameSizeInput" type="number" min="40" max="180" step="5" value="${Math.round(Number(overlayConfig.overlayTeamNameFontSize) || 100)}">
@@ -6965,7 +6988,7 @@ function renderOverlayAppearanceMenus(){
       <summary>Goals</summary>
       <div class="overlaySubmenuBody overlayControlGrid">
         <label class="overlayField">Font
-          ${renderOverlayFontSelect("overlayGoalFontInput", overlayConfig.overlayGoalFontFamily)}
+          ${renderOverlayFontInput("overlayGoalFontInput", overlayConfig.overlayGoalFontFamily)}
         </label>
         <label class="overlayField">Size %
           <input class="overlayInput" id="overlayGoalSizeInput" type="number" min="40" max="180" step="5" value="${Math.round(Number(overlayConfig.overlayGoalFontSize) || 100)}">
@@ -6979,7 +7002,7 @@ function renderOverlayAppearanceMenus(){
       <summary>Timer</summary>
       <div class="overlaySubmenuBody overlayControlGrid">
         <label class="overlayField">Font
-          ${renderOverlayFontSelect("overlayTimerFontInput", overlayConfig.overlayTimerFontFamily)}
+          ${renderOverlayFontInput("overlayTimerFontInput", overlayConfig.overlayTimerFontFamily)}
         </label>
         <label class="overlayField">Size %
           <input class="overlayInput" id="overlayTimerSizeInput" type="number" min="40" max="180" step="5" value="${Math.round(Number(overlayConfig.overlayTimerFontSize) || 100)}">
@@ -6993,7 +7016,7 @@ function renderOverlayAppearanceMenus(){
       <summary>Ticker</summary>
       <div class="overlaySubmenuBody overlayControlGrid">
         <label class="overlayField">Font
-          ${renderOverlayFontSelect("overlayTickerFontInput", overlayConfig.overlayTickerFontFamily)}
+          ${renderOverlayFontInput("overlayTickerFontInput", overlayConfig.overlayTickerFontFamily)}
         </label>
         <label class="overlayField">Size %
           <input class="overlayInput" id="overlayTickerSizeInput" type="number" min="40" max="180" step="5" value="${Math.round(Number(overlayConfig.overlayTickerFontSize) || 100)}">
@@ -7007,7 +7030,7 @@ function renderOverlayAppearanceMenus(){
       <summary>Player Boosts</summary>
       <div class="overlaySubmenuBody overlayControlGrid">
         <label class="overlayField">Font
-          ${renderOverlayFontSelect("overlayBoostFontInput", overlayConfig.overlayBoostFontFamily)}
+          ${renderOverlayFontInput("overlayBoostFontInput", overlayConfig.overlayBoostFontFamily)}
         </label>
         <label class="overlayField">Size %
           <input class="overlayInput" id="overlayBoostSizeInput" type="number" min="40" max="180" step="5" value="${Math.round(Number(overlayConfig.overlayBoostFontSize) || 100)}">
@@ -7016,7 +7039,10 @@ function renderOverlayAppearanceMenus(){
           <input class="overlayColorInput" id="overlayBoostTextColorInput" type="color" value="${escapeHtml(overlayConfig.overlayBoostTextColor)}">
         </label>
       </div>
-    </details>`;
+    </details>
+    <datalist id="overlayFontList">
+      ${overlayFontOptions().map(option=>`<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("")}
+    </datalist>`;
 }
 
 function renderOverlayControl(){
@@ -7262,6 +7288,8 @@ function renderOverlayControl(){
       if(key) overlayDetailsOpenState.set(key, details.open);
     });
   });
+  refreshOverlayFontDatalist();
+  loadOverlaySystemFonts();
 
   const bind = (id,key,eventName="change")=>{
     const el = $(id);
@@ -7269,6 +7297,10 @@ function renderOverlayControl(){
       markOverlayControlInteraction();
       updateOverlayConfigField(key, el.value, {renderControl:false});
     });
+  };
+  const bindFont = (id,key)=>{
+    bind(id, key, "input");
+    bind(id, key, "change");
   };
   const bindColor = (id,key)=>{
     const el = $(id);
@@ -7294,20 +7326,20 @@ function renderOverlayControl(){
   bindColor("overlayAccentColorInput","overlayAccentColor");
   bindColor("overlayBlueBoostColorInput","overlayBlueBoostColor");
   bindColor("overlayOrangeBoostColorInput","overlayOrangeBoostColor");
-  bind("overlayFontInput","overlayFontFamily","change");
-  bind("overlayTeamNameFontInput","overlayTeamNameFontFamily","change");
+  bindFont("overlayFontInput","overlayFontFamily");
+  bindFont("overlayTeamNameFontInput","overlayTeamNameFontFamily");
   bind("overlayTeamNameSizeInput","overlayTeamNameFontSize","input");
   bindColor("overlayTeamNameColorInput","overlayTeamNameColor");
-  bind("overlayGoalFontInput","overlayGoalFontFamily","change");
+  bindFont("overlayGoalFontInput","overlayGoalFontFamily");
   bind("overlayGoalSizeInput","overlayGoalFontSize","input");
   bindColor("overlayGoalColorInput","overlayGoalColor");
-  bind("overlayTimerFontInput","overlayTimerFontFamily","change");
+  bindFont("overlayTimerFontInput","overlayTimerFontFamily");
   bind("overlayTimerSizeInput","overlayTimerFontSize","input");
   bindColor("overlayTimerColorInput","overlayTimerColor");
-  bind("overlayTickerFontInput","overlayTickerFontFamily","change");
+  bindFont("overlayTickerFontInput","overlayTickerFontFamily");
   bind("overlayTickerSizeInput","overlayTickerFontSize","input");
   bindColor("overlayTickerColorInput","overlayTickerColor");
-  bind("overlayBoostFontInput","overlayBoostFontFamily","change");
+  bindFont("overlayBoostFontInput","overlayBoostFontFamily");
   bind("overlayBoostSizeInput","overlayBoostFontSize","input");
   bindColor("overlayBoostTextColorInput","overlayBoostTextColor");
   bind("overlayStingerCutInput","stingerTransitionCutMs","input");
@@ -12501,38 +12533,49 @@ function sanitizeOverlayMs(value, fallback=900){
 }
 
 function overlayFontOptions(){
-  return [
+  const common = [
     {label:"Inter", value:"Inter, Segoe UI, Arial, sans-serif"},
     {label:"Segoe UI", value:"Segoe UI, Inter, Arial, sans-serif"},
     {label:"Arial", value:"Arial, Helvetica, sans-serif"},
     {label:"Barlow Condensed", value:"Barlow Condensed, Inter, Arial, sans-serif"},
     {label:"Impact", value:"Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"}
   ];
+  const seen = new Set();
+  return [...common, ...(overlaySystemFontOptions || [])].filter(option=>{
+    const key = String(option.value || "").toLowerCase();
+    if(!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function sanitizeOverlayFontFamily(value, fallback=overlayDefaultConfig.overlayFontFamily){
+  const text = String(value || "").trim().replace(/[\u0000-\u001f\u007f;]/g, "");
+  if(!text || /[{}<>`]/.test(text)) return fallback;
+  return text.slice(0, 180);
 }
 
 function normalizeOverlayTheme(config){
-  const fonts = overlayFontOptions().map(option=>option.value);
   const fallback = overlayDefaultConfig;
-  const font = value=>fonts.includes(value) ? value : fallback.overlayFontFamily;
   return {
     overlayTextColor:sanitizeOverlayColor(config.overlayTextColor, fallback.overlayTextColor),
     overlayAccentColor:sanitizeOverlayColor(config.overlayAccentColor, fallback.overlayAccentColor),
     overlayBlueBoostColor:sanitizeOverlayColor(config.overlayBlueBoostColor, fallback.overlayBlueBoostColor),
     overlayOrangeBoostColor:sanitizeOverlayColor(config.overlayOrangeBoostColor, fallback.overlayOrangeBoostColor),
-    overlayFontFamily:font(config.overlayFontFamily),
-    overlayTeamNameFontFamily:font(config.overlayTeamNameFontFamily),
+    overlayFontFamily:sanitizeOverlayFontFamily(config.overlayFontFamily, fallback.overlayFontFamily),
+    overlayTeamNameFontFamily:sanitizeOverlayFontFamily(config.overlayTeamNameFontFamily, fallback.overlayTeamNameFontFamily),
     overlayTeamNameFontSize:sanitizeOverlayPercent(config.overlayTeamNameFontSize, fallback.overlayTeamNameFontSize),
     overlayTeamNameColor:sanitizeOverlayColor(config.overlayTeamNameColor, fallback.overlayTeamNameColor),
-    overlayGoalFontFamily:font(config.overlayGoalFontFamily),
+    overlayGoalFontFamily:sanitizeOverlayFontFamily(config.overlayGoalFontFamily, fallback.overlayGoalFontFamily),
     overlayGoalFontSize:sanitizeOverlayPercent(config.overlayGoalFontSize, fallback.overlayGoalFontSize),
     overlayGoalColor:sanitizeOverlayColor(config.overlayGoalColor, fallback.overlayGoalColor),
-    overlayTimerFontFamily:font(config.overlayTimerFontFamily),
+    overlayTimerFontFamily:sanitizeOverlayFontFamily(config.overlayTimerFontFamily, fallback.overlayTimerFontFamily),
     overlayTimerFontSize:sanitizeOverlayPercent(config.overlayTimerFontSize, fallback.overlayTimerFontSize),
     overlayTimerColor:sanitizeOverlayColor(config.overlayTimerColor, fallback.overlayTimerColor),
-    overlayTickerFontFamily:font(config.overlayTickerFontFamily),
+    overlayTickerFontFamily:sanitizeOverlayFontFamily(config.overlayTickerFontFamily, fallback.overlayTickerFontFamily),
     overlayTickerFontSize:sanitizeOverlayPercent(config.overlayTickerFontSize, fallback.overlayTickerFontSize),
     overlayTickerColor:sanitizeOverlayColor(config.overlayTickerColor, fallback.overlayTickerColor),
-    overlayBoostFontFamily:font(config.overlayBoostFontFamily),
+    overlayBoostFontFamily:sanitizeOverlayFontFamily(config.overlayBoostFontFamily, fallback.overlayBoostFontFamily),
     overlayBoostFontSize:sanitizeOverlayPercent(config.overlayBoostFontSize, fallback.overlayBoostFontSize),
     overlayBoostTextColor:sanitizeOverlayColor(config.overlayBoostTextColor, fallback.overlayBoostTextColor)
   };
