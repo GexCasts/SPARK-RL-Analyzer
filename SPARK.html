@@ -7299,8 +7299,36 @@ function renderOverlayControl(){
     });
   };
   const bindFont = (id,key)=>{
-    bind(id, key, "input");
-    bind(id, key, "change");
+    const el = $(id);
+    if(!el) return;
+    let previousValue = el.value;
+    const openPicker = ()=>{
+      previousValue = overlayConfig[key] || el.value || previousValue;
+      if(el.value){
+        el.value = "";
+        el.dataset.fontPickerOpen = "true";
+      }
+    };
+    const commit = ()=>{
+      const next = el.value.trim();
+      if(!next) return;
+      previousValue = next;
+      delete el.dataset.fontPickerOpen;
+      markOverlayControlInteraction();
+      updateOverlayConfigField(key, next, {renderControl:false});
+    };
+    el.addEventListener("pointerdown", openPicker);
+    el.addEventListener("focus", openPicker);
+    el.addEventListener("input", ()=>{
+      if(el.value.trim()) commit();
+    });
+    el.addEventListener("change", commit);
+    el.addEventListener("blur", ()=>{
+      if(!el.value.trim()){
+        el.value = previousValue || overlayConfig[key] || "";
+        delete el.dataset.fontPickerOpen;
+      }
+    });
   };
   const bindColor = (id,key)=>{
     const el = $(id);
