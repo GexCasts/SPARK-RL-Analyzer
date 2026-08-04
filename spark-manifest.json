@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.08.04.0606",
-    "generatedUtc":  "2026-08-04T06:06:29.0886195Z",
+    "appVersion":  "2026.08.04.0613",
+    "generatedUtc":  "2026-08-04T06:13:21.7128126Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -145,10 +145,10 @@
                   },
                   {
                       "path":  "SPARK Launcher.exe",
-                      "version":  "4a07e42fc7b6",
-                      "sha256":  "4a07e42fc7b691de58bc0ec56d49f12f372f999cc70f504ec08513cf1f641132",
-                      "size":  64512,
-                      "modifiedUtc":  "2026-06-17T08:18:00.7267715Z"
+                      "version":  "20eef2d5ca30",
+                      "sha256":  "20eef2d5ca301ce275662364de164b3e4e3ce598f2e6063b8cee5dd2ba4b06f2",
+                      "size":  61952,
+                      "modifiedUtc":  "2026-08-04T06:12:11.2553677Z"
                   },
                   {
                       "path":  "SPARK Personal Overlay.exe",
