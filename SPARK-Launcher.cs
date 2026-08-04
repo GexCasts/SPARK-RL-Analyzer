@@ -59,8 +59,8 @@ namespace SparkLauncher
         private readonly string tmpDir;
         private readonly string nodeVersion = "v22.11.0";
         private readonly string nodeFolder = "node-v22.11.0-win-x64";
-        private readonly string rrrocketVersion = "0.11.3";
-        private readonly string rrrocketFolder = "rrrocket-0.11.3-x86_64-pc-windows-msvc";
+        private readonly string rrrocketVersion = "0.11.5";
+        private readonly string rrrocketFolder = "rrrocket-0.11.5-x86_64-pc-windows-msvc";
         private readonly string ffmpegVersion = "8.1.1";
         private readonly string ffmpegFolder = "ffmpeg-8.1.1-essentials_build";
         private readonly string githubRawBase = "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main";

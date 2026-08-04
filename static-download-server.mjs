@@ -22,7 +22,7 @@ const replayFolderConfigPath = path.join(overlayAssetDir, "replay-folder.json");
 const liveApiSettingsPath = path.join(overlayAssetDir, "live-api-settings.json");
 const legacySteamReplayFolderPath = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Rocket League\\TAGame\\Demos";
 const defaultReplayFolderPath = defaultWindowsReplayFolderPath();
-const rrrocketVersion = "0.11.3";
+const rrrocketVersion = "0.11.5";
 const bundledRrrocketCandidates = [
   path.join(here, "tools", "rrrocket", `rrrocket-${rrrocketVersion}-x86_64-unknown-linux-musl`, "rrrocket"),
   path.join(here, "tools", "rrrocket", `rrrocket-${rrrocketVersion}-x86_64-apple-darwin`, "rrrocket"),
