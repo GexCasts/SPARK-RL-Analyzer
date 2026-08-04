@@ -164,11 +164,12 @@ html,body{
   will-change:transform;
 }
 .maskSlot.seriesDots{
-  gap:8px;
+  gap:5px;
+  justify-content:center;
 }
 .maskSlot.seriesDots .dot{
-  width:clamp(10px,22%,20px);
-  height:clamp(8px,70%,18px);
+  width:clamp(8px,18%,18px);
+  height:clamp(6px,60%,14px);
 }
 .scorebug{
   position:absolute;
@@ -1602,6 +1603,8 @@ function componentsForColor(data, width, height, target){
   const seen = new Uint8Array(width * height);
   const components = [];
   const queue = [];
+  const scaleX = 1920 / width;
+  const scaleY = 1080 / height;
   for(let y = 0; y < height; y++){
     for(let x = 0; x < width; x++){
       const start = y * width + x;
@@ -1612,6 +1615,8 @@ function componentsForColor(data, width, height, target){
         continue;
       }
       let minX = x, maxX = x, minY = y, maxY = y, count = 0;
+      const rowMin = new Map();
+      const rowMax = new Map();
       queue.length = 0;
       queue.push(start);
       seen[start] = 1;
@@ -1624,6 +1629,8 @@ function componentsForColor(data, width, height, target){
         if(cx > maxX) maxX = cx;
         if(cy < minY) minY = cy;
         if(cy > maxY) maxY = cy;
+        rowMin.set(cy, Math.min(rowMin.get(cy) ?? cx, cx));
+        rowMax.set(cy, Math.max(rowMax.get(cy) ?? cx, cx));
         const neighbors = [current - 1, current + 1, current - width, current + width];
         for(const next of neighbors){
           if(next < 0 || next >= seen.length || seen[next]) continue;
@@ -1638,11 +1645,45 @@ function componentsForColor(data, width, height, target){
         }
       }
       if(count >= 48){
+        const rows = Array.from(rowMin.keys()).sort((a,b)=>a - b);
+        let safeMinX = -Infinity;
+        let safeMaxX = Infinity;
+        rows.forEach(row=>{
+          safeMinX = Math.max(safeMinX, rowMin.get(row));
+          safeMaxX = Math.min(safeMaxX, rowMax.get(row));
+        });
+        const bboxWidth = maxX - minX + 1;
+        if(!Number.isFinite(safeMinX) || !Number.isFinite(safeMaxX) || safeMaxX <= safeMinX || safeMaxX - safeMinX + 1 < bboxWidth * .38){
+          const centerRows = rows.filter(row=>row >= minY + (maxY - minY) * .25 && row <= minY + (maxY - minY) * .75);
+          safeMinX = -Infinity;
+          safeMaxX = Infinity;
+          centerRows.forEach(row=>{
+            safeMinX = Math.max(safeMinX, rowMin.get(row));
+            safeMaxX = Math.min(safeMaxX, rowMax.get(row));
+          });
+        }
+        if(!Number.isFinite(safeMinX) || !Number.isFinite(safeMaxX) || safeMaxX <= safeMinX){
+          safeMinX = minX;
+          safeMaxX = maxX;
+        }
+        const topRow = rows[0];
+        const bottomRow = rows[rows.length - 1];
+        const poly = [
+          [(rowMin.get(topRow) - minX) / bboxWidth * 100, 0],
+          [(rowMax.get(topRow) + 1 - minX) / bboxWidth * 100, 0],
+          [(rowMax.get(bottomRow) + 1 - minX) / bboxWidth * 100, 100],
+          [(rowMin.get(bottomRow) - minX) / bboxWidth * 100, 100]
+        ].map(point=>`${Math.max(0, Math.min(100, point[0])).toFixed(2)}% ${Math.max(0, Math.min(100, point[1])).toFixed(2)}%`).join(",");
         components.push({
-          x:minX * (1920 / width),
-          y:minY * (1080 / height),
-          width:(maxX - minX + 1) * (1920 / width),
-          height:(maxY - minY + 1) * (1080 / height),
+          x:minX * scaleX,
+          y:minY * scaleY,
+          width:bboxWidth * scaleX,
+          height:(maxY - minY + 1) * scaleY,
+          safeX:safeMinX * scaleX,
+          safeY:minY * scaleY,
+          safeWidth:(safeMaxX - safeMinX + 1) * scaleX,
+          safeHeight:(maxY - minY + 1) * scaleY,
+          clipPath:`polygon(${poly})`,
           count
         });
       }
@@ -1700,18 +1741,25 @@ function setMaskSlot(id, region, options={}){
   if(!region){
     if(options.ticker) stopMaskTicker(el);
     el.style.display = "none";
+    el.style.clipPath = "";
     return;
   }
   const pad = Number(options.pad || 0);
-  const x = region.x + pad;
-  const y = region.y + pad;
-  const width = Math.max(1, region.width - pad * 2);
-  const height = Math.max(1, region.height - pad * 2);
+  const useSafe = options.safe !== false && Number(region.safeWidth) > 0 && Number(region.safeHeight) > 0;
+  const baseX = useSafe ? region.safeX : region.x;
+  const baseY = useSafe ? region.safeY : region.y;
+  const baseWidth = useSafe ? region.safeWidth : region.width;
+  const baseHeight = useSafe ? region.safeHeight : region.height;
+  const x = baseX + pad;
+  const y = baseY + pad;
+  const width = Math.max(1, baseWidth - pad * 2);
+  const height = Math.max(1, baseHeight - pad * 2);
   el.style.display = "flex";
   el.style.left = `${x}px`;
   el.style.top = `${y}px`;
   el.style.width = `${width}px`;
   el.style.height = `${height}px`;
+  el.style.clipPath = options.clip === false || useSafe ? "" : region.clipPath || "";
   if(options.fontScale){
     const text = options.text === undefined ? String(el.textContent || "") : String(options.text || "");
     if(options.text !== undefined && !options.ticker) el.textContent = text;
@@ -1724,7 +1772,8 @@ function setMaskSlot(id, region, options={}){
   }
 }
 function setMaskTicker(el, text, width){
-  const shouldScroll = text.length > 30;
+  const maskWidth = Math.max(1, Number(width) || el.getBoundingClientRect().width || 1);
+  const shouldScroll = measureTickerTextWidth(el, text) > maskWidth + 1;
   el.classList.toggle("scrolling", shouldScroll);
   if(!shouldScroll){
     stopMaskTicker(el);
@@ -1732,7 +1781,6 @@ function setMaskTicker(el, text, width){
     return;
   }
   let state = maskTickerStates.get(el);
-  const maskWidth = Math.max(1, Number(width) || el.getBoundingClientRect().width || 1);
   if(!state || state.text !== text || Math.abs((state.maskWidth || 0) - maskWidth) > 2){
     stopMaskTicker(el);
     el.textContent = "";
@@ -1757,6 +1805,22 @@ function setMaskTicker(el, text, width){
   }
   updateMaskTickerMetrics(state, width);
   ensureMaskTickerLoop();
+}
+
+function measureTickerTextWidth(el, text){
+  const probe = document.createElement("span");
+  probe.className = "tickerCopy";
+  probe.textContent = text || "";
+  probe.style.position = "absolute";
+  probe.style.left = "-99999px";
+  probe.style.top = "-99999px";
+  probe.style.transform = "none";
+  probe.style.visibility = "hidden";
+  probe.style.pointerEvents = "none";
+  el.append(probe);
+  const width = Math.max(1, probe.getBoundingClientRect().width || probe.scrollWidth || 1);
+  probe.remove();
+  return width;
 }
 
 function stopMaskTicker(el){
@@ -1899,9 +1963,9 @@ function renderCustomScoreboard(config){
   setMaskSlot("maskClock", clockRegion, {fontScale:.7, charScale:.52, maxFont:72, text:overlayClockText()});
   setMaskSlot("maskBlueName", nameRegions[0], {pad:8, fontScale:.72, charScale:.6, maxFont:58, text:blueName});
   setMaskSlot("maskOrangeName", nameRegions[nameRegions.length - 1], {pad:8, fontScale:.72, charScale:.6, maxFont:58, text:orangeName});
-  setMaskSlot("maskBlueSeries", seriesRegions[0], {pad:6});
-  setMaskSlot("maskOrangeSeries", seriesRegions[seriesRegions.length - 1], {pad:6});
-  setMaskSlot("maskSeriesTitle", titleRegion, {pad:3, fontScale:.78, charScale:.48, maxFont:44, text:title, ticker:true});
+  setMaskSlot("maskBlueSeries", seriesRegions[0], {pad:2});
+  setMaskSlot("maskOrangeSeries", seriesRegions[seriesRegions.length - 1], {pad:2});
+  setMaskSlot("maskSeriesTitle", titleRegion, {pad:2, fontScale:.7, charScale:.5, maxFont:34, text:title, ticker:true});
 
   setMaskLogo("maskBlueLogo", teamLogoFor("Blue", config));
   setMaskLogo("maskOrangeLogo", teamLogoFor("Orange", config));
