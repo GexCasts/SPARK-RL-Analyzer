@@ -2883,6 +2883,7 @@ body.obsOverlayMode #obsOverlayRoot{
   display:grid;
   place-items:center;
   color:#fff;
+  font-family:var(--overlay-goal-font,var(--overlay-font,Inter,Segoe UI,Arial,sans-serif));
   font-size:32px;
   font-weight:1000;
   z-index:2;
@@ -2913,6 +2914,7 @@ body.obsOverlayMode #obsOverlayRoot{
   transform:translateX(-50%);
   background:transparent;
   color:#f4f4f4;
+  font-family:var(--overlay-ticker-font,var(--overlay-font,Inter,Segoe UI,Arial,sans-serif));
   font-size:12px;
   font-weight:1000;
   padding:0;
@@ -3611,6 +3613,7 @@ body.obsOverlayMode #obsOverlayRoot{
   display:grid;
   place-items:center;
   color:#fff;
+  font-family:var(--overlay-goal-font,var(--overlay-font,Inter,Segoe UI,Arial,sans-serif));
   font-size:32px;
   font-weight:1000;
 }
@@ -3643,6 +3646,7 @@ body.obsOverlayMode #obsOverlayRoot{
   width:220px;
   color:#f5f5f5;
   text-align:center;
+  font-family:var(--overlay-ticker-font,var(--overlay-font,Inter,Segoe UI,Arial,sans-serif));
   font-size:12px;
   font-weight:1000;
 }
@@ -12638,18 +12642,38 @@ function applyOverlayThemeToElement(element, config=overlayConfig){
   element.style.setProperty("--overlay-boost-blue", theme.overlayBlueBoostColor);
   element.style.setProperty("--overlay-boost-orange", theme.overlayOrangeBoostColor);
   element.style.setProperty("--spark-yellow", theme.overlayAccentColor);
-  element.style.setProperty("--overlay-font", resolveOverlayFontFamily(theme.overlayFontFamily));
-  element.style.setProperty("--overlay-team-name-font", resolveOverlayFontFamily(theme.overlayTeamNameFontFamily));
+  const baseFont = resolveOverlayFontFamily(theme.overlayFontFamily);
+  const teamFont = resolveOverlayFontFamily(theme.overlayTeamNameFontFamily);
+  const goalFont = resolveOverlayFontFamily(theme.overlayGoalFontFamily);
+  const timerFont = resolveOverlayFontFamily(theme.overlayTimerFontFamily);
+  const tickerFont = resolveOverlayFontFamily(theme.overlayTickerFontFamily);
+  const boostFont = resolveOverlayFontFamily(theme.overlayBoostFontFamily);
+  element.style.setProperty("--overlay-font", baseFont);
+  element.style.setProperty("--overlay-team-name-font", teamFont);
+  element.style.setProperty("--mask-team-font", teamFont);
   element.style.setProperty("--overlay-team-name-color", theme.overlayTeamNameColor);
-  element.style.setProperty("--overlay-goal-font", resolveOverlayFontFamily(theme.overlayGoalFontFamily));
+  element.style.setProperty("--mask-team-color", theme.overlayTeamNameColor);
+  element.style.setProperty("--overlay-goal-font", goalFont);
+  element.style.setProperty("--mask-goal-font", goalFont);
+  element.style.setProperty("--mask-goal-scale", String(theme.overlayGoalFontSize / 100));
   element.style.setProperty("--overlay-goal-color", theme.overlayGoalColor);
-  element.style.setProperty("--overlay-timer-font", resolveOverlayFontFamily(theme.overlayTimerFontFamily));
+  element.style.setProperty("--mask-goal-color", theme.overlayGoalColor);
+  element.style.setProperty("--overlay-timer-font", timerFont);
+  element.style.setProperty("--mask-timer-font", timerFont);
   element.style.setProperty("--overlay-timer-scale", String(theme.overlayTimerFontSize / 100));
+  element.style.setProperty("--mask-timer-scale", String(theme.overlayTimerFontSize / 100));
   element.style.setProperty("--overlay-timer-color", theme.overlayTimerColor);
-  element.style.setProperty("--overlay-ticker-font", resolveOverlayFontFamily(theme.overlayTickerFontFamily));
+  element.style.setProperty("--mask-timer-color", theme.overlayTimerColor);
+  element.style.setProperty("--overlay-ticker-font", tickerFont);
+  element.style.setProperty("--mask-ticker-font", tickerFont);
+  element.style.setProperty("--mask-ticker-scale", String(theme.overlayTickerFontSize / 100));
   element.style.setProperty("--overlay-ticker-color", theme.overlayTickerColor);
-  element.style.setProperty("--overlay-boost-font", resolveOverlayFontFamily(theme.overlayBoostFontFamily));
+  element.style.setProperty("--mask-ticker-color", theme.overlayTickerColor);
+  element.style.setProperty("--overlay-boost-font", boostFont);
+  element.style.setProperty("--boost-font", boostFont);
+  element.style.setProperty("--boost-font-scale", String(theme.overlayBoostFontSize / 100));
   element.style.setProperty("--overlay-boost-text", theme.overlayBoostTextColor);
+  element.style.setProperty("--boost-text-color", theme.overlayBoostTextColor);
 }
 
 function applyOverlayThemeToPreview(){
@@ -12727,22 +12751,23 @@ async function refreshOverlayConfigFromServer(){
 }
 
 function saveOverlayConfig(nextConfig, options={}){
-  const bestOf = [3,5,7].includes(Number(nextConfig.seriesBestOf)) ? Number(nextConfig.seriesBestOf) : 5;
+  const configSource = {...(overlayConfig || overlayDefaultConfig), ...nextConfig};
+  const bestOf = [3,5,7].includes(Number(configSource.seriesBestOf)) ? Number(configSource.seriesBestOf) : 5;
   const maxWins = Math.ceil(bestOf / 2);
   overlayConfig = {
     ...overlayDefaultConfig,
-    ...nextConfig,
+    ...configSource,
     seriesBestOf:bestOf,
-    blueSeriesScore:Math.max(0, Math.min(maxWins, Number(nextConfig.blueSeriesScore) || 0)),
-    orangeSeriesScore:Math.max(0, Math.min(maxWins, Number(nextConfig.orangeSeriesScore) || 0)),
-    tournamentLogoX:Math.round(Math.max(0, Math.min(1920, Number(nextConfig.tournamentLogoX) || 0))),
-    tournamentLogoY:Math.round(Math.max(0, Math.min(1080, Number(nextConfig.tournamentLogoY) || 0))),
-    tournamentLogoWidth:Math.round(Math.max(24, Math.min(900, Number(nextConfig.tournamentLogoWidth) || 280))),
-    tournamentLogoRatio:Math.max(.2, Math.min(8, Number(nextConfig.tournamentLogoRatio) || 2.2)),
-    stingerTransitionCutMs:sanitizeOverlayMs(nextConfig.stingerTransitionCutMs, overlayDefaultConfig.stingerTransitionCutMs),
-    ...normalizeOverlayTheme(nextConfig),
-    forceLiveOverlayAt:Math.max(0, Number(nextConfig.forceLiveOverlayAt) || 0),
-    testFinalStatsPreview:nextConfig.testFinalStatsPreview === true
+    blueSeriesScore:Math.max(0, Math.min(maxWins, Number(configSource.blueSeriesScore) || 0)),
+    orangeSeriesScore:Math.max(0, Math.min(maxWins, Number(configSource.orangeSeriesScore) || 0)),
+    tournamentLogoX:Math.round(Math.max(0, Math.min(1920, Number(configSource.tournamentLogoX) || 0))),
+    tournamentLogoY:Math.round(Math.max(0, Math.min(1080, Number(configSource.tournamentLogoY) || 0))),
+    tournamentLogoWidth:Math.round(Math.max(24, Math.min(900, Number(configSource.tournamentLogoWidth) || 280))),
+    tournamentLogoRatio:Math.max(.2, Math.min(8, Number(configSource.tournamentLogoRatio) || 2.2)),
+    stingerTransitionCutMs:sanitizeOverlayMs(configSource.stingerTransitionCutMs, overlayDefaultConfig.stingerTransitionCutMs),
+    ...normalizeOverlayTheme(configSource),
+    forceLiveOverlayAt:Math.max(0, Number(configSource.forceLiveOverlayAt) || 0),
+    testFinalStatsPreview:configSource.testFinalStatsPreview === true
   };
   delete overlayConfig.lastAutoSeriesMatchId;
   delete overlayConfig.lastAutoSeriesWinner;
