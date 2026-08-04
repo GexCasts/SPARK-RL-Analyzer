@@ -1397,20 +1397,20 @@ const defaultConfig = {
   overlayAccentColor:"#ffd000",
   overlayBlueBoostColor:"#1b8cff",
   overlayOrangeBoostColor:"#ff8400",
-  overlayFontFamily:"Inter, Segoe UI, Arial, sans-serif",
-  overlayTeamNameFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayFontFamily:"Inter",
+  overlayTeamNameFontFamily:"Inter",
   overlayTeamNameFontSize:100,
   overlayTeamNameColor:"#f7f7f4",
-  overlayGoalFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayGoalFontFamily:"Inter",
   overlayGoalFontSize:100,
   overlayGoalColor:"#fffdf3",
-  overlayTimerFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayTimerFontFamily:"Inter",
   overlayTimerFontSize:100,
   overlayTimerColor:"#fffdf3",
-  overlayTickerFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayTickerFontFamily:"Inter",
   overlayTickerFontSize:100,
   overlayTickerColor:"#050609",
-  overlayBoostFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayBoostFontFamily:"Inter",
   overlayBoostFontSize:100,
   overlayBoostTextColor:"#f7f7f4",
   forceLiveOverlayAt:0
@@ -1499,10 +1499,24 @@ function applyOverlayTheme(config){
     const n = Number(value);
     return Number.isFinite(n) ? Math.max(40, Math.min(180, n)) : fallback;
   };
+  const fontFallbacks = new Map([
+    ["inter", "Inter, Segoe UI, Arial, sans-serif"],
+    ["inter, segoe ui, arial, sans-serif", "Inter"],
+    ["segoe ui", "Segoe UI, Inter, Arial, sans-serif"],
+    ["segoe ui, inter, arial, sans-serif", "Segoe UI"],
+    ["arial", "Arial, Helvetica, sans-serif"],
+    ["arial, helvetica, sans-serif", "Arial"],
+    ["barlow condensed", "Barlow Condensed, Inter, Arial, sans-serif"],
+    ["barlow condensed, inter, arial, sans-serif", "Barlow Condensed"],
+    ["impact", "Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"],
+    ["impact, haettenschweiler, arial narrow bold, sans-serif", "Impact"]
+  ]);
   const font = (value, fallback=defaultConfig.overlayFontFamily)=>{
     const text = String(value || "").trim().replace(/[\u0000-\u001f\u007f;]/g, "");
     if(!text || /[{}<>`]/.test(text)) return fallback;
-    return text.slice(0, 180);
+    const safe = text.slice(0, 180);
+    const normalized = fontFallbacks.get(safe.toLowerCase()) || safe;
+    return fontFallbacks.get(normalized.toLowerCase()) || normalized;
   };
   root.style.setProperty("--overlay-text", color(config.overlayTextColor, defaultConfig.overlayTextColor));
   root.style.setProperty("--overlay-accent", color(config.overlayAccentColor, defaultConfig.overlayAccentColor));

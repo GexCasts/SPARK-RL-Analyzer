@@ -4493,20 +4493,20 @@ const overlayDefaultConfig = {
   overlayAccentColor:"#ffd000",
   overlayBlueBoostColor:"#1b8cff",
   overlayOrangeBoostColor:"#ff8400",
-  overlayFontFamily:"Inter, Segoe UI, Arial, sans-serif",
-  overlayTeamNameFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayFontFamily:"Inter",
+  overlayTeamNameFontFamily:"Inter",
   overlayTeamNameFontSize:100,
   overlayTeamNameColor:"#f7f7f7",
-  overlayGoalFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayGoalFontFamily:"Inter",
   overlayGoalFontSize:100,
   overlayGoalColor:"#f7f7f7",
-  overlayTimerFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayTimerFontFamily:"Inter",
   overlayTimerFontSize:100,
   overlayTimerColor:"#f7f7f7",
-  overlayTickerFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayTickerFontFamily:"Inter",
   overlayTickerFontSize:100,
   overlayTickerColor:"#050609",
-  overlayBoostFontFamily:"Inter, Segoe UI, Arial, sans-serif",
+  overlayBoostFontFamily:"Inter",
   overlayBoostFontSize:100,
   overlayBoostTextColor:"#f7f7f7",
   testFinalStatsPreview:false,
@@ -6929,7 +6929,7 @@ function refreshOverlayFontDatalist(){
   const list = $("overlayFontList");
   if(!list) return;
   const options = overlayFontOptions();
-  list.innerHTML = options.map(option=>`<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("");
+  list.innerHTML = options.map(option=>`<option value="${escapeHtml(option.value)}"></option>`).join("");
 }
 
 async function loadOverlaySystemFonts(){
@@ -7041,7 +7041,7 @@ function renderOverlayAppearanceMenus(){
       </div>
     </details>
     <datalist id="overlayFontList">
-      ${overlayFontOptions().map(option=>`<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("")}
+      ${overlayFontOptions().map(option=>`<option value="${escapeHtml(option.value)}"></option>`).join("")}
     </datalist>`;
 }
 
@@ -12534,11 +12534,11 @@ function sanitizeOverlayMs(value, fallback=900){
 
 function overlayFontOptions(){
   const common = [
-    {label:"Inter", value:"Inter, Segoe UI, Arial, sans-serif"},
-    {label:"Segoe UI", value:"Segoe UI, Inter, Arial, sans-serif"},
-    {label:"Arial", value:"Arial, Helvetica, sans-serif"},
-    {label:"Barlow Condensed", value:"Barlow Condensed, Inter, Arial, sans-serif"},
-    {label:"Impact", value:"Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"}
+    {label:"Inter", value:"Inter"},
+    {label:"Segoe UI", value:"Segoe UI"},
+    {label:"Arial", value:"Arial"},
+    {label:"Barlow Condensed", value:"Barlow Condensed"},
+    {label:"Impact", value:"Impact"}
   ];
   const seen = new Set();
   return [...common, ...(overlaySystemFontOptions || [])].filter(option=>{
@@ -12549,10 +12549,31 @@ function overlayFontOptions(){
   });
 }
 
+function overlayFontFallbacks(){
+  return new Map([
+    ["inter", "Inter, Segoe UI, Arial, sans-serif"],
+    ["inter, segoe ui, arial, sans-serif", "Inter"],
+    ["segoe ui", "Segoe UI, Inter, Arial, sans-serif"],
+    ["segoe ui, inter, arial, sans-serif", "Segoe UI"],
+    ["arial", "Arial, Helvetica, sans-serif"],
+    ["arial, helvetica, sans-serif", "Arial"],
+    ["barlow condensed", "Barlow Condensed, Inter, Arial, sans-serif"],
+    ["barlow condensed, inter, arial, sans-serif", "Barlow Condensed"],
+    ["impact", "Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"],
+    ["impact, haettenschweiler, arial narrow bold, sans-serif", "Impact"]
+  ]);
+}
+
 function sanitizeOverlayFontFamily(value, fallback=overlayDefaultConfig.overlayFontFamily){
   const text = String(value || "").trim().replace(/[\u0000-\u001f\u007f;]/g, "");
   if(!text || /[{}<>`]/.test(text)) return fallback;
-  return text.slice(0, 180);
+  const safe = text.slice(0, 180);
+  return overlayFontFallbacks().get(safe.toLowerCase()) || safe;
+}
+
+function resolveOverlayFontFamily(value){
+  const safe = sanitizeOverlayFontFamily(value);
+  return overlayFontFallbacks().get(safe.toLowerCase()) || safe;
 }
 
 function normalizeOverlayTheme(config){
@@ -12589,17 +12610,17 @@ function applyOverlayThemeToElement(element, config=overlayConfig){
   element.style.setProperty("--overlay-boost-blue", theme.overlayBlueBoostColor);
   element.style.setProperty("--overlay-boost-orange", theme.overlayOrangeBoostColor);
   element.style.setProperty("--spark-yellow", theme.overlayAccentColor);
-  element.style.setProperty("--overlay-font", theme.overlayFontFamily);
-  element.style.setProperty("--overlay-team-name-font", theme.overlayTeamNameFontFamily);
+  element.style.setProperty("--overlay-font", resolveOverlayFontFamily(theme.overlayFontFamily));
+  element.style.setProperty("--overlay-team-name-font", resolveOverlayFontFamily(theme.overlayTeamNameFontFamily));
   element.style.setProperty("--overlay-team-name-color", theme.overlayTeamNameColor);
-  element.style.setProperty("--overlay-goal-font", theme.overlayGoalFontFamily);
+  element.style.setProperty("--overlay-goal-font", resolveOverlayFontFamily(theme.overlayGoalFontFamily));
   element.style.setProperty("--overlay-goal-color", theme.overlayGoalColor);
-  element.style.setProperty("--overlay-timer-font", theme.overlayTimerFontFamily);
+  element.style.setProperty("--overlay-timer-font", resolveOverlayFontFamily(theme.overlayTimerFontFamily));
   element.style.setProperty("--overlay-timer-scale", String(theme.overlayTimerFontSize / 100));
   element.style.setProperty("--overlay-timer-color", theme.overlayTimerColor);
-  element.style.setProperty("--overlay-ticker-font", theme.overlayTickerFontFamily);
+  element.style.setProperty("--overlay-ticker-font", resolveOverlayFontFamily(theme.overlayTickerFontFamily));
   element.style.setProperty("--overlay-ticker-color", theme.overlayTickerColor);
-  element.style.setProperty("--overlay-boost-font", theme.overlayBoostFontFamily);
+  element.style.setProperty("--overlay-boost-font", resolveOverlayFontFamily(theme.overlayBoostFontFamily));
   element.style.setProperty("--overlay-boost-text", theme.overlayBoostTextColor);
 }
 
