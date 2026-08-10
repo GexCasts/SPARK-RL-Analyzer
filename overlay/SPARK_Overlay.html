@@ -1484,11 +1484,58 @@ function cleanName(value){
 function escapeHtml(value){
   return String(value ?? "").replace(/[&<>"']/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
 }
+function fontFallbacks(){
+  return new Map([
+    ["inter", "Inter, Segoe UI, Arial, sans-serif"],
+    ["segoe ui", "Segoe UI, Inter, Arial, sans-serif"],
+    ["arial", "Arial, Helvetica, sans-serif"],
+    ["barlow condensed", "Barlow Condensed, Inter, Arial, sans-serif"],
+    ["impact", "Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"]
+  ]);
+}
+function fontAliases(){
+  return new Map([
+    ["inter, segoe ui, arial, sans-serif", "Inter"],
+    ["segoe ui, inter, arial, sans-serif", "Segoe UI"],
+    ["arial, helvetica, sans-serif", "Arial"],
+    ["barlow condensed, inter, arial, sans-serif", "Barlow Condensed"],
+    ["impact, haettenschweiler, arial narrow bold, sans-serif", "Impact"]
+  ]);
+}
+function sanitizeFontFamily(value, fallback=defaultConfig.overlayFontFamily){
+  const text = String(value || "").trim().replace(/[\u0000-\u001f\u007f;]/g, "");
+  if(!text || /[{}<>`]/.test(text)) return fallback;
+  const safe = text.slice(0, 180);
+  return fontAliases().get(safe.toLowerCase()) || safe;
+}
+function resolveFontFamily(value, fallback=defaultConfig.overlayFontFamily){
+  const safe = sanitizeFontFamily(value, fallback);
+  return fontFallbacks().get(safe.toLowerCase()) || safe;
+}
+function fontConfigKeys(){
+  return [
+    "overlayFontFamily",
+    "overlayTeamNameFontFamily",
+    "overlayGoalFontFamily",
+    "overlayTimerFontFamily",
+    "overlayTickerFontFamily",
+    "overlayBoostFontFamily"
+  ];
+}
+function normalizeFontConfigValues(config){
+  const copy = {...(config || {})};
+  fontConfigKeys().forEach(key=>{
+    if(Object.prototype.hasOwnProperty.call(copy, key)){
+      copy[key] = sanitizeFontFamily(copy[key], defaultConfig[key] || defaultConfig.overlayFontFamily);
+    }
+  });
+  return copy;
+}
 function readConfig(){
   let localConfig = {};
   try{ localConfig = JSON.parse(localStorage.getItem(overlayConfigKey) || "{}"); }
   catch{ localConfig = {}; }
-  const merged = {...defaultConfig, ...localConfig, ...(serverConfig || {})};
+  const merged = normalizeFontConfigValues({...defaultConfig, ...normalizeFontConfigValues(localConfig), ...normalizeFontConfigValues(serverConfig || {})});
   merged.forceLiveOverlayAt = Math.max(0, Number(merged.forceLiveOverlayAt) || 0);
   return merged;
 }
@@ -1499,25 +1546,7 @@ function applyOverlayTheme(config){
     const n = Number(value);
     return Number.isFinite(n) ? Math.max(40, Math.min(180, n)) : fallback;
   };
-  const fontFallbacks = new Map([
-    ["inter", "Inter, Segoe UI, Arial, sans-serif"],
-    ["inter, segoe ui, arial, sans-serif", "Inter"],
-    ["segoe ui", "Segoe UI, Inter, Arial, sans-serif"],
-    ["segoe ui, inter, arial, sans-serif", "Segoe UI"],
-    ["arial", "Arial, Helvetica, sans-serif"],
-    ["arial, helvetica, sans-serif", "Arial"],
-    ["barlow condensed", "Barlow Condensed, Inter, Arial, sans-serif"],
-    ["barlow condensed, inter, arial, sans-serif", "Barlow Condensed"],
-    ["impact", "Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"],
-    ["impact, haettenschweiler, arial narrow bold, sans-serif", "Impact"]
-  ]);
-  const font = (value, fallback=defaultConfig.overlayFontFamily)=>{
-    const text = String(value || "").trim().replace(/[\u0000-\u001f\u007f;]/g, "");
-    if(!text || /[{}<>`]/.test(text)) return fallback;
-    const safe = text.slice(0, 180);
-    const normalized = fontFallbacks.get(safe.toLowerCase()) || safe;
-    return fontFallbacks.get(normalized.toLowerCase()) || normalized;
-  };
+  const font = (value, fallback=defaultConfig.overlayFontFamily)=>resolveFontFamily(value, fallback);
   root.style.setProperty("--overlay-text", color(config.overlayTextColor, defaultConfig.overlayTextColor));
   root.style.setProperty("--overlay-accent", color(config.overlayAccentColor, defaultConfig.overlayAccentColor));
   root.style.setProperty("--overlay-boost-blue", color(config.overlayBlueBoostColor, defaultConfig.overlayBlueBoostColor));
@@ -1546,8 +1575,8 @@ async function refreshServerConfig(){
     if(!response.ok) return;
     const json = await response.json();
     if(json?.config && typeof json.config === "object"){
-      serverConfig = json.config;
-      try{ localStorage.setItem(overlayConfigKey, JSON.stringify({...defaultConfig, ...serverConfig})); }
+      serverConfig = normalizeFontConfigValues(json.config);
+      try{ localStorage.setItem(overlayConfigKey, JSON.stringify(normalizeFontConfigValues({...defaultConfig, ...serverConfig}))); }
       catch{}
       render();
     }
@@ -2378,8 +2407,8 @@ function compactEventName(event){
 function applyConfigBroadcast(payload){
   const config = firstDefined(valueByKey(payload,["config","Config"]), payload?.payload?.config);
   if(!config || typeof config !== "object" || Array.isArray(config)) return false;
-  serverConfig = config;
-  try{ localStorage.setItem(overlayConfigKey, JSON.stringify({...defaultConfig, ...serverConfig})); }
+  serverConfig = normalizeFontConfigValues(config);
+  try{ localStorage.setItem(overlayConfigKey, JSON.stringify(normalizeFontConfigValues({...defaultConfig, ...serverConfig}))); }
   catch{}
   render();
   return true;

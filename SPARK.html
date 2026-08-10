@@ -12527,8 +12527,9 @@ function escapeHtml(value){
 
 function readOverlayConfig(){
   try{
-    const stored = JSON.parse(localStorage.getItem(overlayConfigKey) || "{}");
-    const merged = {...stored, ...(overlayServerConfig || {})};
+    const stored = normalizeOverlayFontConfigValues(JSON.parse(localStorage.getItem(overlayConfigKey) || "{}"));
+    const server = normalizeOverlayFontConfigValues(overlayServerConfig || {});
+    const merged = {...stored, ...server};
     const bestOf = [3,5,7].includes(Number(merged.seriesBestOf)) ? Number(merged.seriesBestOf) : overlayDefaultConfig.seriesBestOf;
     const maxWins = Math.ceil(bestOf / 2);
     return {
@@ -12584,14 +12585,19 @@ function overlayFontOptions(){
 function overlayFontFallbacks(){
   return new Map([
     ["inter", "Inter, Segoe UI, Arial, sans-serif"],
-    ["inter, segoe ui, arial, sans-serif", "Inter"],
     ["segoe ui", "Segoe UI, Inter, Arial, sans-serif"],
-    ["segoe ui, inter, arial, sans-serif", "Segoe UI"],
     ["arial", "Arial, Helvetica, sans-serif"],
-    ["arial, helvetica, sans-serif", "Arial"],
     ["barlow condensed", "Barlow Condensed, Inter, Arial, sans-serif"],
+    ["impact", "Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"]
+  ]);
+}
+
+function overlayFontAliases(){
+  return new Map([
+    ["inter, segoe ui, arial, sans-serif", "Inter"],
+    ["segoe ui, inter, arial, sans-serif", "Segoe UI"],
+    ["arial, helvetica, sans-serif", "Arial"],
     ["barlow condensed, inter, arial, sans-serif", "Barlow Condensed"],
-    ["impact", "Impact, Haettenschweiler, Arial Narrow Bold, sans-serif"],
     ["impact, haettenschweiler, arial narrow bold, sans-serif", "Impact"]
   ]);
 }
@@ -12600,12 +12606,33 @@ function sanitizeOverlayFontFamily(value, fallback=overlayDefaultConfig.overlayF
   const text = String(value || "").trim().replace(/[\u0000-\u001f\u007f;]/g, "");
   if(!text || /[{}<>`]/.test(text)) return fallback;
   const safe = text.slice(0, 180);
-  return overlayFontFallbacks().get(safe.toLowerCase()) || safe;
+  return overlayFontAliases().get(safe.toLowerCase()) || safe;
 }
 
 function resolveOverlayFontFamily(value){
   const safe = sanitizeOverlayFontFamily(value);
   return overlayFontFallbacks().get(safe.toLowerCase()) || safe;
+}
+
+function overlayFontConfigKeys(){
+  return [
+    "overlayFontFamily",
+    "overlayTeamNameFontFamily",
+    "overlayGoalFontFamily",
+    "overlayTimerFontFamily",
+    "overlayTickerFontFamily",
+    "overlayBoostFontFamily"
+  ];
+}
+
+function normalizeOverlayFontConfigValues(config){
+  const copy = {...(config || {})};
+  overlayFontConfigKeys().forEach(key=>{
+    if(Object.prototype.hasOwnProperty.call(copy, key)){
+      copy[key] = sanitizeOverlayFontFamily(copy[key], overlayDefaultConfig[key] || overlayDefaultConfig.overlayFontFamily);
+    }
+  });
+  return copy;
 }
 
 function normalizeOverlayTheme(config){
@@ -12739,7 +12766,7 @@ async function refreshOverlayConfigFromServer(){
     if(!response.ok) return false;
     const json = await response.json();
     const previous = stableOverlayConfigJson(overlayServerConfig);
-    overlayServerConfig = json?.config && typeof json.config === "object" ? json.config : {};
+    overlayServerConfig = json?.config && typeof json.config === "object" ? normalizeOverlayFontConfigValues(json.config) : {};
     const changed = stableOverlayConfigJson(overlayServerConfig) !== previous;
     overlayConfig = readOverlayConfig();
     try{ localStorage.setItem(overlayConfigKey, JSON.stringify(overlayConfig)); }catch{}
@@ -12751,7 +12778,7 @@ async function refreshOverlayConfigFromServer(){
 }
 
 function saveOverlayConfig(nextConfig, options={}){
-  const configSource = {...(overlayConfig || overlayDefaultConfig), ...nextConfig};
+  const configSource = normalizeOverlayFontConfigValues({...(overlayConfig || overlayDefaultConfig), ...nextConfig});
   const bestOf = [3,5,7].includes(Number(configSource.seriesBestOf)) ? Number(configSource.seriesBestOf) : 5;
   const maxWins = Math.ceil(bestOf / 2);
   overlayConfig = {
@@ -12799,7 +12826,7 @@ function saveOverlayConfig(nextConfig, options={}){
 }
 
 function overlayConfigForServer(config){
-  const copy = {...(config || {})};
+  const copy = normalizeOverlayFontConfigValues(config || {});
   delete copy.testFinalStatsPreview;
   delete copy.lastAutoSeriesMatchId;
   delete copy.lastAutoSeriesWinner;
@@ -12848,7 +12875,7 @@ function updateOverlayConfigField(key, value, options={}){
 function applyOverlayConfigBroadcast(payload){
   const config = firstDefined(valueByKey(payload,["config","Config"]), payload?.payload?.config);
   if(!config || typeof config !== "object" || Array.isArray(config)) return false;
-  overlayServerConfig = config;
+  overlayServerConfig = normalizeOverlayFontConfigValues(config);
   overlayConfig = readOverlayConfig();
   try{ localStorage.setItem(overlayConfigKey, JSON.stringify(overlayConfig)); }catch{}
   renderObsOverlay();
