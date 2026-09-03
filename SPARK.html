@@ -13550,7 +13550,8 @@ function handleLiveUpdateState(payload){
   if(updateEndsMatch) markLiveMatchEnded();
   updateLiveTeamsFromPayload(payload);
   const replayFlag = liveApiReplayFlag(payload);
-  if(replayFlag !== null) setLiveReplayActive(replayFlag);
+  if(replayFlag !== null && !liveApiState.matchEnded) setLiveReplayActive(replayFlag);
+  if(liveApiState.matchEnded) setLiveReplayActive(false);
   const clockState = updateLiveGameClock(payload);
   if(clockState.clock !== null){
     liveApiState.durationSeconds = Math.max(liveApiState.durationSeconds, Math.round(liveElapsedSeconds()));
@@ -13794,6 +13795,7 @@ function handleLiveStatfeedEvent(payload){
 }
 
 function handleLiveReplayEvent(event){
+  if(liveApiState?.matchEnded) return;
   if(event.includes("goalreplaystart")) setLiveReplayActive(true);
   if(event.includes("goalreplaywillend") || event.includes("goalreplayend")) setLiveReplayActive(false);
 }

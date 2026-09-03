@@ -3016,6 +3016,7 @@ function transitionCutDelayMs(config, hasPlayableStinger){
 function revealFinalScreen(){
   if(personalOverlayMode) return;
   if(state.finalVisible) return;
+  state.replay = false;
   state.finalVisible = true;
   if(!forceLiveStatsScreen) scheduleRecentReplayHeatmap();
   render();
@@ -3076,6 +3077,7 @@ function queueFinalTransition(config){
   if(personalOverlayMode) return;
   if(forceLiveStatsScreen) return;
   if(applyForceLiveOverlayCommand(config)) return;
+  state.replay = false;
   if(state.finalVisible || finalTransitionQueueTimer || finalTransitionTimer) return;
   preloadFinalTransition(config);
   finalTransitionQueueTimer = setTimeout(()=>{
@@ -3308,9 +3310,10 @@ function render(){
   }
   applyOverlayTheme(config);
   const stage = $("stage");
+  const showReplay = !!state.replay && !state.matchEnded && !state.finalVisible && !finalTransitionQueueTimer && !finalTransitionTimer;
   stage.classList.toggle("live", state.connected && state.updates > 0);
   stage.classList.toggle("personalOverlay", personalOverlayMode);
-  stage.classList.toggle("replayActive", !!state.replay);
+  stage.classList.toggle("replayActive", showReplay);
   stage.classList.toggle("finalActive", !!state.finalVisible && !personalOverlayMode);
   stage.classList.toggle("liveStatsUnlocked", !!state.liveStatsUnlocked);
   stage.classList.toggle("overtime", !!state.overtime);
@@ -3429,9 +3432,13 @@ function handleMessage(raw){
     }
   }
   const replay = replayFlag(msg.payload);
-  if(replay !== null) state.replay = replay;
-  if(eventName.includes("goalreplay")) state.replay = !(eventName.includes("ended") || eventName.endsWith("end") || eventName.includes("willend"));
-  if(messageEndsMatch && !personalOverlayMode){
+  if(!state.matchEnded){
+    if(replay !== null) state.replay = replay;
+    if(eventName.includes("goalreplay")) state.replay = !(eventName.includes("ended") || eventName.endsWith("end") || eventName.includes("willend"));
+  }else{
+    state.replay = false;
+  }
+  if(state.matchEnded && !personalOverlayMode && !state.finalVisible){
     const config = readConfig();
     queueFinalTransition(config);
   }
