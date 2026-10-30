@@ -128,7 +128,7 @@ test("unmapped locations are counted but never pinned to a guessed pad", ()=>{
   assert.equal(run('boostPickupCounts({ps:[...liveApiState.players.values()]}).reduce((sum,pad)=>sum+pad.count,0)'), 0);
 });
 
-test("bridge broadcasts pickups once without replaying them on reconnect", ()=>{
+test("bridge broadcasts pickups and contacts without replaying them on reconnect", ()=>{
   const context = vm.createContext({Buffer});
   vm.runInContext(`
     let liveApiLatestMessage = null;
@@ -139,7 +139,8 @@ test("bridge broadcasts pickups once without replaying them on reconnect", ()=>{
     ${functionSource(server, "broadcastLiveApiMessage")}
     broadcastLiveApiMessage('{"Event":"UpdateState","Data":{}}');
     broadcastLiveApiMessage('{"Event":"BoostPickup","Data":{}}');
+    broadcastLiveApiMessage('{"Event":"BallHit","Data":{}}');
   `, context);
-  assert.equal(vm.runInContext("sent.length", context), 2);
+  assert.equal(vm.runInContext("sent.length", context), 3);
   assert.equal(vm.runInContext("JSON.parse(liveApiLatestMessage).Event", context), "UpdateState");
 });

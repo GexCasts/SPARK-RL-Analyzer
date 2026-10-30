@@ -9842,6 +9842,12 @@ function optionalBallSpeedText(speedUU){
   return Number.isFinite(speedUU) ? formatSpeedFromUUPerSecond(speedUU) : "Unavailable";
 }
 
+function nonNegativeBallSpeed(value){
+  if(value == null || value === "" || typeof value === "boolean") return null;
+  const speed = Number(value);
+  return Number.isFinite(speed) && speed >= 0 ? speed : null;
+}
+
 function positionShotPopupInBounds(dot, map){
   if(!dot || !map) return;
 
@@ -9887,7 +9893,8 @@ function getFrameAccurateShootingSamples(a){
       const elapsed = Number(shot.elapsed ?? shot.elapsedSeconds ?? shot.timeSeconds ?? 0);
       const nearestOpponentDistance = Number(shot.nearestOpponentDistanceUU ?? shot.nearestOpponentDistance ?? NaN);
       const lastTouchDistanceToNet = Number(shot.lastTouchDistanceToNetUU ?? shot.lastTouchDistanceToNet ?? NaN);
-      const ballSpeed = Number(shot.ballSpeedUUPerSecond ?? shot.ballSpeedUU ?? shot.ballSpeed ?? shot.speedUU ?? NaN);
+      const postHitSpeed = result === "miss" || result === "post" ? nonNegativeBallSpeed(shot.postHitSpeedUUPerSecond) : null;
+      const ballSpeed = postHitSpeed ?? Number(shot.ballSpeedUUPerSecond ?? shot.ballSpeedUU ?? shot.ballSpeed ?? shot.speedUU ?? NaN);
       const scoreboardElapsed = scoreboardElapsedFromSample(shot);
       const goalTime = scoreboardClockFromSample(shot) || shotClockFromElapsed(elapsed, replayObservedDurationSeconds()) || shot.goalTime;
       const nearestOpponent = cleanReplayName(shot.nearestOpponent || shot.nearestDefender || shot.closestDefender || "");
@@ -9910,7 +9917,7 @@ function getFrameAccurateShootingSamples(a){
         defender: defender || null,
         lastTouchDistanceToNet: Number.isFinite(lastTouchDistanceToNet) ? lastTouchDistanceToNet : null,
         ballSpeed: Number.isFinite(ballSpeed) ? ballSpeed : null,
-        ballSpeedSource: shot.ballSpeedSource || null,
+        ballSpeedSource: postHitSpeed !== null ? (shot.postHitSpeedSource || "post-hit speed") : shot.ballSpeedSource || null,
         placementSource: shot.placementSource || null,
         placementProjectionSource: shot.placementProjectionSource || null,
         placementCorrected: face.placementCorrected,
@@ -12065,6 +12072,7 @@ function makeEmptyLiveApiState(){
     },
     focusedPlayerName:null,
     ballHits: [],
+    ballHitSequence: 0,
     kickoffStarts: [],
     kickoffOutcomes: [],
     events: [],
@@ -13595,6 +13603,11 @@ function handleLiveBoostPickup(payload){
 }
 
 function handleLiveBallHit(payload){
+  if(!liveApiState || liveApiState.matchEnded) return false;
+  const replay = liveApiReplayFlag(payload);
+  if(replay === true || (replay === null && liveApiState.replayActive)) return false;
+  const matchGuid = liveApiMatchGuid(payload);
+  if(matchGuid && liveApiState.matchGuid && matchGuid !== liveApiState.matchGuid) return false;
   const players = Array.isArray(payload?.Players) ? payload.Players : Array.isArray(payload?.players) ? payload.players : [
     firstDefined(valueByKey(payload,["player","Player","playerName","PlayerName","lastTouchPlayer","LastTouchPlayer"]), payload?.player)
   ].filter(Boolean);
@@ -13603,6 +13616,11 @@ function handleLiveBallHit(payload){
     valueByKey(payload?.Ball,["Location","location"]),
     valueByKey(payload?.ball,["location","Location"])
   );
+  if(!players.length) return false;
+  syncLiveApiMatchBoundary(payload);
+  const ball = firstDefined(payload?.Ball, payload?.ball, payload);
+  const postHitSpeedUUPerSecond = nonNegativeBallSpeed(firstDefined(ball?.PostHitSpeed, ball?.postHitSpeed));
+  const contactId = ++liveApiState.ballHitSequence;
   players.forEach(apiPlayer=>{
     const player = liveApiPlayerName(apiPlayer);
     const team = normalizeLiveTeam(firstDefined(valueByKey(apiPlayer,["TeamNum","teamNum","team","Team"]), valueByKey(payload,["team","Team"])));
@@ -13611,12 +13629,16 @@ function handleLiveBallHit(payload){
       liveApiState.focusedPlayerName = p.name;
       p.touches++;
       const elapsedSeconds = liveElapsedSeconds();
-      liveApiState.ballHits.push({player,team,location,time:Date.now(),clock:liveApiState.lastKnownClock,elapsedSeconds});
+      const hit = {player,team,location,time:Date.now(),clock:liveApiState.lastKnownClock,elapsedSeconds,
+        contactId, contactPlayerCount:players.length, roundIndex:liveApiState.kickoffStarts.length,
+        postHitSpeedUUPerSecond};
+      liveApiState.ballHits.push(hit);
       recordLiveKickoffTouch({player:p.name, team:p.team || team, location, elapsedSeconds, payload});
-      addLiveTimelineEvent("touch", p.name, p.team || team, {location, elapsedSeconds, dedupeMs:120});
+      addLiveTimelineEvent("touch", p.name, p.team || team, {location, elapsedSeconds, postHitSpeedUUPerSecond, dedupeMs:120});
     }
   });
   if(liveApiState.ballHits.length > 200) liveApiState.ballHits.shift();
+  return true;
 }
 
 function handleLiveKickoffStart(eventName){
@@ -13662,6 +13684,15 @@ function lastLiveHitForPlayer(name){
     if(cleanReplayName(hit.player).toLowerCase() === cleanReplayName(name).toLowerCase()) return hit;
   }
   return null;
+}
+
+function liveShotContactForPlayer(name, payload){
+  const hit = lastLiveHitForPlayer(name);
+  if(!hit || hit.contactId !== liveApiState.ballHitSequence || hit.contactPlayerCount !== 1
+    || hit.roundIndex !== liveApiState.kickoffStarts.length) return null;
+  const reportedPlayer = liveApiPlayerName(firstDefined(payload?.BallLastTouch?.Player, payload?.ballLastTouch?.player));
+  if(reportedPlayer && cleanReplayName(reportedPlayer).toLowerCase() !== cleanReplayName(name).toLowerCase()) return null;
+  return hit;
 }
 
 function liveElapsedSeconds(){
@@ -13773,17 +13804,20 @@ function handleLiveCrossbar(payload){
   const location = firstDefined(valueByKey(payload,["ballLocation","BallLocation","location","Location"]), valueByKey(payload?.ball,["location","Location"]));
   const face = goalFaceFromImpactLocation(location, p.team);
   if(!face) return;
-  const lastHit = lastLiveHitForPlayer(player);
+  const lastHit = liveShotContactForPlayer(player, payload);
+  const impactSpeed = nonNegativeBallSpeed(valueByKey(payload,["BallSpeed","ballSpeed","Speed","speed"]));
+  const ballSpeed = lastHit?.postHitSpeedUUPerSecond ?? impactSpeed;
   const sample = {
     result:"post",
     elapsedSeconds:liveElapsedSeconds(),
+    scoreboardSecondsRemaining:liveApiState.lastKnownClock,
     xPercent:face.xPercent,
     yPercent:Math.min(face.yPercent, 10),
     target:"crossbar",
     nearestOpponentDistanceUU:null,
     lastTouchDistanceToNetUU:lastHit ? distanceFromHitToOpponentNet(lastHit.location, p.team) : null,
-    ballSpeed:toNumber(firstDefined(valueByKey(payload,["BallSpeed","ballSpeed","Speed","speed"]), liveApiState.lastBallSpeed), null),
-    ballSpeedSource:"live-api"
+    ballSpeed,
+    ballSpeedSource:lastHit?.postHitSpeedUUPerSecond != null ? "live-api post-hit speed" : impactSpeed !== null ? "live-api crossbar speed" : null
   };
   p.shotSamples.push(sample);
   liveApiState.shotSamples.push({...sample, player, team:p.team});
@@ -13924,6 +13958,19 @@ function handleLiveApiMessage(raw){
     if(handleLiveBoostPickup(msg.payload) && !isObsOverlayMode) scheduleLiveRender();
     return;
   }
+  if(msg.event.replace(/[^a-z]/g, "").includes("ballhit")){
+    if(handleLiveBallHit(msg.payload)){
+      renderObsOverlay();
+      if(!isObsOverlayMode) scheduleLiveRender();
+    }
+    return;
+  }
+  if(msg.event.includes("crossbar")){
+    const replay = liveApiReplayFlag(msg.payload);
+    const matchGuid = liveApiMatchGuid(msg.payload);
+    if(liveApiState.matchEnded || replay === true || (replay === null && liveApiState.replayActive)
+      || (matchGuid && liveApiState.matchGuid && matchGuid !== liveApiState.matchGuid)) return;
+  }
   syncLiveApiMatchBoundary(msg.payload);
   const messageEndsMatch = liveApiGameEnded(msg.payload, msg.event);
   if(!messageEndsMatch) clearLivePostGameIfNextFieldState(msg.payload, msg.event);
@@ -13935,7 +13982,6 @@ function handleLiveApiMessage(raw){
       liveApiState.durationSeconds = Math.max(liveApiState.durationSeconds, Math.round(liveElapsedSeconds()));
     }
   }
-  else if(msg.event.includes("ballhit")) handleLiveBallHit(msg.payload);
   else if(msg.event.includes("goalscored")) handleLiveGoal(msg.payload);
   else if(msg.event.includes("crossbar")) handleLiveCrossbar(msg.payload);
   else if(msg.event.includes("statfeedevent")) handleLiveStatfeedEvent(msg.payload);

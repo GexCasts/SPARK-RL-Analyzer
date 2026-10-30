@@ -229,8 +229,9 @@ function sendLiveApiWebSocketText(socket, text){
 }
 
 function broadcastLiveApiMessage(text){
-  // A reconnect must not count the most recent one-shot pickup a second time.
-  if(!liveApiMessageEventName(text).replace(/[^a-z]/g, "").includes("boostpickup")) liveApiLatestMessage = text;
+  // A reconnect must not replay one-shot pickup or ball-contact events.
+  const event = liveApiMessageEventName(text).replace(/[^a-z]/g, "");
+  if(!event.includes("boostpickup") && !event.includes("ballhit")) liveApiLatestMessage = text;
   for(const client of liveApiClients) sendLiveApiWebSocketText(client, text);
 }
 
