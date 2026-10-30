@@ -1423,6 +1423,9 @@ const state = {
   updates:0,
   replay:false,
   matchEnded:false,
+  scenePhase:"live",
+  pendingMatchGuid:null,
+  nextMatchClock:null,
   matchEndedAt:0,
   finalVisible:false,
   heatmapVisible:false,
@@ -1447,6 +1450,7 @@ let stingerFallbackTimer = null;
 let finalTransitionTimer = null;
 let finalTransitionQueueTimer = null;
 let finalTransitionRunId = 0;
+let finalTransitionPending = false;
 let replayHeatmapLookupTimer = null;
 let replayHeatmapRevealTimer = null;
 let replayHeatmapRunId = 0;
@@ -2255,65 +2259,41 @@ function matchGuidFromPayload(payload){
 }
 function nextMatchStartEvent(eventName){
   const compact = compactEventName(eventName);
-  return compact.includes("countdownbegan")
-    || compact.includes("countdownbegin")
-    || compact.includes("countdownstarted");
+  return compact.includes("matchinitialized");
 }
-function nextMatchLooksReady(payload, eventName, incomingClock, messageEndsMatch){
-  if(!state.matchEnded || messageEndsMatch) return false;
-  return nextMatchStartEvent(eventName)
-    || payloadHasKickoffCountdown(payload)
-    || payloadHasNextMatchSpectatorTarget(payload, eventName);
-}
-function payloadWinnerCleared(payload){
-  const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
-  const winnerState = firstDefined(
-    valueByKey(payload,["bHasWinner","hasWinner","HasWinner"]),
-    valueByKey(game,["bHasWinner","hasWinner","HasWinner"]),
-    valueByKey(payload,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"]),
-    valueByKey(game,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"])
-  );
-  return winnerState !== undefined && !toBoolean(winnerState);
-}
-function payloadHasSpectatorTarget(payload){
-  const game = firstDefined(valueByKey(payload,["Game","game"]), payload);
-  const hasTarget = firstDefined(
-    valueByKey(payload,["bHasTarget","hasTarget","HasTarget","bSpectatorHasTarget","spectatorHasTarget","SpectatorHasTarget"]),
-    valueByKey(game,["bHasTarget","hasTarget","HasTarget","bSpectatorHasTarget","spectatorHasTarget","SpectatorHasTarget"])
-  );
-  const target = firstDefined(
-    valueByKey(payload,["Target","target","CameraTarget","cameraTarget","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"]),
-    valueByKey(game,["Target","target","CameraTarget","cameraTarget","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"])
-  );
-  if(toBoolean(hasTarget) || playerNameFromValue(target)) return true;
-  return extractPlayers(payload).some(player=>{
-    if(!player || typeof player !== "object") return false;
-    const hasCar = firstDefined(valueByKey(player,["bHasCar","hasCar","HasCar"]), valueByKey(player?.State,["bHasCar","hasCar","HasCar"]));
-    return toBoolean(hasCar) && boostValueFromPlayer(player) !== null;
-  });
-}
-function payloadHasNextMatchSpectatorTarget(payload, eventName=""){
-  if(!payloadHasSpectatorTarget(payload)) return false;
-  const nextMatchGuid = matchGuidFromPayload(payload);
-  const newMatchGuid = !!(nextMatchGuid && state.matchGuid && nextMatchGuid !== state.matchGuid);
-  const eventLooksRelevant = compactEventName(eventName).includes("spectator")
-    || compactEventName(eventName).includes("target");
-  return newMatchGuid || payloadWinnerCleared(payload) || eventLooksRelevant;
-}
-function payloadHasKickoffCountdown(payload){
-  const value = firstDefined(
-    valueByKey(payload,["Countdown","countdown","CountdownTime","countdownTime","CountdownNumber","countdownNumber","roundCountdown","RoundCountdown","kickoffCountdown","KickoffCountdown"]),
-    valueByKey(payload?.Game,["Countdown","countdown","CountdownTime","countdownTime","CountdownNumber","countdownNumber","roundCountdown","RoundCountdown","kickoffCountdown","KickoffCountdown"]),
-    valueByKey(payload?.game,["Countdown","countdown","CountdownTime","countdownTime","CountdownNumber","countdownNumber","roundCountdown","RoundCountdown","kickoffCountdown","KickoffCountdown"])
-  );
-  const countdown = toNumber(value, NaN);
-  return Number.isFinite(countdown) && countdown > 0 && countdown <= 10;
+function nextMatchLooksReady(payload, eventName, messageEndsMatch){
+  if(!state.matchEnded) return false;
+  if(messageEndsMatch || replayFlag(payload) === true){ state.nextMatchClock = null; return false; }
+  const guid = matchGuidFromPayload(payload);
+  const newMatch = !!(guid && guid !== state.matchGuid);
+  if(nextMatchStartEvent(eventName)) return !guid || newMatch;
+  if(compactEventName(eventName).includes("roundstarted") && newMatch) return true;
+  if(!newMatch || !compactEventName(eventName).includes("updatestate")) return false;
+  const game = firstDefined(payload?.Game,payload?.game,payload);
+  const rawClock = valueByKey(game,["TimeSeconds","timeSeconds"]);
+  const clock = rawClock == null || rawClock === "" || typeof rawClock === "boolean" ? NaN : Number(rawClock);
+  const winner = valueByKey(game,["bHasWinner","hasWinner"]);
+  const hasFieldPlayer = extractPlayers(payload).some(player=>toBoolean(player?.bHasCar) && normalizeTeam(player) !== null);
+  if(replayFlag(payload) !== false || winner === undefined || toBoolean(winner) || !hasFieldPlayer || !Number.isFinite(clock)){
+    state.nextMatchClock = null;
+    return false;
+  }
+  const overtime = toBoolean(valueByKey(game,["bOvertime","overtime"]));
+  const previous = state.nextMatchClock;
+  state.nextMatchClock = {guid,clock,overtime};
+  // Reconnect recovery requires actual clock progress in a different live match.
+  return !!previous && previous.guid === guid && previous.overtime === overtime
+    && (overtime ? Math.abs(clock) > Math.abs(previous.clock) : clock < previous.clock);
 }
 function resetForNextMatch(options={}){
   const preserveActiveTransition = !!options.preserveActiveTransition;
   resetAllMaskTickers();
   state.replay = false;
   state.matchEnded = false;
+  state.scenePhase = "live";
+  state.pendingMatchGuid = null;
+  state.nextMatchClock = null;
+  finalTransitionPending = false;
   state.matchEndedAt = 0;
   state.finalVisible = false;
   state.heatmapVisible = false;
@@ -3021,6 +3001,7 @@ function preloadFinalTransition(config){
 }
 
 function cancelFinalTransition(){
+  finalTransitionPending = false;
   if(finalTransitionQueueTimer){
     clearTimeout(finalTransitionQueueTimer);
     finalTransitionQueueTimer = null;
@@ -3059,12 +3040,21 @@ function applyForceLiveOverlayCommand(config){
   return true;
 }
 
-function queueFinalTransition(config){
+function queueFinalTransition(config, immediate=false){
   if(personalOverlayMode) return;
   if(forceLiveStatsScreen) return;
   if(applyForceLiveOverlayCommand(config)) return;
   state.replay = false;
-  if(state.finalVisible || finalTransitionQueueTimer || finalTransitionTimer) return;
+  if(state.finalVisible || finalTransitionPending || finalTransitionTimer) return;
+  if(immediate && finalTransitionQueueTimer){
+    clearTimeout(finalTransitionQueueTimer);
+    finalTransitionQueueTimer = null;
+  }
+  if(finalTransitionQueueTimer) return;
+  if(immediate){
+    playFinalTransition(config);
+    return;
+  }
   preloadFinalTransition(config);
   finalTransitionQueueTimer = setTimeout(()=>{
     finalTransitionQueueTimer = null;
@@ -3147,21 +3137,24 @@ function unlockLiveStatsIfFocused(focusName){
   if(hasPlayer) state.liveStatsUnlocked = true;
 }
 
-function beginNextMatchResetTransition(){
+function beginNextMatchResetTransition(nextMatchGuid=""){
   if(state.finalExitTransitioning) return true;
   if(!state.finalVisible || personalOverlayMode){
     resetForNextMatch();
+    state.matchGuid = nextMatchGuid || null;
     return false;
   }
   state.finalExitTransitioning = true;
   playFinalTransition(readConfig(), ()=>{
     resetForNextMatch({preserveActiveTransition:true});
+    state.matchGuid = nextMatchGuid || null;
     render();
   });
   return true;
 }
 
 function playFinalTransition(config, onCut=revealFinalScreen){
+  finalTransitionPending = true;
   const stage = $("stage");
   const stinger = $("stingerTransition");
   const src = String(config.stingerTransitionUrl || "");
@@ -3180,6 +3173,7 @@ function playFinalTransition(config, onCut=revealFinalScreen){
     stingerFallbackTimer = null;
   }
   if(!stinger){
+    finalTransitionPending = false;
     onCut?.();
     return;
   }
@@ -3196,6 +3190,7 @@ function playFinalTransition(config, onCut=revealFinalScreen){
   const cut = ()=>{
     if(runId !== finalTransitionRunId || cutDone) return;
     cutDone = true;
+    finalTransitionPending = false;
     if(finalTransitionTimer){
       clearTimeout(finalTransitionTimer);
       finalTransitionTimer = null;
@@ -3353,22 +3348,48 @@ function handleMessage(raw){
     render();
     return;
   }
+  if((eventName.includes("matchended") || eventName.includes("podiumstart") || eventName.includes("matchdestroyed"))
+    && incomingMatchGuid && state.matchGuid && incomingMatchGuid !== state.matchGuid) return;
+  if(state.finalExitTransitioning) return;
+  const incomingClockState = gameClockState(msg.payload);
+  const incomingClock = incomingClockState.clock;
+  const messageEndsMatch = matchEndedFlag(msg.payload, msg.event);
+  if(nextMatchLooksReady(msg.payload, eventName, messageEndsMatch)){
+    if(beginNextMatchResetTransition(incomingMatchGuid || state.pendingMatchGuid || "")) return;
+  }
+  if(state.matchEnded && incomingMatchGuid && state.matchGuid && incomingMatchGuid !== state.matchGuid){
+    state.pendingMatchGuid = incomingMatchGuid;
+    return;
+  }
+  if(state.scenePhase === "lobby") return;
+  if(state.matchEnded && (!messageEndsMatch || replayFlag(msg.payload) === true)) return;
   if(incomingMatchGuid && state.matchGuid && incomingMatchGuid !== state.matchGuid && !state.matchEnded){
     liveRoster.clear();
     state.finalPlayers = null;
     state.focusedPlayerKey = null;
   }
   if(incomingMatchGuid) state.matchGuid = incomingMatchGuid;
-  const incomingClockState = gameClockState(msg.payload);
-  const incomingClock = incomingClockState.clock;
-  const messageEndsMatch = matchEndedFlag(msg.payload, msg.event);
-  if(nextMatchLooksReady(msg.payload, eventName, incomingClock, messageEndsMatch) && beginNextMatchResetTransition()) return;
   const firstMatchEnd = messageEndsMatch && !state.matchEnded;
   if(messageEndsMatch){
     if(firstMatchEnd) state.finalPlayers = liveRoster.snapshot();
     state.replay = false;
     if(firstMatchEnd) state.matchEndedAt = Date.now();
     state.matchEnded = true;
+    if(firstMatchEnd) state.scenePhase = "postgame";
+  }
+  if(eventName.includes("podiumstart")) state.scenePhase = "podium";
+  if(eventName.includes("matchdestroyed")){
+    state.scenePhase = "lobby";
+    state.finalPlayers = sortedFinalPlayers().map(player=>({...player,stats:{...player.stats}}));
+    liveRoster.clear();
+    state.replay = false;
+    if(!personalOverlayMode && !applyForceLiveOverlayCommand(readConfig())){
+      cancelFinalTransition();
+      $("stage")?.classList.remove("fadeTransition");
+      revealFinalScreen();
+    }
+    render();
+    return;
   }
   updateTeams(msg.payload);
   if(eventName.includes("updatestate") && replayFlag(msg.payload) !== true) updatePlayers(msg.payload);
@@ -3380,9 +3401,6 @@ function handleMessage(raw){
     const target = firstDefined(game?.Target,game?.target,msg.payload?.Target,msg.payload?.target,{Name:focusName});
     state.focusedPlayerKey = liveRoster.find(typeof target === "object" ? target : {Name:focusName})?.key || null;
     unlockLiveStatsIfFocused(focusName);
-  }
-  if(state.matchEnded && !messageEndsMatch && nextMatchStartEvent(eventName)){
-    if(beginNextMatchResetTransition()) return;
   }
   if(eventName.includes("goalscored")){
     updateGoalReplayInfo({...goalReplayInfoFromPayload(msg.payload), newGoal:true});
@@ -3443,7 +3461,7 @@ function handleMessage(raw){
   }
   if(state.matchEnded && !personalOverlayMode && !state.finalVisible){
     const config = readConfig();
-    queueFinalTransition(config);
+    queueFinalTransition(config, eventName.includes("podiumstart"));
   }
   render();
 }

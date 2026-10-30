@@ -52,6 +52,27 @@ namespace SparkPersonalOverlay
             Check(state.Snapshot().Players.Count == 1, "A joined player with a car must return");
             send("{\"Event\":\"PlayerLeft\",\"Data\":{\"MatchGuid\":\"foreign\",\"PrimaryId\":\"a\",\"PlayerName\":\"Alice\"}}");
             Check(state.Snapshot().Players.Count == 1, "Events for another match must not alter the native field roster");
+            send("{\"Event\":\"MatchEnded\",\"Data\":{\"MatchGuid\":\"next\",\"WinnerTeamNum\":0}}");
+            Check(state.MatchEnded && state.ScenePhase == "postgame", "MatchEnded must latch the native postgame state");
+            DateTime endedAt = state.MatchEndedAtUtc;
+            send("{\"Event\":\"PodiumStart\",\"Data\":{\"MatchGuid\":\"next\"}}");
+            Check(state.ScenePhase == "podium" && state.MatchEndedAtUtc == endedAt, "Podium must not restart match-end timing");
+            send("{\"Event\":\"UpdateState\",\"Data\":{\"MatchGuid\":\"next\",\"Game\":{\"TimeSeconds\":300,\"bHasWinner\":false}}}");
+            Check(state.MatchEnded, "A fresh-looking clock cannot reset a finished match");
+            send("{\"Event\":\"MatchDestroyed\",\"Data\":{\"MatchGuid\":\"next\"}}");
+            Check(state.ScenePhase == "lobby" && state.MatchEnded, "Leaving the match must preserve postgame state");
+            send("{\"Event\":\"MatchCreated\",\"Data\":{\"MatchGuid\":\"new-match\"}}");
+            Check(state.ScenePhase == "lobby" && state.MatchGuid == "next", "Lobby creation must not switch to a new game");
+            send("{\"Event\":\"UpdateState\",\"Data\":{\"MatchGuid\":\"recovered\",\"Players\":[{\"Name\":\"Alice\",\"TeamNum\":0,\"bHasCar\":true}],\"Game\":{\"TimeSeconds\":250,\"bHasWinner\":false,\"bReplay\":false}}}");
+            Check(state.ScenePhase == "lobby", "One field snapshot is not proof of an active next match");
+            send("{\"Event\":\"UpdateState\",\"Data\":{\"MatchGuid\":\"recovered\",\"Players\":[{\"Name\":\"Alice\",\"TeamNum\":0,\"bHasCar\":true}],\"Game\":{\"TimeSeconds\":249,\"bHasWinner\":false,\"bReplay\":false}}}");
+            Check(state.ScenePhase == "live" && !state.MatchEnded, "An advancing confirmed live clock can recover missed initialization");
+            send("{\"Event\":\"MatchEnded\",\"Data\":{\"MatchGuid\":\"recovered\"}}");
+            send("{\"Event\":\"MatchDestroyed\",\"Data\":{\"MatchGuid\":\"recovered\"}}");
+            send("{\"Event\":\"MatchInitialized\",\"Data\":{\"MatchGuid\":\"new-match\"}}");
+            Check(!state.MatchEnded && state.ScenePhase == "live" && state.MatchGuid == "new-match", "First countdown must restore the live scene");
+            send("{\"Event\":\"MatchEnded\",\"Data\":{\"MatchGuid\":\"next\"}}");
+            Check(!state.MatchEnded, "Late lifecycle events for the old match must be ignored");
             Console.WriteLine("Native roster checks passed: " + checks);
         }
     }

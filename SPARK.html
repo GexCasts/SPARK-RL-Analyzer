@@ -12093,7 +12093,9 @@ function makeEmptyLiveApiState(){
     isOvertime: false,
     overtimeSeconds: 0,
     matchEnded: false,
+    scenePhase:"live",
     pendingMatchGuid: null,
+    nextMatchClock:null,
     endedAt: null,
     endedElapsedSeconds: null
   };
@@ -12211,67 +12213,34 @@ function setLiveReplayActive(active){
 
 function liveApiNextMatchStartEvent(eventName){
   const compact = String(eventName || "").toLowerCase().replace(/[^a-z]/g, "");
-  return compact.includes("countdownbegan")
-    || compact.includes("countdownbegin")
-    || compact.includes("countdownstarted");
-}
-
-function liveApiPayloadHasKickoffCountdown(payload){
-  const game = livePayloadGame(payload);
-  const value = firstDefined(
-    valueByKey(payload,["Countdown","countdown","CountdownTime","countdownTime","CountdownNumber","countdownNumber","roundCountdown","RoundCountdown","kickoffCountdown","KickoffCountdown"]),
-    valueByKey(game,["Countdown","countdown","CountdownTime","countdownTime","CountdownNumber","countdownNumber","roundCountdown","RoundCountdown","kickoffCountdown","KickoffCountdown"])
-  );
-  const countdown = toNumber(value, NaN);
-  return Number.isFinite(countdown) && countdown > 0 && countdown <= 10;
-}
-
-function liveApiPayloadWinnerCleared(payload){
-  const game = livePayloadGame(payload);
-  const winnerState = firstDefined(
-    valueByKey(payload,["bHasWinner","hasWinner","HasWinner"]),
-    valueByKey(game,["bHasWinner","hasWinner","HasWinner"]),
-    valueByKey(payload,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"]),
-    valueByKey(game,["bMatchEnded","matchEnded","MatchEnded","bGameEnded","gameEnded","GameEnded","IsGameOver","isGameOver"])
-  );
-  return winnerState !== undefined && !toBoolean(winnerState);
-}
-
-function liveApiPayloadHasSpectatorTarget(payload){
-  const game = livePayloadGame(payload);
-  const hasTarget = firstDefined(
-    valueByKey(payload,["bHasTarget","hasTarget","HasTarget","bSpectatorHasTarget","spectatorHasTarget","SpectatorHasTarget"]),
-    valueByKey(game,["bHasTarget","hasTarget","HasTarget","bSpectatorHasTarget","spectatorHasTarget","SpectatorHasTarget"])
-  );
-  const target = firstDefined(
-    valueByKey(payload,["Target","target","CameraTarget","cameraTarget","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"]),
-    valueByKey(game,["Target","target","CameraTarget","cameraTarget","ViewedPlayer","viewedPlayer","SpectatedPlayer","spectatedPlayer"])
-  );
-  if(toBoolean(hasTarget) || liveApiPlayerName(target)) return true;
-  return extractLivePlayers(payload).some(player=>{
-    if(!player || typeof player !== "object") return false;
-    const hasCar = firstDefined(valueByKey(player,["bHasCar","hasCar","HasCar"]), valueByKey(player?.State,["bHasCar","hasCar","HasCar"]));
-    return toBoolean(hasCar) && liveBoostValueFromPlayer(player) !== null;
-  });
-}
-
-function liveApiPayloadHasNextMatchSpectatorTarget(payload, eventName=""){
-  if(!liveApiPayloadHasSpectatorTarget(payload)) return false;
-  const nextMatchGuid = liveApiMatchGuid(payload);
-  const newMatchGuid = !!(nextMatchGuid && liveApiState?.matchGuid && nextMatchGuid !== liveApiState.matchGuid);
-  const compact = String(eventName || "").toLowerCase().replace(/[^a-z]/g, "");
-  const eventLooksRelevant = compact.includes("spectator") || compact.includes("target");
-  return newMatchGuid || liveApiPayloadWinnerCleared(payload) || eventLooksRelevant;
+  return compact.includes("matchinitialized");
 }
 
 function clearLivePostGameIfNextFieldState(payload, eventName=""){
-  if(!liveApiState?.matchEnded) return;
-  const shouldReset = liveApiNextMatchStartEvent(eventName)
-    || liveApiPayloadHasKickoffCountdown(payload)
-    || liveApiPayloadHasNextMatchSpectatorTarget(payload, eventName);
-  if(shouldReset){
-    resetLiveApiForNewMatch(liveApiMatchGuid(payload) || liveApiState.pendingMatchGuid || liveApiState.matchGuid || "");
+  if(!liveApiState?.matchEnded) return false;
+  if(liveApiReplayFlag(payload) === true || liveApiGameEnded(payload,eventName)){ liveApiState.nextMatchClock = null; return false; }
+  const guid = liveApiMatchGuid(payload);
+  const newMatch = !!(guid && guid !== liveApiState.matchGuid);
+  let shouldReset = (liveApiNextMatchStartEvent(eventName) && (!guid || newMatch))
+    || (String(eventName).toLowerCase().replace(/[^a-z]/g, "").includes("roundstarted") && newMatch);
+  if(!shouldReset && newMatch && String(eventName).toLowerCase().replace(/[^a-z]/g, "").includes("updatestate")){
+    const game = livePayloadGame(payload);
+    const rawClock = valueByKey(game,["TimeSeconds","timeSeconds"]);
+    const clock = rawClock == null || rawClock === "" || typeof rawClock === "boolean" ? NaN : Number(rawClock);
+    const winner = valueByKey(game,["bHasWinner","hasWinner"]);
+    const hasFieldPlayer = extractLivePlayers(payload).some(player=>toBoolean(player?.bHasCar) && normalizeLiveTeam(player) !== null);
+    if(liveApiReplayFlag(payload) === false && winner !== undefined && !toBoolean(winner) && hasFieldPlayer && Number.isFinite(clock)){
+      const overtime = toBoolean(valueByKey(game,["bOvertime","overtime"]));
+      const previous = liveApiState.nextMatchClock;
+      liveApiState.nextMatchClock = {guid,clock,overtime};
+      shouldReset = !!previous && previous.guid === guid && previous.overtime === overtime
+        && (overtime ? Math.abs(clock) > Math.abs(previous.clock) : clock < previous.clock);
+    }else liveApiState.nextMatchClock = null;
   }
+  if(shouldReset){
+    resetLiveApiForNewMatch(guid || liveApiState.pendingMatchGuid || "");
+  }
+  return shouldReset;
 }
 
 function normalizeLiveTeam(value){
@@ -12959,13 +12928,18 @@ function liveApiGameEnded(payload, event=""){
   );
   if(ended === true || ended === "true" || ended === 1 || ended === "1") return true;
   const eventText = String(event || "").toLowerCase();
-  if(eventText.includes("matchended") || eventText.includes("gameended") || eventText.includes("matchdestroyed")) return true;
+  if(eventText.includes("matchended") || eventText.includes("gameended") || eventText.includes("matchdestroyed") || eventText.includes("podiumstart")) return true;
   return false;
 }
 
 function markLiveMatchEnded(){
   if(!liveApiState) return;
-  if(!liveApiState.matchEnded) liveApiState.finalOverlayPlayers = liveApiState.overlayRoster.snapshot();
+  if(liveApiState.matchEnded){
+    setLiveReplayActive(false);
+    return;
+  }
+  liveApiState.finalOverlayPlayers = liveApiState.overlayRoster.snapshot();
+  liveApiState.scenePhase = "postgame";
   const elapsedAtEnd = liveElapsedSeconds();
   liveApiState.matchEnded = true;
   liveApiState.endedAt = liveApiState.endedAt || Date.now();
@@ -13348,7 +13322,7 @@ function renderObsFinalScreen(){
   const manualPreview = !!overlayConfig.testFinalStatsPreview;
   const showFinalScreen = !!((liveApiState.matchEnded || forceObsFinalPreview || manualPreview) && !liveApiState.replayActive && !obsForceLiveOverlayActive);
   if(showFinalScreen !== obsFinalScreenVisible){
-    if(showFinalScreen) playObsStatsTransition(true);
+    if(showFinalScreen && liveApiState.scenePhase !== "lobby") playObsStatsTransition(true);
     else stopObsStatsTransition();
     obsFinalScreenVisible = showFinalScreen;
   }
@@ -13545,6 +13519,7 @@ function liveOverlayClockText(){
 }
 
 function handleLiveUpdateState(payload){
+  if(liveApiState.scenePhase === "lobby" || (liveApiState.matchEnded && !liveApiGameEnded(payload,"updatestate"))) return;
   syncLiveApiMatchBoundary(payload);
   const updateEndsMatch = liveApiGameEnded(payload, "updatestate");
   if(!updateEndsMatch) clearLivePostGameIfNextFieldState(payload, "updatestate");
@@ -13969,6 +13944,16 @@ function handleLiveApiMessage(raw){
     renderObsOverlay();
     return;
   }
+  const incomingMatchGuid = liveApiMatchGuid(msg.payload);
+  const sceneEvent = msg.event.replace(/[^a-z]/g, "");
+  if((sceneEvent.includes("matchended") || sceneEvent.includes("podiumstart") || sceneEvent.includes("matchdestroyed"))
+    && incomingMatchGuid && liveApiState.matchGuid && incomingMatchGuid !== liveApiState.matchGuid) return;
+  clearLivePostGameIfNextFieldState(msg.payload,msg.event);
+  if(liveApiState.matchEnded && incomingMatchGuid && liveApiState.matchGuid && incomingMatchGuid !== liveApiState.matchGuid){
+    liveApiState.pendingMatchGuid = incomingMatchGuid;
+    return;
+  }
+  if(liveApiState.scenePhase === "lobby" || (liveApiState.matchEnded && !liveApiGameEnded(msg.payload,msg.event))) return;
   if(msg.event.replace(/[^a-z]/g, "").includes("boostpickup")){
     // Pickup events cannot establish a new match or change replay/end-of-game state.
     if(handleLiveBoostPickup(msg.payload) && !isObsOverlayMode) scheduleLiveRender();
@@ -13991,6 +13976,20 @@ function handleLiveApiMessage(raw){
   const messageEndsMatch = liveApiGameEnded(msg.payload, msg.event);
   if(!messageEndsMatch) clearLivePostGameIfNextFieldState(msg.payload, msg.event);
   if(messageEndsMatch) markLiveMatchEnded();
+  if(sceneEvent.includes("podiumstart")) liveApiState.scenePhase = "podium";
+  if(sceneEvent.includes("matchdestroyed")){
+    liveApiState.scenePhase = "lobby";
+    const roster = liveApiState.overlayRoster;
+    liveApiState.finalOverlayPlayers = (liveApiState.finalOverlayPlayers || roster.snapshot()).map(player=>({...player,stats:{...(roster.players.get(player.key)?.stats || player.stats)}}));
+    roster.clear();
+    if(isObsOverlayMode){
+      stopObsStatsTransition();
+      document.querySelector(".obsStage")?.classList.remove("fadeTransition");
+    }
+    renderObsOverlay();
+    if(!isObsOverlayMode) scheduleLiveRender();
+    return;
+  }
   if(msg.event.includes("updatestate")) handleLiveUpdateState(msg.payload);
   else if(msg.event.includes("clockupdatedseconds")){
     const clockState = updateLiveGameClock(msg.payload);

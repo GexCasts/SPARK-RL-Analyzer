@@ -26,7 +26,8 @@ function harness(){
     "playerBoostPickups", "boostPickupCounts", "boostPickupTotals", "largeBoostSteals",
     "supersonicBoostUsed", "boostManagementMetrics", "liveApiDashboardActive",
     "normalizeLiveApiMessage", "handleLiveApiMessage", "livePlayersForBuildData",
-    "applyLiveApiMetricsToData"
+    "applyLiveApiMetricsToData",
+    "clearLivePostGameIfNextFieldState", "liveApiNextMatchStartEvent", "liveApiGameEnded"
   ];
   const coordinates = html.match(/const standardBoostPadCoords = \[[^]*?\n\];/)[0];
   vm.runInContext(`${coordinates}

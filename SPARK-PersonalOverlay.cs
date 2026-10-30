@@ -546,16 +546,15 @@ namespace SparkPersonalOverlay
                         BeginInvokeSafe(Invalidate);
                         return;
                     }
-                    bool nextMatchStartSignal = state.MatchEnded && NextMatchStartEvent(eventName);
-                    bool messageEndsMatch = !nextMatchStartSignal && MatchEndedFlag(payload, eventName);
-                    if (nextMatchStartSignal)
+                    bool messageEndsMatch = MatchEndedFlag(payload, eventName);
+                    if ((eventName.Contains("matchended") || eventName.Contains("podiumstart") || eventName.Contains("matchdestroyed")) &&
+                        !String.IsNullOrWhiteSpace(matchGuid) && !String.IsNullOrWhiteSpace(state.MatchGuid) && matchGuid != state.MatchGuid) return;
+                    if (ShouldResetForNextMatch(payload, eventName, messageEndsMatch, matchGuid))
                     {
                         state.ResetForNewMatch(matchGuid);
                     }
-                    else if (ShouldResetForNextMatch(payload, eventName, clock, messageEndsMatch, matchGuid))
-                    {
-                        state.ResetForNewMatch(matchGuid);
-                    }
+                    else if (state.ScenePhase == "lobby" || (state.MatchEnded && (!messageEndsMatch ||
+                        (!String.IsNullOrWhiteSpace(matchGuid) && !String.IsNullOrWhiteSpace(state.MatchGuid) && matchGuid != state.MatchGuid)))) return;
                     else if (!String.IsNullOrWhiteSpace(matchGuid) && !String.IsNullOrWhiteSpace(state.MatchGuid) && !state.MatchEnded && !String.Equals(matchGuid, state.MatchGuid, StringComparison.OrdinalIgnoreCase))
                     {
                         state.ResetForNewMatch(matchGuid);
@@ -566,9 +565,21 @@ namespace SparkPersonalOverlay
                     }
                     if (messageEndsMatch)
                     {
+                        if (!state.MatchEnded)
+                        {
+                            state.ScenePhase = "postgame";
+                            state.MatchEndedAtUtc = DateTime.UtcNow;
+                        }
                         state.MatchEnded = true;
-                        state.MatchEndedAtUtc = DateTime.UtcNow;
                         state.ReplayActive = false;
+                    }
+                    if (eventName.Contains("podiumstart")) state.ScenePhase = "podium";
+                    if (eventName.Contains("matchdestroyed"))
+                    {
+                        state.ScenePhase = "lobby";
+                        state.ClearRoster();
+                        BeginInvokeSafe(Invalidate);
+                        return;
                     }
                     if (clock.HasValue) state.Clock = clock.Value;
                     bool? replay = ReplayFlag(payload);
@@ -658,66 +669,44 @@ namespace SparkPersonalOverlay
             if (type.Contains("demo")) player.Demos++;
         }
 
-        private bool ShouldResetForNextMatch(Dictionary<string, object> payload, string eventName, double? clock, bool messageEndsMatch, string matchGuid)
+        private bool ShouldResetForNextMatch(Dictionary<string, object> payload, string eventName, bool messageEndsMatch, string matchGuid)
         {
-            if (!state.MatchEnded || messageEndsMatch) return false;
-            if (!String.IsNullOrWhiteSpace(matchGuid) && !String.IsNullOrWhiteSpace(state.MatchGuid) && !String.Equals(matchGuid, state.MatchGuid, StringComparison.OrdinalIgnoreCase)) return true;
-            if (NextMatchStartEvent(eventName)) return true;
-            bool freshClock = clock.HasValue && clock.Value >= 285;
-            bool playersPresent = EnumeratePlayers(payload).Any();
-            double endedAgeMs = state.MatchEndedAtUtc == DateTime.MinValue ? 0 : (DateTime.UtcNow - state.MatchEndedAtUtc).TotalMilliseconds;
-            if (freshClock && playersPresent && PayloadScoresLookReset(payload)) return true;
-            return endedAgeMs > 2500 && freshClock && playersPresent;
+            if (!state.MatchEnded) return false;
+            if (messageEndsMatch || ReplayFlag(payload) == true) { state.PendingStartClock = null; return false; }
+            bool newMatch = !String.IsNullOrWhiteSpace(matchGuid) && matchGuid != state.MatchGuid;
+            if (NextMatchStartEvent(eventName)) return String.IsNullOrWhiteSpace(matchGuid) || newMatch;
+            if (Compact(eventName).Contains("roundstarted") && newMatch) return true;
+            if (!newMatch || !Compact(eventName).Contains("updatestate")) return false;
+            double? clock = GameClock(payload);
+            object winner = First(Game(payload), "bHasWinner", "hasWinner");
+            bool hasFieldPlayer = EnumeratePlayers(payload).Any(player => ToBool(First(player, "bHasCar", "hasCar")) &&
+                !String.IsNullOrWhiteSpace(NormalizeTeam(First(player, "TeamNum", "teamNum", "Team", "team"))));
+            if (ReplayFlag(payload) != false || winner == null || ToBool(winner) || !hasFieldPlayer || !clock.HasValue)
+            {
+                state.PendingStartClock = null;
+                return false;
+            }
+            bool overtime = ToBool(First(Game(payload), "bOvertime", "overtime"));
+            bool progressed = state.PendingStartClock.HasValue && state.PendingStartGuid == matchGuid && state.PendingStartOvertime == overtime &&
+                (overtime ? Math.Abs(clock.Value) > Math.Abs(state.PendingStartClock.Value) : clock.Value < state.PendingStartClock.Value);
+            state.PendingStartClock = clock;
+            state.PendingStartGuid = matchGuid;
+            state.PendingStartOvertime = overtime;
+            return progressed;
         }
 
         private bool NextMatchStartEvent(string eventName)
         {
             string eventText = Compact(eventName);
-            return eventText.Contains("matchcreated")
-                || eventText.Contains("matchinitialized")
-                || eventText.Contains("roundstarted")
-                || eventText.Contains("countdownbegan")
-                || eventText.Contains("countdownbegin")
-                || eventText.Contains("countdownstarted")
-                || eventText.Contains("gamebegan")
-                || SpawnEventName(eventText);
+            return eventText.Contains("matchinitialized");
         }
 
-        private bool SpawnEventName(string eventName)
-        {
-            return eventName.Contains("playerspawn")
-                || eventName.Contains("carspawn")
-                || eventName.Contains("vehiclespawn")
-                || eventName.Contains("pawnspawn")
-                || eventName.Contains("playerrespawn")
-                || eventName.Contains("carrespawn")
-                || eventName.Contains("vehiclerespawn");
-        }
 
-        private bool PayloadScoresLookReset(Dictionary<string, object> payload)
-        {
-            bool found = false;
-            bool blueZero = false;
-            bool orangeZero = false;
-            object teamsObj = First(payload, "Teams", "teams") ?? First(Game(payload), "Teams", "teams");
-            foreach (Dictionary<string, object> team in EnumerateObjects(teamsObj))
-            {
-                string side = NormalizeTeam(First(team, "TeamNum", "teamNum", "Team", "team", "Index", "index"));
-                if (String.IsNullOrWhiteSpace(side)) continue;
-                object rawScore = First(team, "Score", "score", "Goals", "goals");
-                if (rawScore == null) continue;
-                found = true;
-                int score = ToInt(rawScore, 0);
-                if (side == "Blue") blueZero = score == 0;
-                if (side == "Orange") orangeZero = score == 0;
-            }
-            return found && blueZero && orangeZero;
-        }
 
         private bool MatchEndedFlag(Dictionary<string, object> payload, string eventName)
         {
             string eventText = Compact(eventName);
-            if (eventText.Contains("matchended") || eventText.Contains("gameended")) return true;
+            if (eventText.Contains("matchended") || eventText.Contains("gameended") || eventText.Contains("podiumstart") || eventText.Contains("matchdestroyed")) return true;
             Dictionary<string, object> game = Game(payload);
             object raw = First(payload, "bHasWinner", "hasWinner", "HasWinner", "bMatchEnded", "matchEnded", "MatchEnded", "bGameEnded", "gameEnded", "GameEnded", "IsGameOver", "isGameOver")
                 ?? First(game, "bHasWinner", "hasWinner", "HasWinner", "bMatchEnded", "matchEnded", "MatchEnded", "bGameEnded", "gameEnded", "GameEnded", "IsGameOver", "isGameOver");
@@ -1111,6 +1100,10 @@ namespace SparkPersonalOverlay
         public double Clock = 300;
         public bool ReplayActive;
         public bool MatchEnded;
+        public string ScenePhase = "live";
+        public double? PendingStartClock;
+        public string PendingStartGuid = "";
+        public bool PendingStartOvertime;
         public DateTime MatchEndedAtUtc = DateTime.MinValue;
         public string MatchGuid = "";
         public string FocusedPlayerName = "";
@@ -1167,6 +1160,9 @@ namespace SparkPersonalOverlay
         {
             MatchGuid = matchGuid ?? "";
             MatchEnded = false;
+            ScenePhase = "live";
+            PendingStartClock = null;
+            PendingStartGuid = "";
             MatchEndedAtUtc = DateTime.MinValue;
             ReplayActive = false;
             FocusedPlayerName = "";
