@@ -31,11 +31,15 @@ When enabled by the "Start Live API Feed" button, the launcher also provides SPA
 
 ## Replay Parser
 
-The repository includes the Windows parser at `tools/rrrocket/rrrocket-0.11.5-x86_64-pc-windows-msvc/rrrocket.exe`.
+The repository includes the Windows parser at `tools/rrrocket/rrrocket-0.11.8-x86_64-pc-windows-msvc/rrrocket.exe`.
 
-If the parser for your platform is missing, the launcher downloads the pinned parser release automatically. Linux uses `rrrocket-0.11.5-x86_64-unknown-linux-musl`.
+If the parser for your platform is missing, the launcher downloads the pinned parser release automatically. Linux uses `rrrocket-0.11.8-x86_64-unknown-linux-musl`.
 
 On launch, SPARK checks the latest upstream rrrocket release. If upstream has a newer parser than SPARK's pinned version, the launcher warns that new Rocket League replays may not process correctly until SPARK includes that parser in its own GitHub release.
+
+The 0.11.8 pin includes Season 24 support (0.11.6), `TAGame.Car_TA:MaxNumJumps` support (0.11.7), and certified-item support (0.11.8). These are replay-decoding compatibility updates; SPARK's existing position, boost, distance, and shooting analysis consumes the same JSON fields. See the [upstream changelog](https://github.com/nickbabcock/rrrocket/blob/v0.11.8/CHANGELOG.md).
+
+Upgrade verification covered three local replays (June, September, and October 2026) and the upstream boxcars 0.13.0 `Certified`, `MaxNumJumps`, and `AcceptedHonorDuel` fixtures through `/api/analyze-replay`. All six produced positions, distances, shots, and boost pickups. The three upstream fixtures fail network decoding with the previous 0.11.5 parser and succeed with 0.11.8.
 
 ## App Updates
 
