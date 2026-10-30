@@ -7,6 +7,7 @@
 <link rel="icon" type="image/png" href="assets/SPARK%20app%20logo%20transparent.png"/>
 <link rel="apple-touch-icon" href="assets/SPARK%20app%20logo%20transparent.png"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="shared/spark-live-roster.js"></script>
 <style>
 :root{
   --bg:#111111; --panel:#1b1b1b; --panel2:#2b2b2b; --line:#595959;
@@ -12066,6 +12067,9 @@ function makeEmptyLiveApiState(){
     lastMessageAt: null,
     updateCount: 0,
     players: new Map(),
+    overlayRoster:new SparkLiveRoster(),
+    finalOverlayPlayers:null,
+    focusedPlayerKey:null,
     teams:{
       Blue:{name:"Blue",score:0},
       Orange:{name:"Orange",score:0}
@@ -12961,6 +12965,7 @@ function liveApiGameEnded(payload, event=""){
 
 function markLiveMatchEnded(){
   if(!liveApiState) return;
+  if(!liveApiState.matchEnded) liveApiState.finalOverlayPlayers = liveApiState.overlayRoster.snapshot();
   const elapsedAtEnd = liveElapsedSeconds();
   liveApiState.matchEnded = true;
   liveApiState.endedAt = liveApiState.endedAt || Date.now();
@@ -12971,18 +12976,16 @@ function markLiveMatchEnded(){
 
 function livePlayersByTeam(team){
   if(!liveApiState) return [];
-  return Array.from(liveApiState.players.values())
+  const roster = liveApiState.overlayRoster;
+  return (liveApiState.matchEnded && liveApiState.finalOverlayPlayers ? liveApiState.finalOverlayPlayers : roster.active())
+    .map(player=>({...player,stats:roster.players.get(player.key)?.stats || player.stats}))
     .filter(p=>(p.team || "Unknown") === team)
     .sort((a,b)=>(a.shortcut ?? 99) - (b.shortcut ?? 99) || a.name.localeCompare(b.name));
 }
 
 function currentOverlayPlayer(){
   if(!liveApiState) return null;
-  const players = Array.from(liveApiState.players.values());
-  return players.find(p=>p.name === liveApiState.focusedPlayerName)
-    || players.find(p=>Number(p.shortcut) === 1)
-    || players[0]
-    || null;
+  return liveApiState.overlayRoster.active().find(player=>player.key === liveApiState.focusedPlayerKey) || null;
 }
 
 function overlayBoostPlayers(players){
@@ -13006,7 +13009,7 @@ function renderOverlayBoostRowsInto(containerId, players, side){
   const container = $(containerId);
   if(!container) return;
   const visiblePlayers = overlayBoostPlayers(players);
-  const signature = visiblePlayers.map(p=>p.name).join("|");
+  const signature = visiblePlayers.map(p=>`${p.key}:${p.name}`).join("|");
   if(container.dataset.signature !== signature){
     container.innerHTML = visiblePlayers.map(p=>overlayBoostRowMarkup(p, side)).join("");
     container.dataset.signature = signature;
@@ -13451,8 +13454,8 @@ function renderObsOverlay(){
   if($("obsOrangeSeriesDots")) $("obsOrangeSeriesDots").innerHTML = renderObsSeriesDots("Orange");
   if($("obsClock")) $("obsClock").textContent = liveOverlayClockText();
   if($("obsMatchTag")) $("obsMatchTag").textContent = liveApiState.updateCount ? `${overlayGameLabel()}     ${overlaySeriesLabel()}` : "Waiting for feed";
-  renderOverlayBoostRowsInto("obsBlueBoosts", livePlayersByTeam("Blue"), "left");
-  renderOverlayBoostRowsInto("obsOrangeBoosts", livePlayersByTeam("Orange"), "right");
+  renderOverlayBoostRowsInto("obsBlueBoosts", liveApiState.overlayRoster.active().filter(player=>player.team === "Blue"), "left");
+  renderOverlayBoostRowsInto("obsOrangeBoosts", liveApiState.overlayRoster.active().filter(player=>player.team === "Orange"), "right");
 
   const focus = currentOverlayPlayer();
   const boost = focus ? Math.round(Math.max(0, Math.min(100, focus.currentBoost ?? 0))) : 0;
@@ -13548,6 +13551,8 @@ function handleLiveUpdateState(payload){
   liveApiState.updateCount++;
   if(updateEndsMatch) markLiveMatchEnded();
   updateLiveTeamsFromPayload(payload);
+  if(liveApiReplayFlag(payload) !== true) liveApiState.overlayRoster.sync(extractLivePlayers(payload));
+  if(liveApiState.matchEnded && !liveApiState.finalOverlayPlayers?.length) liveApiState.finalOverlayPlayers = liveApiState.overlayRoster.snapshot();
   const replayFlag = liveApiReplayFlag(payload);
   if(replayFlag !== null && !liveApiState.matchEnded) setLiveReplayActive(replayFlag);
   if(liveApiState.matchEnded) setLiveReplayActive(false);
@@ -13562,6 +13567,9 @@ function handleLiveUpdateState(payload){
   if(focusName){
     const focusPlayer = ensureLivePlayer(focusName, null);
     liveApiState.focusedPlayerName = focusPlayer.name;
+    const game = firstDefined(payload?.Game,payload?.game,payload);
+    const target = firstDefined(game?.Target,game?.target,payload?.Target,payload?.target,{Name:focusName});
+    liveApiState.focusedPlayerKey = liveApiState.overlayRoster.find(typeof target === "object" ? target : {Name:focusName})?.key || null;
   }
 }
 
@@ -13953,6 +13961,14 @@ function handleLiveApiMessage(raw){
     applyOverlayConfigBroadcast(msg.payload);
     return;
   }
+  if(msg.event.includes("playerjoined") || msg.event.includes("playerleft")){
+    const matchGuid = liveApiMatchGuid(msg.payload);
+    if(matchGuid && liveApiState.matchGuid && matchGuid !== liveApiState.matchGuid) return;
+    if(msg.event.includes("playerleft")) liveApiState.overlayRoster.left(msg.payload);
+    else liveApiState.overlayRoster.joined(msg.payload);
+    renderObsOverlay();
+    return;
+  }
   if(msg.event.replace(/[^a-z]/g, "").includes("boostpickup")){
     // Pickup events cannot establish a new match or change replay/end-of-game state.
     if(handleLiveBoostPickup(msg.payload) && !isObsOverlayMode) scheduleLiveRender();
@@ -13996,6 +14012,7 @@ function handleLiveApiMessage(raw){
 }
 
 function stopLiveApiFeed(){
+  if(liveApiState?.overlayRoster) liveApiState.overlayRoster.clear();
   if(liveApiReconnectTimer){
     clearTimeout(liveApiReconnectTimer);
     liveApiReconnectTimer = null;
@@ -14050,6 +14067,8 @@ function connectLiveApiEndpoint(endpointIndex){
   };
   liveApiSocket.onclose = ()=>{
     liveApiSocket = null;
+    liveApiState?.overlayRoster?.clear();
+    renderObsOverlay();
     if(!opened && !failedOver){
       failedOver = true;
       tryNextLiveEndpoint(endpointIndex, "Connection closed before opening");

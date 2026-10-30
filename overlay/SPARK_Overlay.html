@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SPARK Overlay</title>
+<script src="../shared/spark-live-roster.js"></script>
 <style>
 :root{
   --spark-amber:#ffb617;
@@ -1416,6 +1417,7 @@ const defaultConfig = {
   forceLiveOverlayAt:0
 };
 const forceLiveCommandWindowMs = 5 * 60 * 1000;
+const liveRoster = new SparkLiveRoster();
 const state = {
   connected:false,
   updates:0,
@@ -1431,7 +1433,9 @@ const state = {
   overtimeUpdatedAt:null,
   goalReplay:{scorer:"",assist:"",speed:null,team:null,startedAt:0},
   teams:{Blue:{name:"Blue",score:0},Orange:{name:"Orange",score:0}},
-  players:new Map(),
+  players:liveRoster.players,
+  finalPlayers:null,
+  focusedPlayerKey:null,
   focusedPlayerName:null,
   liveStatsUnlocked:false,
   matchGuid:null,
@@ -2052,25 +2056,7 @@ function updateTeams(payload){
   }
 }
 function updatePlayers(payload){
-  extractPlayers(payload).forEach(player=>{
-    const name = cleanName(firstDefined(valueByKey(player,["Name","name","PlayerName","playerName","Id","id","__playerKey"]), ""));
-    if(!name) return;
-    const team = normalizeTeam(firstDefined(valueByKey(player,["TeamNum","teamNum","Team","team"]), valueByKey(player,["Team"])));
-    if(!team) return;
-    const existing = state.players.get(name) || {name, team, boost:0, boostKnown:false, stats:{score:0,goals:0,shots:0,assists:0,saves:0,demos:0,touches:0}};
-    existing.team = team;
-    const boost = boostValueFromPlayer(player);
-    existing.boost = boost !== null ? boost : 0;
-    existing.boostKnown = true;
-    existing.stats.score = toNumber(firstDefined(valueByKey(player,["Score","score","points","Points"]), existing.stats.score), existing.stats.score);
-    existing.stats.goals = toNumber(firstDefined(valueByKey(player,["Goals","goals"]), existing.stats.goals), existing.stats.goals);
-    existing.stats.shots = toNumber(firstDefined(valueByKey(player,["Shots","shots"]), existing.stats.shots), existing.stats.shots);
-    existing.stats.assists = toNumber(firstDefined(valueByKey(player,["Assists","assists"]), existing.stats.assists), existing.stats.assists);
-    existing.stats.saves = toNumber(firstDefined(valueByKey(player,["Saves","saves"]), existing.stats.saves), existing.stats.saves);
-    existing.stats.demos = toNumber(firstDefined(valueByKey(player,["Demos","demos","Demolitions","demolitions"]), existing.stats.demos), existing.stats.demos);
-    existing.stats.touches = toNumber(firstDefined(valueByKey(player,["Touches","touches"]), existing.stats.touches), existing.stats.touches);
-    state.players.set(name, existing);
-  });
+  liveRoster.sync(extractPlayers(payload));
 }
 function playerNameFromValue(value){
   if(!value) return "";
@@ -2152,10 +2138,7 @@ function focusNameFromPayload(payload){
 function ensurePlayer(name, team=null){
   const clean = cleanName(name);
   if(!clean) return null;
-  const existing = state.players.get(clean) || {name:clean, team, boost:0, boostKnown:false, stats:{score:0,goals:0,shots:0,assists:0,saves:0,demos:0,touches:0}};
-  if(team) existing.team = team;
-  state.players.set(clean, existing);
-  return existing;
+  return liveRoster.find({Name:clean,Team:team});
 }
 function normalizeBoostValue(value){
   if(value && typeof value === "object"){
@@ -2343,7 +2326,9 @@ function resetForNextMatch(options={}){
   replayBannerMarkup = "";
   state.teams.Blue.score = 0;
   state.teams.Orange.score = 0;
-  state.players.clear();
+  liveRoster.clear();
+  state.finalPlayers = null;
+  state.focusedPlayerKey = null;
   state.focusedPlayerName = null;
   state.liveStatsUnlocked = false;
   state.matchGuid = null;
@@ -2419,7 +2404,7 @@ function renderBoostRows(team){
     .join("");
 }
 function boostPlayersForTeam(team){
-  return Array.from(state.players.values())
+  return liveRoster.active()
     .filter(player=>player.team === team)
     .sort((a,b)=>a.name.localeCompare(b.name))
     .slice(0, 4);
@@ -2438,7 +2423,7 @@ function renderBoostRowsInto(containerId, team){
   const container = $(containerId);
   if(!container) return;
   const players = boostPlayersForTeam(team);
-  const signature = players.map(player=>player.name).join("|");
+  const signature = players.map(player=>`${player.key}:${player.name}`).join("|");
   if(container.dataset.signature !== signature){
     container.innerHTML = players.map(player=>boostRowMarkup(player)).join("");
     container.dataset.signature = signature;
@@ -2522,7 +2507,7 @@ function renderReplayBanner(){
   banner.innerHTML = markup;
 }
 function allPlayersForCard(){
-  return Array.from(state.players.values())
+  return liveRoster.active()
     .filter(player=>player.team === "Blue" || player.team === "Orange")
     .sort((a,b)=>{
       if(a.team !== b.team) return a.team === "Blue" ? -1 : 1;
@@ -2530,7 +2515,8 @@ function allPlayersForCard(){
     });
 }
 function renderLiveStatCard(){
-  const focusName = state.focusedPlayerName && state.players.has(state.focusedPlayerName) ? state.focusedPlayerName : "";
+  const focus = liveRoster.active().find(player=>player.key === state.focusedPlayerKey);
+  const focusName = focus?.name || "";
   $("liveStatFocus").textContent = focusName ? `${focusName} view` : "No focused view";
   const players = allPlayersForCard();
   if(!players.length){
@@ -2540,7 +2526,7 @@ function renderLiveStatCard(){
   $("liveStatPlayers").innerHTML = players.map(player=>{
     const stats = player.stats || {};
     const boost = player.boostKnown ? Math.max(0, Math.min(100, Math.round(player.boost))) : 0;
-    const focused = focusName && player.name === focusName;
+    const focused = focus && player.key === focus.key;
     return `<div class="liveStatPlayer ${player.team.toLowerCase()} ${focused ? "focused" : ""}" style="--boost:${boost}%">
       <div class="liveStatName">${escapeHtml(player.name)}</div>
       <div class="liveStatValue"><b>${Math.round(stats.goals || 0)}</b><span>Goals</span></div>
@@ -2552,7 +2538,7 @@ function renderLiveStatCard(){
   }).join("");
 }
 function sortedFinalPlayers(){
-  return Array.from(state.players.values())
+  return (state.finalPlayers || liveRoster.active()).map(player=>({...player,stats:state.players.get(player.key)?.stats || player.stats}))
     .filter(player=>player.team === "Blue" || player.team === "Orange")
     .sort((a,b)=>{
       if(a.team !== b.team) return a.team === "Blue" ? -1 : 1;
@@ -2612,7 +2598,7 @@ function replayHeatmapTeam(player){
   const direct = normalizeTeam(firstDefined(player?.team, player?.Team, player?.teamName, player?.TeamName));
   if(direct) return direct;
   const name = cleanName(player?.name || player?.playerName || player?.id);
-  const live = name ? state.players.get(name) : null;
+  const live = name ? liveRoster.find({Name:name}) : null;
   return live?.team || "Blue";
 }
 
@@ -3157,7 +3143,7 @@ function scheduleRecentReplayHeatmap(){
 function unlockLiveStatsIfFocused(focusName){
   const clean = cleanName(focusName);
   if(!clean) return;
-  const hasPlayer = Array.from(state.players.keys()).some(name=>cleanName(name).toLowerCase() === clean.toLowerCase());
+  const hasPlayer = liveRoster.active().some(player=>cleanName(player.name).toLowerCase() === clean.toLowerCase());
   if(hasPlayer) state.liveStatsUnlocked = true;
 }
 
@@ -3360,6 +3346,18 @@ function handleMessage(raw){
   state.updates++;
   const eventName = compactEventName(msg.event);
   const incomingMatchGuid = matchGuidFromPayload(msg.payload);
+  if(eventName.includes("playerjoined") || eventName.includes("playerleft")){
+    if(incomingMatchGuid && state.matchGuid && incomingMatchGuid !== state.matchGuid) return;
+    if(eventName.includes("playerleft")) liveRoster.left(msg.payload);
+    else liveRoster.joined(msg.payload);
+    render();
+    return;
+  }
+  if(incomingMatchGuid && state.matchGuid && incomingMatchGuid !== state.matchGuid && !state.matchEnded){
+    liveRoster.clear();
+    state.finalPlayers = null;
+    state.focusedPlayerKey = null;
+  }
   if(incomingMatchGuid) state.matchGuid = incomingMatchGuid;
   const incomingClockState = gameClockState(msg.payload);
   const incomingClock = incomingClockState.clock;
@@ -3367,15 +3365,20 @@ function handleMessage(raw){
   if(nextMatchLooksReady(msg.payload, eventName, incomingClock, messageEndsMatch) && beginNextMatchResetTransition()) return;
   const firstMatchEnd = messageEndsMatch && !state.matchEnded;
   if(messageEndsMatch){
+    if(firstMatchEnd) state.finalPlayers = liveRoster.snapshot();
     state.replay = false;
     if(firstMatchEnd) state.matchEndedAt = Date.now();
     state.matchEnded = true;
   }
   updateTeams(msg.payload);
-  updatePlayers(msg.payload);
+  if(eventName.includes("updatestate") && replayFlag(msg.payload) !== true) updatePlayers(msg.payload);
+  if(state.matchEnded && !state.finalPlayers?.length) state.finalPlayers = liveRoster.snapshot();
   const focusName = focusNameFromPayload(msg.payload);
   if(focusName){
     state.focusedPlayerName = focusName;
+    const game = firstDefined(msg.payload?.Game,msg.payload?.game,msg.payload);
+    const target = firstDefined(game?.Target,game?.target,msg.payload?.Target,msg.payload?.target,{Name:focusName});
+    state.focusedPlayerKey = liveRoster.find(typeof target === "object" ? target : {Name:focusName})?.key || null;
     unlockLiveStatsIfFocused(focusName);
   }
   if(state.matchEnded && !messageEndsMatch && nextMatchStartEvent(eventName)){
@@ -3389,7 +3392,7 @@ function handleMessage(raw){
     const primaryHitPlayer = eventPlayers[0] || null;
     const hitPlayer = playerNameFromValue(firstDefined(primaryHitPlayer, valueByKey(msg.payload,["Player","player","playerName","PlayerName","lastTouchPlayer","LastTouchPlayer"]), msg.payload?.BallLastTouch?.Player, msg.payload?.ballLastTouch?.player));
     const team = normalizeTeam(firstDefined(valueByKey(primaryHitPlayer,["TeamNum","teamNum","team","Team"]), valueByKey(msg.payload,["team","Team"])));
-    const p = ensurePlayer(hitPlayer, team);
+    const p = liveRoster.find(primaryHitPlayer || {Name:hitPlayer,Team:team});
     if(p){
       p.stats.touches = (p.stats.touches || 0) + 1;
     }
@@ -3399,7 +3402,7 @@ function handleMessage(raw){
     const statPlayer = playerNameFromValue(statTarget);
     const statType = String(firstDefined(valueByKey(msg.payload,["Type","type","EventName","eventName"]), "")).toLowerCase();
     const team = normalizeTeam(firstDefined(valueByKey(statTarget,["TeamNum","teamNum","team","Team"]), valueByKey(msg.payload,["team","Team"])));
-    const p = ensurePlayer(statPlayer, team);
+    const p = liveRoster.find(typeof statTarget === "object" ? statTarget : {Name:statPlayer,Team:team});
     if(p){
       if(statType.includes("goal")){
         p.stats.goals = (p.stats.goals || 0) + 1;
@@ -3455,6 +3458,7 @@ function connect(){
   ws.addEventListener("message", event=>handleMessage(event.data));
   ws.addEventListener("close", ()=>{
     state.connected = false;
+    liveRoster.clear();
     render();
     setTimeout(connect, 1500);
   });
@@ -3491,8 +3495,11 @@ function seedFinalPreview(){
     {name:"Rival 2",team:"Orange",score:402,goals:1,shots:3,assists:0,saves:2,demos:1,boost:29},
     {name:"Rival 3",team:"Orange",score:276,goals:0,shots:2,assists:1,saves:1,demos:0,boost:35}
   ].forEach(raw=>{
-    const player = ensurePlayer(raw.name, raw.team);
+    const player = liveRoster.upsert({Name:raw.name,Team:raw.team});
     if(!player) return;
+    player.team = raw.team;
+    player.present = true;
+    player.onField = true;
     player.stats.score = raw.score;
     player.stats.goals = raw.goals;
     player.stats.shots = raw.shots;

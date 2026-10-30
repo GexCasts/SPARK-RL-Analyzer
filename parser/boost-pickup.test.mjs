@@ -15,6 +15,7 @@ function functionSource(source, name){
 
 function harness(){
   const context = vm.createContext({console, Date, Map, Set});
+  vm.runInContext(fs.readFileSync(new URL("../shared/spark-live-roster.js", import.meta.url), "utf8"), context);
   const names = [
     "makeEmptyLiveApiState", "firstDefined", "valueByKey", "toNumber", "toBoolean",
     "cleanReplayName", "isBadReplayName", "liveApiMatchGuid", "stableLiveSeed",

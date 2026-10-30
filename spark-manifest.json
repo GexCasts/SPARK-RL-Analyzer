@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "appName":  "SPARK RL Analyzer",
-    "appVersion":  "2026.10.30.0617",
-    "generatedUtc":  "2026-10-30T06:17:27.3162424Z",
+    "appVersion":  "2026.10.30.0635",
+    "generatedUtc":  "2026-10-30T06:35:06.1307613Z",
     "source":  {
                    "branch":  "main",
                    "rawBaseUrl":  "https://raw.githubusercontent.com/GexCasts/SPARK-RL-Analyzer/main",
@@ -89,17 +89,24 @@
                   },
                   {
                       "path":  "overlay/SPARK_Overlay.html",
-                      "version":  "afa0b2ed81c6",
-                      "sha256":  "afa0b2ed81c6f3b742c1bfad0080f7c51f7594b9866cfe3f536badcfaf9bd58e",
-                      "size":  127772,
-                      "modifiedUtc":  "2026-09-03T06:21:46.4346370Z"
+                      "version":  "036293a83bd6",
+                      "sha256":  "036293a83bd6a791f16c4a495e75918ab6c12618e74d28f34bf573c64173e0ad",
+                      "size":  127484,
+                      "modifiedUtc":  "2026-10-30T06:35:00.0050037Z"
                   },
                   {
                       "path":  "parser/boost-pickup.test.mjs",
-                      "version":  "07896c1403ac",
-                      "sha256":  "07896c1403ac3fdb52a071438876b4411c63dac3807d86bf8fdca5ecf4e265e3",
-                      "size":  7050,
-                      "modifiedUtc":  "2026-10-30T06:17:21.7219111Z"
+                      "version":  "b557ccdde072",
+                      "sha256":  "b557ccdde07248d607994ca2f8c185e102167e105e3ba71c8ef6136119b6babb",
+                      "size":  7163,
+                      "modifiedUtc":  "2026-10-30T06:24:41.7233685Z"
+                  },
+                  {
+                      "path":  "parser/live-roster-native.test.cs",
+                      "version":  "7fd88233af75",
+                      "sha256":  "7fd88233af75203e357a2c8034107c7c6e46bed8bf14120f47c543862efd985b",
+                      "size":  4308,
+                      "modifiedUtc":  "2026-10-30T06:30:48.0195543Z"
                   },
                   {
                       "path":  "parser/README.md",
@@ -117,10 +124,10 @@
                   },
                   {
                       "path":  "parser/shot-speed.test.mjs",
-                      "version":  "10ccb77c02a0",
-                      "sha256":  "10ccb77c02a06235f198c08efc6ffa5d8b0a01ebba6c5943e52be5dfce18e6d9",
-                      "size":  5546,
-                      "modifiedUtc":  "2026-10-30T06:15:07.2996105Z"
+                      "version":  "62c04ccf1a95",
+                      "sha256":  "62c04ccf1a952e3fee800856b694848139e51ec0d25b9526e44013b32ae26d39",
+                      "size":  5659,
+                      "modifiedUtc":  "2026-10-30T06:24:41.7233685Z"
                   },
                   {
                       "path":  "README.md",
@@ -130,11 +137,18 @@
                       "modifiedUtc":  "2026-10-30T05:54:50.1116079Z"
                   },
                   {
+                      "path":  "shared/live-roster.test.mjs",
+                      "version":  "fd0ed2043670",
+                      "sha256":  "fd0ed2043670194c4df5277f87556e9690295603e8a4945a182b5902dd9fb823",
+                      "size":  3820,
+                      "modifiedUtc":  "2026-10-30T06:27:39.9082780Z"
+                  },
+                  {
                       "path":  "shared/README.md",
-                      "version":  "a8ea1145c5dc",
-                      "sha256":  "a8ea1145c5dc819e49e4d9d2cbb3e2831746ac7e989e1691ef303c97b2a4e1f8",
-                      "size":  254,
-                      "modifiedUtc":  "2026-05-22T10:03:04.2168958Z"
+                      "version":  "85a2fb826b74",
+                      "sha256":  "85a2fb826b747741a2c97332171049b1b906b7af277eaab876d25e9ea1c1df29",
+                      "size":  1271,
+                      "modifiedUtc":  "2026-10-30T06:32:02.2254160Z"
                   },
                   {
                       "path":  "shared/spark-data-contract.mjs",
@@ -142,6 +156,13 @@
                       "sha256":  "e40e6e44fabd1b11e3e29842c21fb8034aef00909359e77f9e45fabaa21f2f1e",
                       "size":  466,
                       "modifiedUtc":  "2026-05-22T10:00:38.9313020Z"
+                  },
+                  {
+                      "path":  "shared/spark-live-roster.js",
+                      "version":  "a06bf8b65766",
+                      "sha256":  "a06bf8b65766ff120973861b710f73582472c5719d6ff8ae5b62b97bf3e27ec3",
+                      "size":  4735,
+                      "modifiedUtc":  "2026-10-30T06:25:38.7899537Z"
                   },
                   {
                       "path":  "shot-samples-schema.example.json",
@@ -166,17 +187,17 @@
                   },
                   {
                       "path":  "SPARK Personal Overlay.exe",
-                      "version":  "27cea3fbaa6f",
-                      "sha256":  "27cea3fbaa6fe020787a29c182e44644b9f1060b200c81b2fb01f7e1979c9dd3",
-                      "size":  41984,
-                      "modifiedUtc":  "2026-06-04T02:03:43.2524907Z"
+                      "version":  "f6fbe0cf74bf",
+                      "sha256":  "f6fbe0cf74bf7f8b1c127b29f632049bd5cea1f3f43acd9b627c54eb633d2526",
+                      "size":  61952,
+                      "modifiedUtc":  "2026-10-30T06:35:00.5372357Z"
                   },
                   {
                       "path":  "SPARK.html",
-                      "version":  "89d3c454063c",
-                      "sha256":  "89d3c454063c0dcf1e52453d3becc3a041b7d9f3cc2a1b97b789de7b455bf4b5",
-                      "size":  3658177,
-                      "modifiedUtc":  "2026-10-30T06:15:00.9033270Z"
+                      "version":  "55df13a02044",
+                      "sha256":  "55df13a02044a15446ff310a49dd3bad8b8f7df3a4e41547f7e8d3e896715f8a",
+                      "size":  3659769,
+                      "modifiedUtc":  "2026-10-30T06:35:00.0020006Z"
                   },
                   {
                       "path":  "SPARK-Launcher.cs",
@@ -208,10 +229,10 @@
                   },
                   {
                       "path":  "SPARK-PersonalOverlay.cs",
-                      "version":  "1334fd27365a",
-                      "sha256":  "1334fd27365a2259b95ff10dd8369778c7cbdf20661426bc2be3679f5089e71b",
-                      "size":  55715,
-                      "modifiedUtc":  "2026-06-04T02:02:57.9284599Z"
+                      "version":  "d5a637d06ca5",
+                      "sha256":  "d5a637d06ca564c0814f5ed85773e58702c75094739dd72c2b8a86ea86946367",
+                      "size":  61164,
+                      "modifiedUtc":  "2026-10-30T06:35:00.0066247Z"
                   },
                   {
                       "path":  "static-download-server.mjs",

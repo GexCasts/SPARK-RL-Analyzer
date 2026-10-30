@@ -135,7 +135,7 @@ namespace SparkPersonalOverlay
             DrawBoostRows(g, snap.Players.Where(p => p.Team == "Blue").ToList(), true, cfg);
             DrawBoostRows(g, snap.Players.Where(p => p.Team == "Orange").ToList(), false, cfg);
 
-            if (!snap.MatchEnded) DrawPlayerStatsBoard(g, snap.Players, snap.FocusedPlayerName, cfg);
+            if (!snap.MatchEnded) DrawPlayerStatsBoard(g, snap.Players, snap.FocusedPlayerKey, cfg);
             if (snap.ReplayActive) DrawReplayBanner(g, cfg);
             if (!snap.Connected || snap.UpdateCount == 0) DrawWaitingBadge(g, "SPARK personal overlay", "Waiting for live feed", cfg);
         }
@@ -236,7 +236,7 @@ namespace SparkPersonalOverlay
             }
         }
 
-        private void DrawPlayerStatsBoard(Graphics g, List<PlayerState> players, string focusedPlayerName, OverlayConfig cfg)
+        private void DrawPlayerStatsBoard(Graphics g, List<PlayerState> players, string focusedPlayerKey, OverlayConfig cfg)
         {
             List<PlayerState> roster = players
                 .Where(p => IsPlayerNameUsable(p.Name))
@@ -262,7 +262,7 @@ namespace SparkPersonalOverlay
                 for (int i = 0; i < roster.Count; i++)
                 {
                     PlayerState player = roster[i];
-                    bool focused = NamesMatch(player.Name, focusedPlayerName);
+                    bool focused = String.Equals(player.Key, focusedPlayerKey, StringComparison.Ordinal);
                     Color team = TeamColor(player.Team, cfg);
                     RectangleF row = new RectangleF(48, 832 + i * 29, 340, 24);
                     FillRoundGradient(g, row, focused ? Color.FromArgb(226, 42, 48, 58) : Color.FromArgb(168, 26, 29, 36), focused ? Color.FromArgb(232, 20, 23, 30) : Color.FromArgb(188, 13, 15, 20), 4);
@@ -416,7 +416,11 @@ namespace SparkPersonalOverlay
                 }
                 catch
                 {
-                    lock (stateLock) state.Connected = false;
+                    lock (stateLock)
+                    {
+                        state.Connected = false;
+                        state.ClearRoster();
+                    }
                     BeginInvokeSafe(Invalidate);
                     Thread.Sleep(1500);
                 }
@@ -518,6 +522,30 @@ namespace SparkPersonalOverlay
                     state.LastMessageUtc = DateTime.UtcNow;
                     double? clock = GameClock(payload);
                     string matchGuid = MatchGuid(payload);
+                    if (eventName.Contains("playerjoined") || eventName.Contains("playerleft"))
+                    {
+                        if (!String.IsNullOrWhiteSpace(matchGuid) && !String.IsNullOrWhiteSpace(state.MatchGuid) && matchGuid != state.MatchGuid) return;
+                        string rosterName = Convert.ToString(First(payload, "PlayerName", "Name", "name") ?? "");
+                        string primaryId = Convert.ToString(First(payload, "PrimaryId", "primaryId", "PrimaryID") ?? "");
+                        PlayerState rosterPlayer = state.GetPlayer(rosterName, primaryId);
+                        if (rosterPlayer != null)
+                        {
+                            if (eventName.Contains("playerleft"))
+                            {
+                                rosterPlayer.Left = true;
+                                rosterPlayer.Present = false;
+                                rosterPlayer.OnField = false;
+                            }
+                            else
+                            {
+                                if (rosterPlayer.Left) rosterPlayer.OnField = false;
+                                rosterPlayer.Left = false;
+                                rosterPlayer.Present = true;
+                            }
+                        }
+                        BeginInvokeSafe(Invalidate);
+                        return;
+                    }
                     bool nextMatchStartSignal = state.MatchEnded && NextMatchStartEvent(eventName);
                     bool messageEndsMatch = !nextMatchStartSignal && MatchEndedFlag(payload, eventName);
                     if (nextMatchStartSignal)
@@ -547,9 +575,18 @@ namespace SparkPersonalOverlay
                     if (replay.HasValue) state.ReplayActive = replay.Value && !state.MatchEnded;
                     if (eventName.Contains("goalreplay")) state.ReplayActive = !state.MatchEnded && !(eventName.Contains("ended") || eventName.EndsWith("end") || eventName.Contains("willend"));
                     UpdateTeams(payload);
-                    UpdatePlayers(payload);
+                    if (eventName.Contains("updatestate") && replay != true) UpdatePlayers(payload);
                     string focus = FocusName(payload);
                     if (!String.IsNullOrWhiteSpace(focus)) state.FocusedPlayerName = focus;
+                    Dictionary<string, object> focusTarget = AsDictionary(First(Game(payload), "Target", "target") ?? First(payload, "Target", "target"));
+                    if (focusTarget != null)
+                    {
+                        string focusId = Convert.ToString(First(focusTarget, "PrimaryId", "primaryId") ?? "");
+                        string focusTeam = NormalizeTeam(First(focusTarget, "TeamNum", "teamNum", "Team", "team"));
+                        int focusShortcut = ToInt(First(focusTarget, "Shortcut", "shortcut"), 0);
+                        PlayerState focusedPlayer = state.GetPlayer(focus, focusId, focusTeam, false, focusShortcut);
+                        state.FocusedPlayerKey = focusedPlayer == null ? "" : focusedPlayer.Key;
+                    }
                     if (eventName.Contains("statfeed")) UpdateStatFeed(payload);
                 }
                 BeginInvokeSafe(Invalidate);
@@ -576,14 +613,21 @@ namespace SparkPersonalOverlay
 
         private void UpdatePlayers(Dictionary<string, object> payload)
         {
+            state.BeginRosterSnapshot();
             foreach (Dictionary<string, object> player in EnumeratePlayers(payload))
             {
                 string name = PlayerNameFromObject(First(player, "Name", "name", "PlayerName", "playerName", "Player", "player", "DisplayName", "displayName", "__playerKey"));
                 if (String.IsNullOrWhiteSpace(name)) continue;
                 string team = NormalizeTeam(First(player, "TeamNum", "teamNum", "Team", "team", "playerTeam", "PlayerTeam"));
-                PlayerState target = state.GetPlayer(name);
+                string primaryId = Convert.ToString(First(player, "PrimaryId", "primaryId", "PrimaryID") ?? "");
+                int shortcut = ToInt(First(player, "Shortcut", "shortcut", "Index", "index"), 0);
+                PlayerState target = state.GetPlayer(name, primaryId, team, true, shortcut);
+                if (target == null) continue;
                 target.Name = name;
-                if (!String.IsNullOrWhiteSpace(team)) target.Team = team;
+                target.Team = team ?? "";
+                target.Present = !target.Left;
+                object hasCar = First(player, "bHasCar", "hasCar", "HasCar");
+                target.OnField = target.Present && !String.IsNullOrWhiteSpace(team) && hasCar != null && ToBool(hasCar);
                 target.Shortcut = ToInt(First(player, "Shortcut", "shortcut", "Index", "index"), target.Shortcut);
                 target.Score = ToInt(First(player, "Score", "score", "Points", "points"), target.Score);
                 target.Goals = ToInt(First(player, "Goals", "goals"), target.Goals);
@@ -600,7 +644,12 @@ namespace SparkPersonalOverlay
         {
             string playerName = PlayerNameFromObject(First(payload, "MainTarget", "mainTarget", "Player", "player", "Target", "target", "Scorer", "scorer"));
             if (String.IsNullOrWhiteSpace(playerName)) return;
-            PlayerState player = state.GetPlayer(playerName);
+            Dictionary<string, object> statTarget = AsDictionary(First(payload, "MainTarget", "mainTarget", "Player", "player", "Target", "target", "Scorer", "scorer"));
+            string primaryId = Convert.ToString(First(statTarget, "PrimaryId", "primaryId") ?? "");
+            string team = NormalizeTeam(First(statTarget, "TeamNum", "teamNum", "Team", "team"));
+            int shortcut = ToInt(First(statTarget, "Shortcut", "shortcut"), 0);
+            PlayerState player = state.GetPlayer(playerName, primaryId, team, false, shortcut);
+            if (player == null) return;
             string type = Convert.ToString(First(payload, "Type", "type", "EventName", "eventName") ?? "").ToLowerInvariant();
             if (type.Contains("goal")) player.Goals++;
             if (type.Contains("shot")) player.Shots++;
@@ -1065,14 +1114,53 @@ namespace SparkPersonalOverlay
         public DateTime MatchEndedAtUtc = DateTime.MinValue;
         public string MatchGuid = "";
         public string FocusedPlayerName = "";
+        public string FocusedPlayerKey = "";
         public readonly TeamState Blue = new TeamState { Name = "Blue" };
         public readonly TeamState Orange = new TeamState { Name = "Orange" };
-        private readonly Dictionary<string, PlayerState> players = new Dictionary<string, PlayerState>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, PlayerState> players = new Dictionary<string, PlayerState>(StringComparer.Ordinal);
 
-        public PlayerState GetPlayer(string name)
+        public PlayerState GetPlayer(string name, string primaryId = "", string team = "", bool create = true, int shortcut = 0)
         {
-            if (!players.ContainsKey(name)) players[name] = new PlayerState { Name = name };
-            return players[name];
+            string key = !String.IsNullOrWhiteSpace(primaryId) ? "id:" + primaryId : "";
+            PlayerState player;
+            if (key != "" && players.TryGetValue(key, out player)) return player;
+            List<PlayerState> matches = players.Values.Where(p =>
+                String.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase) &&
+                (String.IsNullOrWhiteSpace(team) || p.Team == team) &&
+                (shortcut <= 0 || p.Shortcut == shortcut) &&
+                (key == "" || String.IsNullOrWhiteSpace(p.PrimaryId))).ToList();
+            if (matches.Count == 1)
+            {
+                player = matches[0];
+                if (key != "" && create)
+                {
+                    players.Remove(player.Key);
+                    player.Key = key;
+                    player.PrimaryId = primaryId;
+                    players[key] = player;
+                }
+                return player;
+            }
+            if (!create || (String.IsNullOrWhiteSpace(name) && key == "") || (key == "" && matches.Count > 1)) return null;
+            if (key == "") key = "name:" + name.ToLowerInvariant() + ":" + team + ":" + shortcut;
+            player = new PlayerState { Key = key, Name = name, PrimaryId = primaryId };
+            players[key] = player;
+            return player;
+        }
+
+        public void BeginRosterSnapshot()
+        {
+            foreach (PlayerState player in players.Values)
+            {
+                player.Present = false;
+                player.OnField = false;
+            }
+        }
+
+        public void ClearRoster()
+        {
+            players.Clear();
+            FocusedPlayerKey = "";
         }
 
         public void ResetForNewMatch(string matchGuid)
@@ -1082,6 +1170,7 @@ namespace SparkPersonalOverlay
             MatchEndedAtUtc = DateTime.MinValue;
             ReplayActive = false;
             FocusedPlayerName = "";
+            FocusedPlayerKey = "";
             Clock = 300;
             Blue.Score = 0;
             Orange.Score = 0;
@@ -1098,11 +1187,12 @@ namespace SparkPersonalOverlay
                 ReplayActive = ReplayActive,
                 MatchEnded = MatchEnded,
                 FocusedPlayerName = FocusedPlayerName,
+                FocusedPlayerKey = FocusedPlayerKey,
                 BlueName = Blue.Name,
                 OrangeName = Orange.Name,
                 BlueScore = Blue.Score,
                 OrangeScore = Orange.Score,
-                Players = players.Values.Select(p => p.Clone()).ToList()
+                Players = players.Values.Where(p => p.Present && p.OnField && !p.Left).Select(p => p.Clone()).ToList()
             };
         }
     }
@@ -1115,6 +1205,7 @@ namespace SparkPersonalOverlay
         public bool ReplayActive;
         public bool MatchEnded;
         public string FocusedPlayerName;
+        public string FocusedPlayerKey;
         public string BlueName;
         public string OrangeName;
         public int BlueScore;
@@ -1130,6 +1221,11 @@ namespace SparkPersonalOverlay
 
     internal sealed class PlayerState
     {
+        public string Key = "";
+        public string PrimaryId = "";
+        public bool Present;
+        public bool OnField;
+        public bool Left;
         public string Name = "";
         public string Team = "";
         public int Shortcut = 99;

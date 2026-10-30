@@ -18,6 +18,7 @@ function harness(){
     "formatSpeedFromUUPerSecond"
   ];
   const context = vm.createContext({console, Date, Map, Set});
+  vm.runInContext(fs.readFileSync(new URL("../shared/spark-live-roster.js", import.meta.url), "utf8"), context);
   const functions = names.map(name=>{
     const match = html.match(new RegExp(`^function ${name}\\([^]*?^\\}`, "m"));
     assert.ok(match, `Missing production function ${name}`);
