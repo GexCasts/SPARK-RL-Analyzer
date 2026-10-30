@@ -5,3 +5,7 @@ This folder contains backend replay-analysis modules as SPARK moves processing o
 `replay-analysis-service.mjs` wraps the decoded rrrocket replay output into a richer backend analysis package: team totals, per-player derived summaries, data quality flags, and a compact event timeline.
 
 The lower-level frame decoder still lives in `../static-download-server.mjs` during migration, but browser uploads now call `/api/analyze-replay` so more chart and coaching logic can move here incrementally.
+
+Live pickup maps and boost-management pickup counters use spectator `BoostPickup` events directly. They do not infer pickups from boost changes. Events flagged as replay playback, events after match end, and events for a different active match are excluded. Pickup type comes from `BoostType`, independently of the amount actually granted. Saved replay uploads retain the rrrocket decoder because live API events are not stored in the uploaded replay data.
+
+Run the focused integration regressions with `node --test parser/boost-pickup.test.mjs` from the repository root. The tests execute the shipped HTML/backend functions and cover pickup classification, map/counter agreement, replay filtering, match boundaries, dashboard rebuilds, legacy replay data, and bridge reconnect caching.

@@ -9058,8 +9058,9 @@ function nearestBoostPadIndexFromCoord(coord){
 }
 
 function pickupPadIndex(pickup){
-  const direct = Number(pickup?.padIndex ?? pickup?.boostPadIndex ?? pickup?.rlbotIndex ?? pickup?.index);
-  if(Number.isInteger(direct) && direct >= 0 && direct < boostPadLayout.length) return direct;
+  const rawIndex = pickup?.padIndex ?? pickup?.boostPadIndex ?? pickup?.rlbotIndex ?? pickup?.index;
+  const direct = Number(rawIndex);
+  if(rawIndex != null && Number.isInteger(direct) && direct >= 0 && direct < boostPadLayout.length) return direct;
 
   const coordIndex = nearestBoostPadIndexFromCoord(pickupFieldCoord(pickup));
   if(coordIndex !== null) return coordIndex;
@@ -9075,21 +9076,17 @@ function pickupPadIndex(pickup){
 
 
 
+function playerBoostPickups(player){
+  if(Array.isArray(player?.boostPickups)) return player.boostPickups;
+  if(Array.isArray(player?.boostPadPickups)) return player.boostPadPickups;
+  return Array.isArray(player?.pickups) ? player.pickups : [];
+}
+
 function boostPickupCounts(a){
   const pads = boostPadLayout.map((p, index) => ({...p, index, count:0, exact:false}));
   const selectedPlayers = a.ps || [];
 
-  const exactPickups = [];
-  selectedPlayers.forEach(player=>{
-    const collections = [
-      player.boostPickups,
-      player.boostPadPickups,
-      player.pickups
-    ];
-    collections.forEach(list=>{
-      if(Array.isArray(list)) list.forEach(p=>exactPickups.push(p));
-    });
-  });
+  const exactPickups = selectedPlayers.flatMap(playerBoostPickups);
 
   if(exactPickups.length){
     exactPickups.forEach(pickup=>{
@@ -9114,14 +9111,17 @@ function boostPadScaleColor(strength){
 }
 
 function boostPickupTotals(a){
-  const pads = boostPickupCounts(a);
-  return pads.reduce((totals, pad)=>{
-    totals.total += pad.count;
-    if(pad.type === "large") totals.large += pad.count;
-    else totals.small += pad.count;
-    if(pad.exact) totals.exact += pad.count;
+  return (a.ps || []).flatMap(playerBoostPickups).reduce((totals, pickup)=>{
+    const index = pickupPadIndex(pickup);
+    const type = pickup?.type || (index !== null ? boostPadLayout[index]?.type : null);
+    if(type !== "large" && type !== "small") return totals;
+    totals.total++;
+    totals[type]++;
+    const amount = pickup?.boostAmount;
+    totals.collected += typeof amount === "number" && Number.isFinite(amount) && amount >= 0 ? amount : type === "large" ? 100 : 12;
+    if(index !== null) totals.exact++;
     return totals;
-  }, {total:0, large:0, small:0, exact:0});
+  }, {total:0, large:0, small:0, exact:0, collected:0});
 }
 
 function largeBoostSteals(a){
@@ -9129,7 +9129,7 @@ function largeBoostSteals(a){
   let stolen = 0;
   players.forEach(player=>{
     const team = String(player.team || "").toLowerCase();
-    const pickups = Array.isArray(player.boostPickups) ? player.boostPickups : [];
+    const pickups = playerBoostPickups(player);
     pickups.forEach(pickup=>{
       const idx = pickupPadIndex(pickup);
       const pad = idx !== null ? boostPadLayout[idx] : null;
@@ -9319,22 +9319,26 @@ function supersonicBoostUsed(a){
 }
 
 function boostManagementMetrics(a){
+  const totals = boostPickupTotals(a);
+  const largeStolen = largeBoostSteals(a);
+  const pickupMetrics = [
+    {label:"Small Pad Pickups",value:totals.small,display:totals.small.toLocaleString(),kind:"count",scaleGroup:"smallPads"},
+    {label:"Large Pad Pickups",value:totals.large,display:totals.large.toLocaleString(),kind:"count",scaleGroup:"largePads"},
+    {label:"Large Boosts Stolen",value:largeStolen,display:largeStolen.toLocaleString(),kind:"count",scaleGroup:"largeSteals"}
+  ];
   if(liveApiDashboardActive()){
     const supersonicUsed = Math.round(supersonicBoostUsed(a));
     return [
+      ...pickupMetrics,
       {label:"Average Boost",value:a.boostEff || 0,display:`${a.boostEff || 0}%`,kind:"percent"},
       {label:"Boost Used Supersonic",value:supersonicUsed,display:`${supersonicUsed.toLocaleString()} boost`,kind:"count",scaleGroup:"supersonicBoost",warning:supersonicUsed > 20},
       {label:"Boost Wasted",value:a.boostWaste || 0,display:`${a.boostWaste || 0}%`,kind:"percent",warning:true},
       {label:"Low-Boost Recovery",value:a.recovery || 0,display:`${a.recovery || 0}%`,kind:"percent"}
     ];
   }
-  const totals = boostPickupTotals(a);
-  const largeStolen = largeBoostSteals(a);
   const supersonicUsed = Math.round(supersonicBoostUsed(a));
   return [
-    {label:"Small Pad Pickups",value:totals.small,display:totals.small.toLocaleString(),kind:"count",scaleGroup:"smallPads"},
-    {label:"Large Pad Pickups",value:totals.large,display:totals.large.toLocaleString(),kind:"count",scaleGroup:"largePads"},
-    {label:"Large Boosts Stolen",value:largeStolen,display:largeStolen.toLocaleString(),kind:"count",scaleGroup:"largeSteals"},
+    ...pickupMetrics,
     {label:"Boost Used Supersonic",value:supersonicUsed,display:`${supersonicUsed.toLocaleString()} boost`,kind:"count",scaleGroup:"supersonicBoost",warning:supersonicUsed > 20},
     {label:"Boost Efficiency",value:a.boostEff || 0,display:`${a.boostEff || 0}%`,kind:"percent"},
     {label:"Low-Boost Recovery",value:a.recovery || 0,display:`${a.recovery || 0}%`,kind:"percent"},
@@ -9364,9 +9368,7 @@ function renderBoostManagement(a, isTeamView){
   const totals = boostPickupTotals(a);
   const largeStolen = largeBoostSteals(a);
   const supersonicUsed = Math.round(supersonicBoostUsed(a));
-  $("boostNote").textContent = liveApiDashboardActive()
-    ? `${a.label}: live boost, speed, and supersonic use.`
-    : `${a.label}: ${totals.small.toLocaleString()} small pads, ${totals.large.toLocaleString()} full boosts, ${largeStolen.toLocaleString()} full boost steal${largeStolen===1?"":"s"}, ${supersonicUsed.toLocaleString()} boost used supersonic.`;
+  $("boostNote").textContent = `${a.label}: ${totals.small.toLocaleString()} small pads, ${totals.large.toLocaleString()} full boosts, ${largeStolen.toLocaleString()} full boost steal${largeStolen===1?"":"s"}, ${supersonicUsed.toLocaleString()} boost used supersonic.`;
 }
 
 
@@ -9378,18 +9380,6 @@ function renderBoostPickupMap(a){
   map.querySelectorAll(".boostPad,.heatmapUnavailable").forEach(e=>e.remove());
   ensureSparkMapWatermark(map);
   ensureMapDrawingTools(map);
-
-  if(liveApiDashboardActive()){
-    const unavailable = document.createElement("div");
-    unavailable.className = "heatmapUnavailable";
-    unavailable.innerHTML = `
-      <b>Boost pickup map unavailable in Live API mode</b><br>
-      Upload a replay to view pad pickups.
-    `;
-    map.appendChild(unavailable);
-    $("boostPickupNote").textContent = `${a.label}: upload a replay to view pad locations.`;
-    return;
-  }
 
   const pads = boostPickupCounts(a);
   const maxCount = Math.max(1, ...pads.map(p=>p.count));
@@ -9417,7 +9407,7 @@ function renderBoostPickupMap(a){
 
   $("boostPickupNote").textContent = total
     ? `${a.label}: ${largeTotal} full boosts, ${smallTotal} small pads, ${largeShare}% full-boost share.`
-    : "";
+    : liveApiDashboardActive() ? "Waiting for spectator boost pickup events." : "";
 }
 
 function ensureSparkFieldSurface(container){
@@ -10244,9 +10234,9 @@ function teamAggregate(team){
     demos: sum("demos"),
     bumps: sum("bumps"),
     touches: sum("touches"),
-    boostCollected: pickupTotals.total ? pickupTotals.large * 100 + pickupTotals.small * 12 : sum("smallPads") * 12,
+    boostCollected: pickupTotals.collected,
     boostStolen: largeBoostSteals(scope),
-    bigPads: pickupTotals.large || Math.max(0, Math.round(sum("stolen") / 22))
+    bigPads: pickupTotals.large
   };
 }
 
@@ -12348,6 +12338,7 @@ function ensureLivePlayer(name, team=null){
       currentBoost:0,
       lastSupersonic:false,
       shortcut:null,
+      boostPickups:[],
       shotSamples:[],
       touchEvents:[],
       demoEvents:[],
@@ -13566,6 +13557,43 @@ function handleLiveUpdateState(payload){
   }
 }
 
+function handleLiveBoostPickup(payload){
+  if(!liveApiState || liveApiState.matchEnded) return false;
+  const replay = liveApiReplayFlag(payload);
+  if(replay === true || (replay === null && liveApiState.replayActive)) return false;
+  const matchGuid = liveApiMatchGuid(payload);
+  if(matchGuid && liveApiState.matchGuid && matchGuid !== liveApiState.matchGuid) return false;
+
+  const apiPlayer = firstDefined(payload?.Player, payload?.player);
+  const name = liveApiPlayerName(apiPlayer);
+  const location = vectorFromApi(firstDefined(payload?.Location, payload?.location));
+  const boostType = String(firstDefined(payload?.BoostType, payload?.boostType, "")).toLowerCase();
+  const type = boostType === "boosttype_pill" ? "large" : boostType === "boosttype_pad" ? "small" : null;
+  if(!name || isBadReplayName(name) || !location || !Number.isFinite(location.x) || !Number.isFinite(location.y) || !type) return false;
+  const rawAmount = firstDefined(payload?.BoostAmount, payload?.boostAmount);
+  const amount = rawAmount == null || typeof rawAmount === "boolean" ? NaN : Number(rawAmount);
+
+  syncLiveApiMatchBoundary(payload);
+  const team = normalizeLiveTeam(valueByKey(apiPlayer,["TeamNum","teamNum","Team","team"]));
+  const player = ensureLivePlayer(name, team);
+  if(team){
+    player.team = team;
+    player.stats.team = team;
+  }
+  player.boostPickups.push({
+    elapsedSeconds:liveElapsedSeconds(),
+    scoreboardSecondsRemaining:liveApiState.lastKnownClock,
+    padIndex:pickupPadIndex({location}),
+    type,
+    fieldX:location.x,
+    fieldY:location.y,
+    location,
+    boostAmount:Number.isFinite(amount) && amount >= 0 ? amount : null,
+    source:"live-api-boost-pickup"
+  });
+  return true;
+}
+
 function handleLiveBallHit(payload){
   const players = Array.isArray(payload?.Players) ? payload.Players : Array.isArray(payload?.players) ? payload.players : [
     firstDefined(valueByKey(payload,["player","Player","playerName","PlayerName","lastTouchPlayer","LastTouchPlayer"]), payload?.player)
@@ -13809,6 +13837,7 @@ function livePlayersForBuildData(){
     touches:p.touches || 0,
     demos:p.demos || 0,
     bumps:p.bumps || 0,
+    boostPickups:p.boostPickups || [],
     shotSamples:p.shotSamples || [],
     touchEvents:p.touchEvents || [],
     demoEvents:p.demoEvents || [],
@@ -13832,7 +13861,7 @@ function applyLiveApiMetricsToData(){
     if(!live) return;
     p.shotSamples = Array.isArray(live.shotSamples) ? live.shotSamples.map(sample=>({...sample})) : [];
     p.touchEvents = Array.isArray(live.touchEvents) ? live.touchEvents.map(event=>({...event})) : [];
-    p.boostPickups = [];
+    p.boostPickups = Array.isArray(live.boostPickups) ? live.boostPickups.map(pickup=>({...pickup})) : [];
     p.demoEvents = Array.isArray(live.demoEvents) ? live.demoEvents.map(event=>({...event})) : [];
     p.bumpEvents = Array.isArray(live.bumpEvents) ? live.bumpEvents.map(event=>({...event})) : [];
     p.liveSamples = Array.isArray(live.liveSamples) ? live.liveSamples.map(sample=>({...sample})) : [];
@@ -13875,7 +13904,7 @@ function scheduleLiveRender(){
       `Messages received: <b>${liveApiState.updateCount.toLocaleString()}</b><br>` +
       `Players tracked: <b>${liveApiState.players.size}</b><br>` +
       `Live events tracked: <b>${liveApiState.events.length.toLocaleString()}</b><br>` +
-      `<span style='color:#ffd000'>Note:</span> Live charts fill in as API events arrive. Field position, distance-to-ball, and boost pad maps still need a replay upload.`;
+      `<span style='color:#ffd000'>Note:</span> Live charts fill in as API events arrive. Field position and distance-to-ball still need a replay upload.`;
     render();
   }, 900);
 }
@@ -13888,6 +13917,11 @@ function handleLiveApiMessage(raw){
   catch(err){ console.warn("Bad Live API message:", err); return; }
   if(msg.event.includes("sparkoverlayconfig")){
     applyOverlayConfigBroadcast(msg.payload);
+    return;
+  }
+  if(msg.event.replace(/[^a-z]/g, "").includes("boostpickup")){
+    // Pickup events cannot establish a new match or change replay/end-of-game state.
+    if(handleLiveBoostPickup(msg.payload) && !isObsOverlayMode) scheduleLiveRender();
     return;
   }
   syncLiveApiMatchBoundary(msg.payload);
